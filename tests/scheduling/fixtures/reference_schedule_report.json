@@ -1,0 +1,115 @@
+{
+ "as_of": "2026-08-10T09:00:00-04:00",
+ "weekly_longform_capacity": 3,
+ "designed_days": [
+  "tue",
+  "fri",
+  "sun"
+ ],
+ "scheduled_longforms": [
+  {
+   "date": "2026-08-11",
+   "time": "16:00:00",
+   "region": "south",
+   "title": "Alpha",
+   "kind": "longform"
+  },
+  {
+   "date": "2026-08-14",
+   "time": "15:00:00",
+   "region": "south",
+   "title": "Gamma",
+   "kind": "longform"
+  },
+  {
+   "date": "2026-08-16",
+   "time": "14:00:00",
+   "region": "north",
+   "title": "Beta",
+   "kind": "longform"
+  }
+ ],
+ "scheduled_shorts_count": 0,
+ "scheduled_shorts_by_region": {},
+ "queue_ends": "2026-08-16",
+ "next_available": [
+  {
+   "region": "north",
+   "day": "tue",
+   "slot": "2026-08-11T16:00:00-04:00",
+   "shorts_windows": [
+    "08:00",
+    "12:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": true
+  },
+  {
+   "region": "north",
+   "day": "fri",
+   "slot": "2026-08-14T15:00:00-04:00",
+   "shorts_windows": [
+    "08:00",
+    "12:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": false
+  },
+  {
+   "region": "north",
+   "day": "sun",
+   "slot": "2026-08-23T14:00:00-04:00",
+   "shorts_windows": [
+    "08:00",
+    "12:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": false
+  },
+  {
+   "region": "south",
+   "day": "sun",
+   "slot": "2026-08-16T14:00:00-04:00",
+   "shorts_windows": [
+    "14:00",
+    "18:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": true
+  },
+  {
+   "region": "south",
+   "day": "tue",
+   "slot": "2026-08-18T16:00:00-04:00",
+   "shorts_windows": [
+    "14:00",
+    "18:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": false
+  },
+  {
+   "region": "south",
+   "day": "fri",
+   "slot": "2026-08-21T15:00:00-04:00",
+   "shorts_windows": [
+    "10:00",
+    "16:00"
+   ],
+   "shorts_required": 14,
+   "earliest_for_region": false
+  }
+ ],
+ "next_available_superlong": [
+  {
+   "region": "north",
+   "day": "sat",
+   "slot": "2026-08-15T11:00:00-04:00"
+  },
+  {
+   "region": "south",
+   "day": "sat",
+   "slot": "2026-08-15T11:00:00-04:00"
+  }
+ ]
+}

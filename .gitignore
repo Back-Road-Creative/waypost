@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Data directories (generated at runtime)
+data/
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+example_data/
+examples/output/
+
+# YouTube API credentials (NEVER COMMIT)
+client_secret.json
+youtube_credentials.json
+# Social publishing credentials (NEVER COMMIT, including encrypted copies)
+meta_publishing.json
+tiktok_publishing.json
+config/production_test.yaml
+
+# Multi-brand credentials (encrypted but still sensitive)
+credentials/
+.credentials_key
+*.enc
+*.backup
+
+# Event store data (runtime, not code)
+data/seo_events/
+.seo_events/
+
+# Metricool extracted text cache
+data/metricool-reports/*.extracted.txt

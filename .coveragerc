@@ -1,0 +1,17 @@
+# Coverage floor for the seo_manager package.
+#
+# Last measured total: 67%.
+#   PYTHONPATH=. pytest -q -p no:cacheprovider --cov=seo_manager \
+#       --cov-report=term --cov-fail-under=0
+# Floor = floor(measured) - 1. Raise it when coverage rises; never lower it
+# to make a PR pass.
+#
+# pytest.ini supplies --cov=seo_manager; this file owns the threshold so the
+# two never disagree. Coverage settings are not
+# duplicated in pyproject.toml.
+
+# No [run] source: --cov=seo_manager in pytest.ini measures the imported
+# package wherever it is installed; a source= pin can measure 0 % when the
+# tests import an installed copy.
+[report]
+fail_under = 66

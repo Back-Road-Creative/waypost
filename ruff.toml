@@ -1,0 +1,22 @@
+# Ratchet: rule families this service ALREADY passes with zero findings,
+# turned on so they can never regress silently. `extend` pulls in the
+# service's [tool.ruff] table from pyproject.toml (select/ignore/exclude/
+# per-file-ignores all still apply) and `extend-select` only ADDS families
+# on top of that base — it never removes or replaces anything.
+#
+# Candidates that were evaluated and left out because they still produce
+# findings against pyproject.toml's config:
+#   N (pep8-naming), S (flake8-bandit), C90 (mccabe), PL (pylint),
+#   PT (flake8-pytest-style), ERA (eradicate), T20 (flake8-print),
+#   PERF (perflint)
+# Added below: TD (flake8-todos), which produces none.
+#
+# A family joins `extend-select` only once it is independently verified
+# clean (zero findings) against pyproject.toml's config. If it ever produces
+# findings again, that is a real regression to fix, not a rule to relax.
+extend = "pyproject.toml"
+
+[lint]
+extend-select = [
+    "TD",     # flake8-todos: TODO comments must follow the standard format
+]

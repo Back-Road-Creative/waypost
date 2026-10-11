@@ -1,0 +1,37 @@
+{
+ "entries": [
+  {
+   "date": "2026-08-11",
+   "time": "16:00:00",
+   "content_type": "longform",
+   "title": "Alpha",
+   "project_name": "A",
+   "region": "south",
+   "video_id": "vA",
+   "status": "scheduled",
+   "source": "pipeline"
+  },
+  {
+   "date": "2026-08-14",
+   "time": "15:00:00",
+   "content_type": "longform",
+   "title": "Gamma",
+   "project_name": "C",
+   "region": "south",
+   "video_id": "vC",
+   "status": "scheduled",
+   "source": "pipeline"
+  },
+  {
+   "date": "2026-08-16",
+   "time": "14:00:00",
+   "content_type": "longform",
+   "title": "Beta",
+   "project_name": "B",
+   "region": "north",
+   "video_id": "vB",
+   "status": "scheduled",
+   "source": "pipeline"
+  }
+ ]
+}

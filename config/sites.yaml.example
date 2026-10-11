@@ -1,0 +1,58 @@
+# Example site configuration
+# Copy to sites.yaml and customize for your projects
+
+sites:
+  # Example: YouTube Channel
+  my_youtube_channel:
+    site_name: "My YouTube Channel"
+    platform: youtube
+    title_prefix: null
+    title_suffix: "| My Channel"
+    base_tags:
+      - tech
+      - tutorials
+      - programming
+    analytics_enabled: true
+    analytics_provider: youtube
+    auto_fix_enabled: true
+    auto_fix_confidence_threshold: 0.85
+    platform_config:
+      category: "Science & Technology"
+      playlist: "Season 1"
+      visibility: public
+
+  # Example: Blog/Hugo Site
+  my_tech_blog:
+    site_name: "My Tech Blog"
+    platform: blog
+    title_prefix: null
+    title_suffix: "| MyBlog"
+    base_tags:
+      - technology
+      - development
+      - programming
+    analytics_enabled: true
+    analytics_provider: google_analytics
+    auto_fix_enabled: true
+    auto_fix_confidence_threshold: 0.90
+    platform_config:
+      categories:
+        - Technology
+        - Development
+      theme: minimal
+
+  # Example: Twitter/X Account
+  my_twitter:
+    site_name: "My Twitter"
+    platform: twitter
+    title_prefix: null
+    title_suffix: null
+    base_tags:
+      - tech
+      - ai
+    analytics_enabled: false
+    auto_fix_enabled: true
+    auto_fix_confidence_threshold: 0.95
+    platform_config:
+      hashtag_strategy: minimal
+      max_hashtags: 3
