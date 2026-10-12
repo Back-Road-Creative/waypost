@@ -209,3 +209,46 @@ class TestScopesConstantRemoved:
         from seo_manager.analytics import youtube_sync
 
         assert not hasattr(youtube_sync.YouTubeAnalyticsSync, "SCOPES")
+
+
+class TestAnalyticsReportWindow:
+    """The Analytics API rejects a far-future end date with HTTP 400
+    ("Invalid value (2100-01-01) given in field parameters.end-date.").
+    The lifetime window must end on today's date in YouTube's reporting
+    zone (Pacific)."""
+
+    def test_window_ends_today_pacific(self, token_file):
+        from datetime import datetime, timezone
+
+        from seo_manager.analytics.youtube_sync import analytics_report_window
+
+        # 02:00 UTC on 2030-01-02 is still 2030-01-01 in Los Angeles.
+        start, end = analytics_report_window(
+            now=datetime(2030, 1, 2, 2, 0, tzinfo=timezone.utc)
+        )
+        assert start == "2005-01-01"
+        assert end == "2030-01-01"
+
+    def test_fetch_never_requests_a_future_end_date(self, token_file, monkeypatch):
+        import importlib
+        from datetime import datetime, timezone
+
+        # The autouse fixture drops the module from sys.modules, so patch the
+        # copy a fresh import resolves to, not the package attribute.
+        youtube_sync = importlib.import_module("seo_manager.analytics.youtube_sync")
+        fixed = datetime(2030, 1, 2, 2, 0, tzinfo=timezone.utc)
+
+        class _FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed.astimezone(tz) if tz else fixed
+
+        monkeypatch.setattr(youtube_sync, "datetime", _FrozenDatetime)
+        sync = _make_sync(token_file)
+        _wire_analytics_response(sync, [[1]], ["views"])
+
+        sync.fetch_video_analytics("vidABC")
+
+        _, kwargs = sync.youtube_analytics.reports().query.call_args
+        assert kwargs["startDate"] == "2005-01-01"
+        assert kwargs["endDate"] == "2030-01-01"

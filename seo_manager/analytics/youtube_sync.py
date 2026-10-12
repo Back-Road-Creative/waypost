@@ -11,7 +11,8 @@ install of this package brings them; there is no reduced mode without them.
 
 import json
 import os
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 # Imported unconditionally on purpose. These used to sit behind a
 # `try/except ImportError` that set GOOGLE_APIS_AVAILABLE = False and printed a
@@ -25,6 +26,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from zoneinfo import ZoneInfo
 
 from . import metric_source
 
@@ -59,6 +61,19 @@ _ANALYTICS_METRICS = [
     "cardClicks",
     "cardClickRate",
 ]
+
+
+# YouTube Analytics reports by Pacific calendar day. A far-future end date is
+# refused with HTTP 400 ("Invalid value (2100-01-01) given in field
+# parameters.end-date."), so the lifetime window ends on today's date there.
+_ANALYTICS_START_DATE = "2005-01-01"
+_ANALYTICS_ZONE = ZoneInfo("America/Los_Angeles")
+
+
+def analytics_report_window(now: Optional[datetime] = None) -> Tuple[str, str]:
+    """Lifetime ``(startDate, endDate)`` for a per-video Analytics report."""
+    now = now or datetime.now(_ANALYTICS_ZONE)
+    return _ANALYTICS_START_DATE, now.astimezone(_ANALYTICS_ZONE).date().isoformat()
 
 
 class YouTubeAnalyticsSync:
@@ -155,13 +170,14 @@ class YouTubeAnalyticsSync:
             when the report has no row (no-data is degraded explicitly — the
             caller threads ``ctr=None``, never a fake 0 that looks real).
         """
+        start_date, end_date = analytics_report_window()
         try:
             response = (
                 self.youtube_analytics.reports()
                 .query(
                     ids="channel==MINE",
-                    startDate="2005-01-01",
-                    endDate="2100-01-01",
+                    startDate=start_date,
+                    endDate=end_date,
                     metrics=",".join(_ANALYTICS_METRICS),
                     filters=f"video=={video_id}",
                 )
