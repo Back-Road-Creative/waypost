@@ -4,7 +4,8 @@ Continuous Optimization Daemon.
 Automates the SEO improvement feedback loop:
 1. Periodically sync YouTube analytics
 2. Re-analyze performance patterns
-3. Update generation templates based on learnings
+3. Record what was learned in ``state_dir/learned_config.json`` -- the
+   daemon's own snapshot for change detection; no generator reads it
 4. Observe how the pooled rate moved since the previous cycle
 
 Step 4 is an OBSERVATION, not a validation. Nothing in this service runs a
@@ -44,7 +45,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .evidence_age import age_days as _age_days
-from .recommendation_auto_applier import RecommendationAutoApplier
 
 logger = logging.getLogger(__name__)
 
@@ -1287,29 +1287,6 @@ def _build_collector(
         return None, COLLECTOR_UNAVAILABLE
 
 
-def _apply_learned(state_dir: Path, config_dir: Path) -> int:
-    """Hand the config this cycle wrote to the applier, under its own gates."""
-    learned_path = Path(state_dir) / "learned_config.json"
-    if not learned_path.exists():
-        logger.error(f"--apply: {learned_path} was not written; nothing applied")
-        return 1
-    with open(learned_path) as f:
-        learned = json.load(f)
-    # `_apply_config_value` writes config_dir/learned_config.json without
-    # creating the directory, so a first apply on a host with no ./config dies.
-    Path(config_dir).mkdir(parents=True, exist_ok=True)
-    # No `config=`: the applier keeps its own AutoApplierConfig defaults. A
-    # scheduled job must never be the thing that widens them.
-    applier = RecommendationAutoApplier(
-        config_dir=Path(config_dir), state_dir=Path(state_dir) / "auto_applier"
-    )
-    # No gate here: `apply_learned_config` gates every section itself, so a
-    # second filter would only be a copy that can drift out of step with it.
-    applied = applier.apply_learned_config(learned, source="scheduled-cycle")
-    logger.info(f"applied {len(applied)} learned setting(s) from {learned_path}")
-    return 0
-
-
 def main(argv: Optional[List[str]] = None) -> int:
     """Run ONE cycle, dry run unless --apply. There is deliberately no
     `--forever`: cron owns the schedule, and a process that loops under it is a
@@ -1318,8 +1295,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument(
         "--apply",
         action="store_true",
-        help="persist the learned config and apply it under the auto-applier's "
-        "own gates; without this nothing is written and nothing changes",
+        help="persist what this cycle learned under --state-dir; without this "
+        "nothing is written",
     )
     p.add_argument("--state-dir", type=Path, default=Path("./data/optimization"))
     p.add_argument(
@@ -1327,7 +1304,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         default="default",
         help="site the SEO events are stored under (default: %(default)s)",
     )
-    p.add_argument("--config-dir", type=Path, default=Path("./config"))
     p.add_argument(
         "--youtube-credentials",
         type=Path,
@@ -1358,9 +1334,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if failures:
         return 1
     if not args.apply:
-        logger.info("dry run: learned config not persisted, nothing applied")
-        return 0
-    return _apply_learned(args.state_dir, args.config_dir)
+        logger.info("dry run: learned state not persisted")
+    return 0
 
 
 if __name__ == "__main__":

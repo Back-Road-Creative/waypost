@@ -244,13 +244,14 @@ and `--dump-text` prints the extracted text and exits.
 
 ```bash
 python -m seo_manager.analytics.continuous_optimization_daemon \
-    [--apply] [--site-id ID] [--state-dir DIR] [--config-dir DIR] \
+    [--apply] [--site-id ID] [--state-dir DIR] \
     [--youtube-credentials TOKEN.json --video-mapping MAP.json]
 ```
 
-Runs one cycle and is a dry run unless `--apply` is given. `--site-id` names the site
+Runs one cycle and is a dry run unless `--apply` is given, which persists what the
+cycle learned under `--state-dir` and nothing else. `--site-id` names the site
 the SEO events are stored under (default `default`); `--state-dir` defaults to
-`./data/optimization` and `--config-dir` to `./config`. `--youtube-credentials` and
+`./data/optimization`. `--youtube-credentials` and
 `--video-mapping` have no default and no environment variable: without both, the
 cycle collects nothing and reports which input was missing. See
 [docs/continuous-optimization-daemon.md](docs/continuous-optimization-daemon.md).
