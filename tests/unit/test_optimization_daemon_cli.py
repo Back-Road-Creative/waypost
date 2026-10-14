@@ -11,26 +11,6 @@ from types import SimpleNamespace
 import pytest
 
 from seo_manager.analytics import continuous_optimization_daemon as cod
-from seo_manager.analytics.recommendation_auto_applier import (
-    AutoApplierConfig,
-    RecommendationAutoApplier,
-)
-
-LEARNED = {
-    "title": {"optimal_length_min": 55, "optimal_length_max": 65},
-    "tags": {"recommended": ["a"]},
-    "thumbnails": {"style_performance": {"bold": 1.0}},
-    "posting": {"best_times": ["09:00"]},
-}
-
-
-def _applier(tmp_path, **flags):
-    (tmp_path / "config").mkdir(exist_ok=True)
-    return RecommendationAutoApplier(
-        config_dir=tmp_path / "config",
-        state_dir=tmp_path / "state",
-        config=AutoApplierConfig(**flags),
-    )
 
 
 def _patch_cycle(monkeypatch, success=True, seen=None):
@@ -47,63 +27,31 @@ def _patch_cycle(monkeypatch, success=True, seen=None):
     monkeypatch.setattr(cod, "build_daemon", build)
 
 
-def test_posting_is_dropped_because_its_flag_is_off_by_default(tmp_path):
-    applier = _applier(tmp_path)
-    assert applier.config.allow_posting_time is False
-    applier.apply_learned_config(LEARNED)
-    assert applier._get_config_value("posting") is None
-
-
-def test_a_flag_turned_off_drops_its_section(tmp_path):
-    off = _applier(tmp_path, allow_tag_changes=False)
-    applied = {rec.target_config for rec in off.apply_learned_config(LEARNED)}
-    assert "seo.tags.recommended" not in applied
-    assert "seo.title.optimal_length" in applied
-
-
-def test_dry_run_is_the_default_and_applies_nothing(monkeypatch, tmp_path):
+def test_dry_run_is_the_default(monkeypatch, tmp_path):
     seen = {}
     _patch_cycle(monkeypatch, seen=seen)
-    monkeypatch.setattr(
-        cod, "_apply_learned", lambda *a: pytest.fail("dry run applied")
-    )
     assert cod.main(["--state-dir", str(tmp_path)]) == 0
     assert seen["dry_run"] is True
+
+
+def test_apply_only_turns_off_the_dry_run(monkeypatch, tmp_path):
+    """`--apply` persists the cycle's own state and stops: there is no applier
+    step after it, which used to exit 1 here for want of a learned config."""
+    seen = {}
+    _patch_cycle(monkeypatch, seen=seen)
+    assert cod.main(["--state-dir", str(tmp_path / "s"), "--apply"]) == 0
+    assert seen["dry_run"] is False
+
+
+def test_config_dir_is_no_longer_accepted(monkeypatch, tmp_path):
+    _patch_cycle(monkeypatch)
+    with pytest.raises(SystemExit):
+        cod.main(["--state-dir", str(tmp_path), "--config-dir", str(tmp_path)])
 
 
 def test_a_failed_step_exits_non_zero(monkeypatch, tmp_path):
     _patch_cycle(monkeypatch, success=False)
     assert cod.main(["--state-dir", str(tmp_path)]) == 1
-
-
-def test_apply_without_a_learned_config_is_an_error(tmp_path):
-    assert cod._apply_learned(tmp_path, tmp_path / "config") == 1
-
-
-def test_apply_writes_only_the_gated_sections(tmp_path):
-    (tmp_path / "learned_config.json").write_text(json.dumps(LEARNED))
-    assert cod._apply_learned(tmp_path, tmp_path / "config") == 0
-    written = json.loads((tmp_path / "config" / "learned_config.json").read_text())
-    assert written["seo"]["title"]["optimal_length"] == {"min": 55, "max": 65}
-    assert "posting" not in written
-
-
-def test_the_nightly_path_still_refuses_a_gated_section(tmp_path, monkeypatch):
-    """End-to-end guard: the CLI hands the whole config over untouched now, so
-    only the applier's own gate stands between a closed flag and a write."""
-    (tmp_path / "learned_config.json").write_text(json.dumps(LEARNED))
-    real = cod.RecommendationAutoApplier
-    monkeypatch.setattr(
-        cod,
-        "RecommendationAutoApplier",
-        lambda **kw: real(config=AutoApplierConfig(allow_tag_changes=False), **kw),
-    )
-
-    assert cod._apply_learned(tmp_path, tmp_path / "config") == 0
-
-    written = json.loads((tmp_path / "config" / "learned_config.json").read_text())
-    assert "tags" not in written["seo"]
-    assert written["seo"]["title"]["optimal_length"] == {"min": 55, "max": 65}
 
 
 # ── DaemonState schema drift ────────────────────────────────────────────────

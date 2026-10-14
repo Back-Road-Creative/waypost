@@ -8,7 +8,6 @@ Components:
 - SEOOptimizer: Learn patterns and generate recommendations
 - ContinuousOptimizationDaemon: Auto-sync and re-learn periodically
 - ThumbnailABTracker: Track thumbnail style performance
-- RecommendationAutoApplier: Apply high-confidence recommendations
 - PerformanceValidator: Statistical validation of improvements
 """
 
@@ -25,13 +24,6 @@ from .performance_validator import (
     SignificanceLevel,
     TrendAnalysis,
     ValidationResult,
-)
-from .recommendation_auto_applier import (
-    AppliedRecommendation,
-    ApplyStatus,
-    AutoApplierConfig,
-    RecommendationAutoApplier,
-    RecommendationType,
 )
 from .seo_optimizer import PerformancePattern, SEOOptimizer, SEORecommendation
 from .theme_rotator import (
@@ -52,9 +44,6 @@ from .tracker import AnalyticsTracker
 
 __all__ = [
     "AnalyticsTracker",
-    "AppliedRecommendation",
-    "ApplyStatus",
-    "AutoApplierConfig",
     "ContentTheme",
     "ContinuousOptimizationDaemon",
     "DaemonState",
@@ -64,8 +53,6 @@ __all__ = [
     "OptimizationResult",
     "PerformancePattern",
     "PerformanceValidator",
-    "RecommendationAutoApplier",
-    "RecommendationType",
     "SEOOptimizer",
     "SEORecommendation",
     "SignificanceLevel",

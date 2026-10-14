@@ -2,7 +2,7 @@
 
 This document describes the mechanism behind the daemon's rules: the evidence vocabulary and what must not be reintroduced.
 
-- **The applied learned config has no consumer, and a test pins that.** `recommendation_auto_applier` writes `config/learned_config.json` and reads its own writes back; no generator opens it; callers that generate metadata use the live optimizer, never that file. So an "applied" recommendation currently changes no next draft. This is recorded rather than fixed because inventing a consumer to close the loop would be the fabrication the loop exists to prevent — wire a real one, or leave the absence visible.
+- **The learned settings are not applied anywhere, and a test pins that.** The daemon writes `state_dir/learned_config.json` as its own snapshot, read back only to report which sections changed. The `recommendation_auto_applier` that copied it into `config/learned_config.json` (`seo.title.optimal_length`, `seo.tags.recommended`, `thumbnails.default_style`, `descriptions.default_template`, `posting.default_time`) was retired: nothing ever read those keys, and the title length could not be wired honestly. It is a `{min, max}` range around the top quarter's average with no sample size, window or Short/longform split, falls back to an invented 50-70, and `select_title`'s `max_title_chars` excludes a candidate outright, so a learned cap would drop fact-complete titles. `select_title` runs on `DEFAULT_POLICY`. `tests/unit/test_learned_config_has_no_writer.py` keeps the writer gone; an admissible per-format measurement would be new work with its own tests.
 
 ## Evidence vocabulary
 
