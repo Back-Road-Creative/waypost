@@ -14,7 +14,7 @@ Daily quota: 10,000 units
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -31,6 +31,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
+from ..platforms.youtube import YouTubeAdapter
+from ..validation.validators import PlatformValidator
+
 
 class PrivacyStatus(Enum):
     """YouTube video privacy statuses"""
@@ -44,6 +47,22 @@ class PrivacyStatus(Enum):
 # Privacy values the YouTube Data API v3 actually accepts. "draft" is a
 # legacy sentinel that 400s on upload, so it is deliberately excluded.
 VALID_PRIVACY_STATUSES = ("private", "public", "unlisted")
+
+
+class YouTubeUploadLimits(YouTubeAdapter):
+    """YouTube Data API hard limits, used to gate the upload payload.
+
+    YouTubeAdapter's title limit (70) is a mobile-display recommendation; the
+    API accepts 100, so refusing 71-100 would reject legal uploads. The API
+    caps tags at 500 characters in total, not by count; since every tag is at
+    least one character, 500 is a sound (loose) count bound for the validator.
+    """
+
+    def get_title_limit(self) -> int:
+        return 100
+
+    def get_tag_limit(self) -> int:
+        return 500
 
 
 @dataclass
@@ -187,14 +206,6 @@ class YouTubeUploader:
                 f"one of {VALID_PRIVACY_STATUSES}."
             )
 
-        if dry_run:
-            print("🔍 DRY RUN - Validation only")
-            print(f"   Video: {video_path}")
-            print(f"   Title: {metadata.title}")
-            print(f"   Tags: {len(metadata.tags)} tags")
-            print(f"   Privacy: {privacy}")
-            return "DRY_RUN_SUCCESS"
-
         # Prepare video metadata
         body = {
             "snippet": {
@@ -223,6 +234,19 @@ class YouTubeUploader:
             body["status"]["publishAt"] = (
                 publish_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
             )
+
+        # Gate the final payload: validate the snippet exactly as it will be
+        # sent, so nothing between the caller's metadata and the request body
+        # can slip past. Runs for dry runs too, before any API call.
+        self.validate_upload_body(metadata, body)
+
+        if dry_run:
+            print("🔍 DRY RUN - Validation only")
+            print(f"   Video: {video_path}")
+            print(f"   Title: {metadata.title}")
+            print(f"   Tags: {len(metadata.tags)} tags")
+            print(f"   Privacy: {privacy}")
+            return "DRY_RUN_SUCCESS"
 
         # Create media file upload
         media = MediaFileUpload(
@@ -267,6 +291,30 @@ class YouTubeUploader:
             error_msg = f"YouTube API error: {e}"
             print(f"   ❌ Upload failed: {error_msg}")
             return None
+
+    def validate_upload_body(self, metadata: "SEOMetadata", body: dict) -> None:  # noqa: F821
+        """
+        Validate the request body's snippet against YouTube's API limits.
+
+        Args:
+            metadata: The caller's SEOMetadata (identity fields only are used)
+            body: The videos.insert body that is about to be sent
+
+        Raises:
+            ValueError: If the snippet breaks a limit
+        """
+        snippet = body["snippet"]
+        sent = replace(
+            metadata,
+            title=snippet["title"],
+            description=snippet["description"],
+            tags=list(snippet["tags"]),
+        )
+        result = PlatformValidator(YouTubeUploadLimits()).validate(sent)
+        if not result.is_valid:
+            raise ValueError(
+                "Upload payload failed validation: " + "; ".join(result.errors)
+            )
 
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str):
         """

@@ -9,6 +9,7 @@ A Python library for generating, validating, tracking, and auto-optimizing SEO m
 - 🎯 **Multi-Platform Support**: YouTube, blogs, Twitter (Instagram, TikTok and LinkedIn are planned)
 - 🔍 **Smart Keyword Extraction**: deterministic, offline TF-based keyword analysis
 - ✅ **SEO Validation**: Platform-specific rules and best practices
+- ✅ **Upload gate**: `YouTubeUploader.upload_video` runs `PlatformValidator.validate` on the exact `videos.insert` snippet it is about to send (dry runs included), against YouTube's API limits (title 100, description 5000), and raises `ValueError` before any API call if it fails
 - 🤖 **Auto-Fix Engine**: Confidence-based automatic corrections
 - 📊 **Analytics Tracking**: Performance metrics, CTR, engagement rates
 - 🏢 **Multi-Site Management**: Isolated data for multiple websites/channels
