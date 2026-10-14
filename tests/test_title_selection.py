@@ -15,6 +15,8 @@ from seo_manager.analytics import metric_source
 from seo_manager.analytics.title_selection import (
     BASELINE,
     DEFAULT_POLICY,
+    PLACE_BASELINE,
+    PLACE_TEMPLATES,
     EvidenceSnapshot,
     Place,
     TemplateObservation,
@@ -233,3 +235,91 @@ def test_equal_scores_break_toward_the_lower_index():
     )
     rec = select_title(_facts(), snap, DEFAULT_POLICY)
     assert rec.candidates[rec.chosen_index].template_id == "highlight_route"
+
+
+# --- single-place Shorts ------------------------------------------------------
+
+
+def _short(highlight=True):
+    return TitleFacts(
+        format="short",
+        baseline_title="Mar 4, 1st stretch: Fenwold County, on a Wednesday",
+        place=Place("Fenwold County", "seg-2:geocode"),
+        highlight=Place("Ashtarn Ridge", "seg-4:gps") if highlight else None,
+    )
+
+
+def _sobs(template_id, rate, n=500):
+    return _obs(template_id, rate, n=n, fmt="short")
+
+
+def test_a_single_place_short_decides_on_its_own_baseline():
+    rec = select_title(_short(), _snapshot(), DEFAULT_POLICY)
+    first = rec.candidates[0]
+    assert first.template_id == PLACE_BASELINE
+    assert first.title == "Mar 4, 1st stretch: Fenwold County, on a Wednesday"
+    assert first.claim_evidence == ("seg-2:geocode",)
+    assert rec.chosen_index == 0
+    assert rec.reason == "insufficient_evidence"
+
+
+def test_a_single_place_short_only_offers_single_place_templates():
+    rec = select_title(_short(), _snapshot(), DEFAULT_POLICY)
+    ids = [c.template_id for c in rec.candidates[1:]]
+    assert ids == [t[0] for t in PLACE_TEMPLATES]
+    hp = rec.candidates[1]
+    assert hp.title == "Ashtarn Ridge, Fenwold County"
+    assert hp.claim_evidence == ("seg-4:gps", "seg-2:geocode")
+
+
+def test_a_single_place_short_can_win_on_lift():
+    snap = _snapshot(_sobs(PLACE_BASELINE, 0.04), _sobs("highlight_place", 0.06))
+    rec = select_title(_short(), snap, DEFAULT_POLICY)
+    assert rec.reason == "lift_over_baseline"
+    assert rec.chosen_title == "Ashtarn Ridge, Fenwold County"
+
+
+def test_route_evidence_never_decides_a_single_place_short():
+    snap = _snapshot(_sobs(BASELINE, 0.04), _sobs("highlight_route", 0.09))
+    rec = select_title(_short(), snap, DEFAULT_POLICY)
+    assert rec.chosen_index == 0
+    assert rec.candidates[0].excluded_reason == "no_evidence"
+
+
+def test_a_single_place_short_without_a_highlight_keeps_the_baseline():
+    rec = select_title(_short(highlight=False), _snapshot(), DEFAULT_POLICY)
+    assert rec.candidates[1].excluded_reason == "missing_fact"
+    assert rec.chosen_index == 0
+
+
+def test_route_facts_keep_the_route_candidates():
+    rec = select_title(_facts(), _snapshot(), DEFAULT_POLICY)
+    assert [c.template_id for c in rec.candidates] == [
+        BASELINE,
+        "highlight_route",
+        "region_route",
+        "highlight_region",
+    ]
+
+
+def test_mixed_or_empty_place_shapes_are_refused():
+    mixed = replace(_facts(fmt="short"), place=Place("Fenwold County", "seg-2:g"))
+    with pytest.raises(TitleSelectionRefused, match="place"):
+        select_title(mixed, _snapshot(), DEFAULT_POLICY)
+    partial = replace(_short(), region=Place("Nordale", "seg-1:geocode"))
+    with pytest.raises(TitleSelectionRefused, match="place"):
+        select_title(partial, _snapshot(), DEFAULT_POLICY)
+    empty = TitleFacts(format="short", baseline_title="Somewhere")
+    with pytest.raises(TitleSelectionRefused, match="place"):
+        select_title(empty, _snapshot(), DEFAULT_POLICY)
+
+
+def test_a_single_place_longform_is_refused():
+    with pytest.raises(TitleSelectionRefused, match="short"):
+        select_title(replace(_short(), format="longform"), _snapshot(), DEFAULT_POLICY)
+
+
+def test_a_single_place_without_evidence_is_refused():
+    facts = replace(_short(), place=Place("Fenwold County", ""))
+    with pytest.raises(TitleSelectionRefused, match="evidence"):
+        select_title(facts, _snapshot(), DEFAULT_POLICY)

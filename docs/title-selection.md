@@ -8,11 +8,13 @@ same record (`record_to_dict` gives its JSON form).
 
 ## Inputs
 
-- **`TitleFacts`**: the format (`short` or `longform`), the caller's route-only
-  title (`baseline_title`), and the places a title may name: `origin`,
-  `destination`, `region` and an optional `highlight`. Each `Place` carries the
-  id of the evidence that puts the footage there; a place without one is
-  refused (`TitleSelectionRefused`), never titled.
+- **`TitleFacts`**: the format (`short` or `longform`), the caller's own
+  title (`baseline_title`), and the places a title may name, in one of two
+  shapes: a route (`origin`, `destination` and `region`), or, for a Short
+  only, a single `place`. Either shape may add a `highlight`. A mix of the two
+  shapes, neither, or a single place on a long-form is refused. Each `Place`
+  carries the id of the evidence that puts the footage there; a place without
+  one is refused (`TitleSelectionRefused`), never titled.
 - **`EvidenceSnapshot`**: `as_of` plus one `TemplateObservation` per template,
   format, traffic source (`search` or `browse`) and metric source: a click
   rate, its denominator `n` (impressions) and its window. Duplicates, rates
@@ -24,8 +26,12 @@ same record (`record_to_dict` gives its JSON form).
 
 ## Candidates
 
-Candidate 0 is always the baseline: the caller's route-only title, unchanged.
-The others come from the fixed `TEMPLATES` list, in order. A template whose
+Candidate 0 is always the baseline: the caller's title, unchanged. For a route
+its template id is `route` and it claims the origin, destination and region;
+for a single place it is `place` and claims that place. The others come from
+the fixed list for the shape, in order: `TEMPLATES` for a route,
+`PLACE_TEMPLATES` for a single place. Each shape's ids are its own, so a
+single-place Short is never judged on route evidence, or the reverse. A template whose
 place is missing is recorded with `missing_fact` and no title; one over the
 length cap is recorded with `too_long`. Every candidate lists the evidence ids
 of the places it names (`claim_evidence`).

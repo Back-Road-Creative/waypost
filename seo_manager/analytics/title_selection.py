@@ -6,7 +6,11 @@ returns a ``TitleDecision`` that names every candidate, its score, the evidence
 each of its claims rests on, why it was or was not eligible, and the policy
 version, so a published title can be replayed and audited later.
 
-Candidate 0 is always the caller's own route-only title, the baseline. Another
+Facts come in one of two shapes. A route names ``origin``, ``destination`` and
+``region``; a single-place Short names one ``place``. Each shape has its own
+baseline id and templates, so neither borrows the other's evidence.
+
+Candidate 0 is always the caller's own title, the baseline. Another
 candidate replaces it only when both it and the baseline have enough fresh
 evidence, measured as a thumbnail-impression click rate, for the same format
 and the traffic source the policy assigns that format, and it beats the
@@ -28,6 +32,7 @@ FORMATS = ("short", "longform")
 TRAFFIC_SOURCES = ("search", "browse")
 
 BASELINE = "route"
+PLACE_BASELINE = "place"
 
 # Templates after the baseline, in candidate order. Each names the facts it
 # claims; a template whose fact is absent is recorded, not generated.
@@ -45,6 +50,13 @@ TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("highlight_region", "{highlight}, {region}{suffix}", ("highlight", "region")),
 )
 _BASELINE_CLAIMS = ("origin", "destination", "region")
+
+# Templates for a single-place Short (``TitleFacts.place``), same shape as above.
+PLACE_TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+    ("highlight_place", "{highlight}, {place}{suffix}", ("highlight", "place")),
+)
+_PLACE_BASELINE_CLAIMS = ("place",)
+_ROUTE_KEYS = ("origin", "destination", "region")
 
 # Exclusion vocabulary, checked in this order.
 MISSING_FACT = "missing_fact"
@@ -74,13 +86,19 @@ class Place:
 
 @dataclass(frozen=True)
 class TitleFacts:
+    """A route (``origin``, ``destination``, ``region``) or, for a Short, one ``place``.
+
+    Exactly one shape is given; a mix, or neither, is refused.
+    """
+
     format: str
     baseline_title: str
-    origin: Place
-    destination: Place
-    region: Place
+    origin: Optional[Place] = None
+    destination: Optional[Place] = None
+    region: Optional[Place] = None
     highlight: Optional[Place] = None
     suffix: str = ""
+    place: Optional[Place] = None
 
 
 @dataclass(frozen=True)
@@ -156,11 +174,23 @@ def record_to_dict(decision: TitleDecision) -> Dict[str, Any]:
 
 
 def _places(facts: TitleFacts) -> Dict[str, Place]:
-    places = {
-        "origin": facts.origin,
-        "destination": facts.destination,
-        "region": facts.region,
-    }
+    route = {k: getattr(facts, k) for k in _ROUTE_KEYS}
+    given = [k for k, p in route.items() if p is not None]
+    places: Dict[str, Place]
+    if facts.place is not None:
+        if given:
+            raise TitleSelectionRefused(
+                f"facts: place cannot be mixed with route facts {given}"
+            )
+        if facts.format != "short":
+            raise TitleSelectionRefused("facts: a single place is for a short only")
+        places = {"place": facts.place}
+    elif len(given) == len(_ROUTE_KEYS):
+        places = {k: p for k, p in route.items() if p is not None}
+    else:
+        raise TitleSelectionRefused(
+            "facts: give a place, or origin, destination and region"
+        )
     if facts.highlight is not None:
         places["highlight"] = facts.highlight
     for key, place in places.items():
@@ -259,12 +289,21 @@ def select_title(
     ]
     as_of = evidence_snapshot.as_of
 
-    obs, excluded = _evidence_for(BASELINE, observations, as_of, policy)
-    claims = tuple(places[k].evidence_id for k in _BASELINE_CLAIMS)
+    if "place" in places:
+        baseline_id, baseline_claims, templates = (
+            PLACE_BASELINE,
+            _PLACE_BASELINE_CLAIMS,
+            PLACE_TEMPLATES,
+        )
+    else:
+        baseline_id, baseline_claims, templates = BASELINE, _BASELINE_CLAIMS, TEMPLATES
+
+    obs, excluded = _evidence_for(baseline_id, observations, as_of, policy)
+    claims = tuple(places[k].evidence_id for k in baseline_claims)
     candidates: List[Candidate] = [
-        _candidate(0, BASELINE, facts.baseline_title, claims, obs, excluded)
+        _candidate(0, baseline_id, facts.baseline_title, claims, obs, excluded)
     ]
-    for index, (template_id, template, needs) in enumerate(TEMPLATES, start=1):
+    for index, (template_id, template, needs) in enumerate(templates, start=1):
         if any(k not in places for k in needs):
             candidates.append(
                 _candidate(index, template_id, None, (), None, MISSING_FACT)
