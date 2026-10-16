@@ -35,10 +35,13 @@ SOURCE_FP = "src-" + "e" * 60
 PLAN_FP = "plan-" + "f" * 59
 
 
-def reviewed(title: str, ost: str = "", chapters: bool = False):
+def reviewed(
+    title: str, ost: str = "", chapters: bool = False, tags=("tag.scenic_drive",)
+):
     """Return ``(final_text_review, final_text_context)`` agreeing on ``title``.
 
-    ``chapters`` adds two chapter lines (``0:00`` and ``2:00``) to the description.
+    ``chapters`` adds two chapter lines (``0:00`` and ``2:00``) to the description;
+    ``tags`` are the template ids of the reviewed tags, in order.
     """
     ost = ost or title
     facts = TitleFacts(format="short", baseline_title=title, place=Place(title, "p-1"))
@@ -83,7 +86,10 @@ def reviewed(title: str, ost: str = "", chapters: bool = False):
                         else []
                     ),
                     TemplateBlock("description.footer", "description.footer"),
-                    Tag("tag.1", template_id="tag.scenic_drive"),
+                    *(
+                        Tag(f"tag.{i}", template_id=t)
+                        for i, t in enumerate(tags, start=1)
+                    ),
                 ]
             ),
         ],
