@@ -195,7 +195,10 @@ def test_w2_a_template_block_citing_evidence_is_refused():
 
 
 def test_w3_the_kinds_are_closed():
-    assert frozenset({PLACE_LINE, TEMPLATE, CHAPTER, TAG}) == VISIBLE_KINDS
+    assert (
+        frozenset({PLACE_LINE, TEMPLATE, CHAPTER, TAG, "param_template"})
+        == VISIBLE_KINDS
+    )
 
 
 @pytest.mark.parametrize("kind", ["prose", "description", "title", None])
@@ -300,8 +303,8 @@ def test_w6_a_template_tag_with_changed_words_is_refused():
 # --- W7: the review is v4; v3 is refused, v4 round-trips ---------------------
 
 
-def test_w7_the_review_is_version_4():
-    assert REVIEW_VERSION == "final-text-review-4"
+def test_w7_the_review_is_version_5():
+    assert REVIEW_VERSION == "final-text-review-5"
     assert RECORD_VERSION == "final-text-record-2"
 
 

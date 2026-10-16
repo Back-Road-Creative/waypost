@@ -7,6 +7,11 @@ surfaces, each checked its own way by ``review_final_text``:
   text (``scope`` ``whole`` or ``segment``);
 - ``template``: Waypost-owned boilerplate, accepted only when its
   ``template_id`` is registered and its bytes hash to the registered hash;
+- ``param_template``: a registered skeleton with typed slots (number, unit,
+  duration, enum, place), accepted only when the skeleton and slot specs hash
+  to the registered hash, every slot value is legal for its type, and the text
+  is exactly the skeleton filled; a place slot names an evidence id and is
+  backed like a place line (``final_text_params``, ``drive_templates``);
 - ``chapter``: a chapter label, a segment surface over its own window
   (``segment_places``);
 - ``tag``: a place tag backed by evidence, or a tag from a registered tag
@@ -27,11 +32,15 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+from .drive_templates import DRIVE_TEXT, PARAMS
+from .final_text_params import render, render_value, valid_value
+
 PLACE_LINE = "place_line"
 TEMPLATE = "template"
 CHAPTER = "chapter"
 TAG = "tag"
-VISIBLE_KINDS = frozenset({PLACE_LINE, TEMPLATE, CHAPTER, TAG})
+PARAM_TEMPLATE = "param_template"
+VISIBLE_KINDS = frozenset({PLACE_LINE, TEMPLATE, CHAPTER, TAG, PARAM_TEMPLATE})
 
 TEMPLATES: Dict[str, str] = {
     "description.chapters_heading": "Chapters",
@@ -41,6 +50,11 @@ TEMPLATES: Dict[str, str] = {
     "tag.driving_tour": "driving tour",
     "tag.4k_drive": "4k drive",
 }
+
+
+def all_templates() -> Dict[str, str]:
+    """Every fixed template and tag: the base set and the drive set."""
+    return {**TEMPLATES, **DRIVE_TEXT}
 
 
 def template_hash(text: str) -> str:
@@ -89,7 +103,54 @@ class Tag:
     template_id: Optional[str] = None
 
 
-Part = Union[PlaceLine, TemplateBlock, Chapter, Tag]
+@dataclass(frozen=True)
+class ParamBlock:
+    """A parameterized template with typed ``slots`` (``name -> value``).
+
+    A ``place`` slot's value is an evidence id; ``places`` maps each such id to
+    the cited text. A value of the wrong type raises when the entry is built.
+    """
+
+    surface: str
+    template_id: str
+    slots: Mapping[str, Any]
+    places: Mapping[str, str] = None  # type: ignore[assignment]
+
+
+Part = Union[PlaceLine, TemplateBlock, Chapter, Tag, ParamBlock]
+
+
+def place_text(slot: Any, text: str) -> str:
+    """A place slot's rendering: the cited text, or its ``#hashtag`` form."""
+    return "#" + "".join(text.split()) if slot.hashtag else text
+
+
+def _param_entry(part: ParamBlock) -> Dict[str, Any]:
+    template = PARAMS[part.template_id]
+    if set(part.slots) != {s.name for s in template.slots}:
+        raise ValueError(f"slots_differ:{part.surface}")
+    rendered: Dict[str, str] = {}
+    ids: List[str] = []
+    for slot in template.slots:
+        value = part.slots[slot.name]
+        if slot.type == "place":
+            if not isinstance(value, str) or value not in (part.places or {}):
+                raise ValueError(f"place_slot:{part.surface}:{slot.name}")
+            ids.append(value)
+            rendered[slot.name] = place_text(slot, part.places[value])
+        elif valid_value(slot, value):
+            rendered[slot.name] = render_value(slot, value)
+        else:
+            raise ValueError(f"slot_value:{part.surface}:{slot.name}")
+    return {
+        "surface": part.surface,
+        "kind": PARAM_TEMPLATE,
+        "text": render(template.skeleton, rendered),
+        "template_id": part.template_id,
+        "skeleton": template.skeleton,
+        "slots": dict(part.slots),
+        "evidence_ids": ids,
+    }
 
 
 def _timestamp(seconds: int) -> str:
@@ -101,6 +162,8 @@ def _timestamp(seconds: int) -> str:
 
 
 def _entry(part: Part) -> Dict[str, Any]:
+    if isinstance(part, ParamBlock):
+        return _param_entry(part)
     if isinstance(part, PlaceLine):
         entry: Dict[str, Any] = {
             "surface": part.surface,
@@ -116,7 +179,7 @@ def _entry(part: Part) -> Dict[str, Any]:
         return {
             "surface": part.surface,
             "kind": TEMPLATE,
-            "text": TEMPLATES[part.template_id],
+            "text": all_templates()[part.template_id],
             "template_id": part.template_id,
         }
     if isinstance(part, Chapter):
@@ -131,7 +194,7 @@ def _entry(part: Part) -> Dict[str, Any]:
         return {
             "surface": part.surface,
             "kind": TAG,
-            "text": TEMPLATES[part.template_id],
+            "text": all_templates()[part.template_id],
             "evidence_ids": [],
             "template_id": part.template_id,
         }
@@ -166,7 +229,7 @@ def is_description_surface(entry: Any) -> bool:
     if kind == CHAPTER:
         return True
     return (
-        kind in (PLACE_LINE, TEMPLATE)
+        kind in (PLACE_LINE, TEMPLATE, PARAM_TEMPLATE)
         and isinstance(surface, str)
         and (
             surface == DESCRIPTION_SURFACE
