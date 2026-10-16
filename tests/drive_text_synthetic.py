@@ -5,7 +5,6 @@ route or location appears here.
 """
 
 import copy
-from collections import namedtuple
 
 from seo_manager.analytics.drive_templates import LAYOUT
 from seo_manager.analytics.final_text_review import (
@@ -28,8 +27,7 @@ from seo_manager.analytics.title_selection import (
     record_to_dict,
     select_title,
 )
-
-PlaceRef = namedtuple("PlaceRef", "evidence_id text")  # an evidence-cited place
+from seo_manager.generation.drive_text import PlaceRef
 
 TITLE = "Brindlemoor to Quillhaven, Harrow County in 4K"
 SRC, PLAN = "src-" + "a" * 60, "plan-" + "b" * 59
