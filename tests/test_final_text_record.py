@@ -75,7 +75,7 @@ def _whole(surface, text, ids):
     return {"surface": surface, "text": text, "evidence_ids": ids, "scope": "whole"}
 
 
-def _record(text=ROUTE, ids=("p-1", "p-2"), title=TITLE, **overrides):
+def _record(text=ROUTE, ids=("p-1", "p-2", "r-1"), title=TITLE, **overrides):
     record = {
         "record_version": RECORD_VERSION,
         "approval_hash": "c" * 64,
@@ -176,6 +176,7 @@ def test_min_place_seconds_is_the_policy_threshold():
         "version": "test-policy",
         "min_place_seconds": 600.0,
         "region_min_coverage": 1.0,
+        "filler_words": DEFAULT_TEXT_POLICY.filler_words,
     }
 
 
@@ -388,3 +389,103 @@ def test_a_review_of_an_older_review_version_is_stale():
 def test_refusals_never_approve():
     reviews = [_review(), _review(_record(text="Brindlemoor", ids=("p-1",)))]
     assert all(r.human_gate_required is True for r in reviews)
+
+
+# --- every name in the text needs a claim ----------------------------------
+
+
+def _unbacked(text, ids=("p-2", "r-1"), title=None, **record):
+    """A route whose sound region would otherwise excuse the text."""
+    record.setdefault("region_claims", [_region()])
+    title = title or text
+    return _review(_record(text=text, ids=ids, title=title, **record), _decision(title))
+
+
+def test_a_name_with_no_claim_is_refused_even_under_a_sound_region():
+    # The shape that agreed at 4b27600: the region excuses the omitted
+    # required place, and nothing asked what "Longmere" stood on.
+    review = _unbacked("Longmere to Quillhaven, Harrow County")
+    assert review.verdict == REFUSED
+    for surface in ("ost", "thumbnail", "title"):
+        assert f"name_unbacked:{surface}:longmere" in review.reasons
+    error = _refused(
+        review=review,
+        final_title="Longmere to Quillhaven, Harrow County",
+        visible={
+            "ost": "Longmere to Quillhaven, Harrow County",
+            "thumbnail": "Longmere to Quillhaven, Harrow County",
+        },
+    )
+    assert error.code == "verdict:refused"
+
+
+def test_a_known_place_named_without_citing_it_is_refused():
+    review = _unbacked("Fenwick to Quillhaven, Harrow County")
+    assert "name_unbacked:ost:fenwick" in review.reasons
+
+
+def test_a_cited_place_off_the_retained_route_is_refused():
+    review = _unbacked(
+        "Fenwick to Quillhaven, Harrow County", ids=("p-3", "p-2", "r-1")
+    )
+    assert review.verdict == REFUSED
+    assert "place_not_on_route:ost:p-3" in review.reasons
+
+
+def test_a_brief_retained_place_may_be_named():
+    places = [
+        {"evidence_id": "p-1", "retained_seconds": 1200.0, "required": True},
+        {"evidence_id": "p-2", "retained_seconds": 480.0, "required": True},
+        {"evidence_id": "p-3", "retained_seconds": 20.0, "required": False},
+    ]
+    text = "Brindlemoor to Quillhaven via Fenwick, Harrow County"
+    review = _review(
+        _record(text=text, ids=("p-1", "p-2", "p-3", "r-1"), route_places=places)
+    )
+    assert review.verdict == AGREE, review.reasons
+
+
+def test_a_short_naming_a_place_outside_its_segment_is_refused():
+    review = _short(text="Quillhaven to Brindlemoor")
+    assert "name_unbacked:shorts_ost:brindlemoor" in review.reasons
+    record_review = review_final_text(
+        _record(
+            visible=[
+                {
+                    "surface": "shorts_ost",
+                    "text": "Quillhaven to Brindlemoor",
+                    "evidence_ids": ["p-2", "p-1"],
+                    "scope": "segment",
+                    "segment_places": ["p-2"],
+                }
+            ]
+        ),
+        _decision(),
+        EVIDENCE,
+    )
+    assert "place_not_in_segment:shorts_ost:p-1" in record_review.reasons
+
+
+def test_words_outside_the_policy_filler_are_refused():
+    text = "Brindlemoor to Quillhaven, Harrow County at dawn"
+    record = _record(text=text, ids=("p-1", "p-2", "r-1"))
+    review = _review(record)
+    assert "name_unbacked:ost:dawn" in review.reasons
+    assert "name_unbacked:ost:at" not in review.reasons
+    policy = FinalTextPolicy(
+        version="test-filler",
+        filler_words=(*DEFAULT_TEXT_POLICY.filler_words, "dawn"),
+    )
+    assert _review(record, policy=policy).verdict == AGREE
+
+
+def test_a_cited_road_backs_its_name():
+    road = {"evidence_id": "rd-1", "kind": "road", "value": "Old Mill Road"}
+    evidence = [*EVIDENCE, {**road, "source": "gps"}]
+    text = "Brindlemoor to Quillhaven via Old Mill Road"
+    record = _record(text=text, ids=("p-1", "p-2", "rd-1"))
+    review = review_final_text(record, _decision(), evidence)
+    assert review.verdict == AGREE, review.reasons
+    uncited = _record(text=text, ids=("p-1", "p-2"))
+    review = review_final_text(uncited, _decision(), evidence)
+    assert "name_unbacked:ost:mill" in review.reasons

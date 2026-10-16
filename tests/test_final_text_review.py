@@ -54,7 +54,7 @@ EVIDENCE = [
     },
     {
         "evidence_id": "seg-1:geo",
-        "kind": "location",
+        "kind": "region",
         "value": "Nordale",
         "source": "geocode",
     },
@@ -126,6 +126,8 @@ def _approved(**overrides):
         "route_places": [
             {"evidence_id": "seg-1:gps", "retained_seconds": 900.0, "required": True},
             {"evidence_id": "seg-9:gps", "retained_seconds": 600.0, "required": True},
+            # The highlight is retained footage too, so a title may name it.
+            {"evidence_id": "seg-4:gps", "retained_seconds": 40.0, "required": False},
         ],
         "region_claims": [],
         "visible": [
