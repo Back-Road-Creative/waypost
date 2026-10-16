@@ -18,7 +18,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 # Imported unconditionally: google-api-python-client and google-auth are both
 # declared dependencies, and youtube/__init__.py imports this module eagerly,
@@ -31,6 +31,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
+from ..analytics.final_text_review import FinalTextReviewRefused, verify_review
+from ..analytics.title_selection import DEFAULT_POLICY
 from ..platforms.youtube import YouTubeAdapter
 from ..validation.validators import PlatformValidator
 
@@ -164,6 +166,9 @@ class YouTubeUploader:
         publish_at: Optional[datetime] = None,
         progress_callback: Optional[Callable] = None,
         dry_run: bool = False,
+        *,
+        final_text_review: Any,
+        final_text_context: Mapping[str, Any],
     ) -> Optional[str]:
         """
         Upload video to YouTube with SEO metadata.
@@ -176,6 +181,13 @@ class YouTubeUploader:
             publish_at: Schedule publish time (for private videos)
             progress_callback: Function(current_bytes, total_bytes)
             dry_run: Validate but don't upload
+            final_text_review: The ``FinalTextReview`` (or its persisted dict)
+                of this upload's title and on-screen text. Required; there is
+                no opt-out, and passing it is not an approval: the caller's
+                human gate still applies.
+            final_text_context: ``visible`` (surface -> text the upload
+                shows), ``source_fingerprint`` and ``plan_fingerprint``,
+                recomputed from current state
 
         Returns:
             Video ID if successful, None if failed
@@ -183,6 +195,9 @@ class YouTubeUploader:
         Raises:
             FileNotFoundError: If video file doesn't exist
             ValueError: If metadata is invalid
+            FinalTextReviewRefused: If the review does not cover the title in
+                the request body, the visible text, the current source and
+                plan, or the title policy in force
 
         API Quota:
             - Upload: 1600 units
@@ -239,6 +254,7 @@ class YouTubeUploader:
         # sent, so nothing between the caller's metadata and the request body
         # can slip past. Runs for dry runs too, before any API call.
         self.validate_upload_body(metadata, body)
+        self.verify_final_text(body, final_text_review, final_text_context)
 
         if dry_run:
             print("🔍 DRY RUN - Validation only")
@@ -315,6 +331,21 @@ class YouTubeUploader:
             raise ValueError(
                 "Upload payload failed validation: " + "; ".join(result.errors)
             )
+
+    def verify_final_text(
+        self, body: dict, review: Any, context: Mapping[str, Any]
+    ) -> None:
+        """Refuse a body whose title or on-screen text was not reviewed as is."""
+        if not isinstance(context, Mapping):
+            raise FinalTextReviewRefused(["review_malformed"], "no review context")
+        verify_review(
+            review,
+            final_title=body["snippet"]["title"],
+            visible=context.get("visible") or {},
+            source_fingerprint=context.get("source_fingerprint") or "",
+            plan_fingerprint=context.get("plan_fingerprint") or "",
+            policy_version=DEFAULT_POLICY.version,
+        )
 
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str):
         """
