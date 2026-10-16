@@ -135,12 +135,14 @@ def _approved(**overrides):
                 "surface": "ost",
                 "text": OST,
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
             {
                 "surface": "thumbnail",
                 "text": OST,
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
         ],
@@ -256,11 +258,18 @@ def test_an_evidence_id_not_supplied_is_refused():
 def test_visible_text_without_evidence_is_refused():
     approved = _approved(
         visible=[
-            {"surface": "ost", "text": OST, "evidence_ids": [], "scope": "whole"},
+            {
+                "surface": "ost",
+                "text": OST,
+                "evidence_ids": [],
+                "kind": "place_line",
+                "scope": "whole",
+            },
             {
                 "surface": "thumbnail",
                 "text": OST,
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
         ]
@@ -329,12 +338,14 @@ def test_evidence_for_a_place_the_text_does_not_show_is_refused():
                 "surface": "ost",
                 "text": "Quillhaven, Nordale",
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
             {
                 "surface": "thumbnail",
                 "text": OST,
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
         ]
@@ -351,12 +362,14 @@ def test_a_duplicate_surface_is_refused():
                 "surface": "ost",
                 "text": OST,
                 "evidence_ids": list(OST_IDS),
+                "kind": "place_line",
                 "scope": "whole",
             },
             {
                 "surface": "ost",
                 "text": "Quillhaven",
                 "evidence_ids": ["seg-9:gps"],
+                "kind": "place_line",
                 "scope": "whole",
             },
         ]
@@ -402,6 +415,7 @@ def test_a_short_reviews_its_own_burned_text_and_place_title():
                 "surface": "shorts_ost",
                 "text": "Quillhaven",
                 "evidence_ids": ["seg-9:gps"],
+                "kind": "place_line",
                 "scope": "segment",
                 "segment_places": ["seg-9:gps"],
             }
