@@ -23,16 +23,21 @@ and a long-form title, must name every required place, or name a region
 whose ``region_claims`` item contains them all with full GPS coverage, no
 gaps and no samples outside it. A segment surface (a Short's burned text),
 and a Short's title, must name its own ``segment_places`` the same way.
+The reverse holds too: every name a surface shows needs a claim. Once its
+cited names are taken out, a word outside ``FinalTextPolicy.filler_words``
+is refused as a name nothing backs, and a cited location must be on the
+retained route (a Short: in its own segment).
 ``verify_review`` refuses a review whose source, plan, title policy or text
 policy changed since it was made.
 """
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-REVIEW_VERSION = "final-text-review-2"
+REVIEW_VERSION = "final-text-review-3"
 RECORD_VERSION = "final-text-record-1"
 
 AGREE = "agree"
@@ -42,7 +47,29 @@ REFUSED = "refused"
 LOCATION = "location"
 REGION = "region"
 DATE = "date"
-_PLACE_KINDS = frozenset({LOCATION, REGION})
+ROAD = "road"
+_PLACE_KINDS = frozenset({LOCATION, REGION, ROAD})
+
+# Words a surface may carry besides its cited names: the connectors in
+# Waypost's title templates and the usual title suffixes. Anything else
+# that is left once the cited names are taken out counts as a name with
+# no claim behind it.
+DEFAULT_FILLER_WORDS: Tuple[str, ...] = (
+    "to",
+    "via",
+    "and",
+    "from",
+    "loop",
+    "drive",
+    "in",
+    "4k",
+    "shorts",
+    "the",
+    "of",
+    "at",
+    "near",
+    "through",
+)
 
 WHOLE = "whole"
 SEGMENT = "segment"
@@ -74,6 +101,7 @@ class FinalTextPolicy:
     version: str = "final-text-policy-1"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
+    filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -421,6 +449,31 @@ def _check_names(
         reasons.refuse(f"route_reduced:{surface.surface}")
 
 
+def _check_backing(
+    surface: SurfaceReview,
+    places: Sequence[str],
+    off_places: str,
+    policy: FinalTextPolicy,
+    reasons: _Reasons,
+) -> None:
+    """Refuse a name on ``surface`` that no claim in ``places`` stands behind.
+
+    Every cited location must be one of ``places`` (the retained route, or a
+    segment's own places). Every word left once the cited names are taken out
+    must be filler: otherwise it is a name nothing backs.
+    """
+    residual = surface.text.casefold()
+    for item in sorted(surface.evidence, key=lambda i: -len(i.value)):
+        if item.kind == LOCATION and item.evidence_id not in places:
+            reasons.refuse(f"{off_places}:{surface.surface}:{item.evidence_id}")
+        pattern = r"(?<!\w)" + re.escape(item.value.casefold()) + r"(?!\w)"
+        residual = re.sub(pattern, " ", residual)
+    filler = {w.casefold() for w in policy.filler_words}
+    for word in re.findall(r"[^\W_]+", residual):
+        if word not in filler and any(c.isalpha() for c in word):
+            reasons.refuse(f"name_unbacked:{surface.surface}:{word}")
+
+
 def review_final_text(
     approved: Mapping[str, Any],
     decision: Mapping[str, Any],
@@ -511,10 +564,20 @@ def review_final_text(
     segment_needed: List[str] = []
     for review_surface in surfaces:
         if review_surface.scope == WHOLE:
+            _check_backing(
+                review_surface, route_ids, "place_not_on_route", policy, reasons
+            )
             _check_names(
                 review_surface, required, "place_dropped", regions, policy, reasons
             )
             continue
+        _check_backing(
+            review_surface,
+            review_surface.segment_places,
+            "place_not_in_segment",
+            policy,
+            reasons,
+        )
         needed = [p for p in review_surface.segment_places if p in route_ids]
         segment_needed += [p for p in needed if p not in segment_needed]
         _check_names(
@@ -533,6 +596,9 @@ def review_final_text(
     )
     title_surface = SurfaceReview(TITLE_SURFACE, final_title or "", title_items)
     if decision.get("format") == "short" and segment_needed:
+        _check_backing(
+            title_surface, segment_needed, "place_not_in_segment", policy, reasons
+        )
         _check_names(
             title_surface,
             segment_needed,
@@ -542,6 +608,7 @@ def review_final_text(
             reasons,
         )
     else:
+        _check_backing(title_surface, route_ids, "place_not_on_route", policy, reasons)
         _check_names(title_surface, required, "place_dropped", regions, policy, reasons)
     surfaces.append(title_surface)
 
@@ -616,7 +683,7 @@ def _stale(
         ("stale:source", body["source_fingerprint"], source_fingerprint),
         ("stale:plan", body["plan_fingerprint"], plan_fingerprint),
         ("stale:policy", body["decision_policy_version"], policy_version),
-        ("stale:text_policy", body["text_policy"], asdict(text_policy)),
+        ("stale:text_policy", body["text_policy"], _plain(asdict(text_policy))),
         ("stale:title", body["final_title"], final_title),
     ):
         if (not _text(actual) and not isinstance(actual, dict)) or expected != actual:
