@@ -44,8 +44,17 @@ import re
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .drive_templates import (
+    DRIVE_TEMPLATES_VERSION,
+    LAYOUTS,
+    PARAMS,
+    TAG_ORDER,
+    drive_hashes,
+)
+from .final_text_params import param_hash, render, render_value, valid_value
 from .final_text_surfaces import (
     CHAPTER,
+    PARAM_TEMPLATE,
     PLACE_LINE,
     TAG,
     TEMPLATE,
@@ -54,11 +63,12 @@ from .final_text_surfaces import (
     compose_tags,
     is_description_surface,
     is_tag_surface,
+    place_text,
     template_hash,
     template_hashes,
 )
 
-REVIEW_VERSION = "final-text-review-4"
+REVIEW_VERSION = "final-text-review-5"
 RECORD_VERSION = "final-text-record-2"
 
 AGREE = "agree"
@@ -119,12 +129,16 @@ class FinalTextReviewRefused(ValueError):
 class FinalTextPolicy:
     """The thresholds a review applies; recorded in, and checked against, it."""
 
-    version: str = "final-text-policy-2"
+    version: str = "final-text-policy-3"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
     filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
     # ``(template_id, sha256)`` of each template a surface may carry.
     templates: Tuple[Tuple[str, str], ...] = template_hashes()
+    # The drive set (fixed lines, tags, parameterized skeletons), versioned:
+    # a record written under one version is refused under another.
+    drive_templates: Tuple[Tuple[str, str], ...] = drive_hashes()
+    drive_version: str = DRIVE_TEMPLATES_VERSION
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -188,6 +202,7 @@ class FinalTextReview:
     decision_policy_version: Optional[str]
     decision_reason: Optional[str]
     decision_chosen_index: Optional[int]
+    description_layout: Optional[str]
     human_gate_required: bool
     fingerprint: str
 
@@ -508,15 +523,119 @@ def _template(
     reasons: _Reasons,
 ) -> None:
     """Refuse a template surface unless its id is registered and its bytes match."""
-    registered = dict(policy.templates)
+    registered = {**dict(policy.templates), **dict(policy.drive_templates)}
     if (
         not isinstance(template_id, str)
         or template_id not in registered
+        or template_id in PARAMS
         or template_id.startswith("tag.") != tag
     ):
         reasons.refuse(f"template_unknown:{surface}:{template_id}")
     elif template_hash(text) != registered[template_id]:
         reasons.refuse(f"template_changed:{surface}:{template_id}")
+
+
+def _param(
+    entry: Mapping[str, Any],
+    surface: str,
+    policy: FinalTextPolicy,
+    by_id: Mapping[str, EvidenceItem],
+    ambiguous: set,
+    route_ids: Sequence[str],
+    reasons: _Reasons,
+) -> Optional[Tuple[str, Tuple[EvidenceItem, ...]]]:
+    """``(text, place evidence)`` of a parameterized template, or None if refused.
+
+    The skeleton must hash to the registered hash, every slot value must be
+    legal for its slot type, the text must be the skeleton filled, and the
+    places cited must pass ``_check_backing`` like a place line's.
+    """
+    template_id, text = entry.get("template_id"), _text(entry.get("text"))
+    template = PARAMS.get(template_id) if isinstance(template_id, str) else None
+    registered = dict(policy.drive_templates)
+    slots, ids = entry.get("slots"), entry.get("evidence_ids")
+    if template is None or template_id not in registered:
+        reasons.refuse(f"template_unknown:{surface}:{template_id}")
+        return None
+    skeleton = entry.get("skeleton")
+    if param_hash(skeleton, template) != registered[template_id]:
+        reasons.refuse(f"template_changed:{surface}:{template_id}")
+        return None
+    if text is None or not isinstance(slots, Mapping) or _ids(ids) is None:
+        reasons.refuse(f"param_malformed:{surface}")
+        return None
+    if set(slots) != {s.name for s in template.slots}:
+        reasons.refuse(f"param_slots:{surface}")
+        return None
+    rendered: Dict[str, str] = {}
+    items: List[EvidenceItem] = []
+    for slot in template.slots:
+        value = slots[slot.name]
+        if slot.type != "place":
+            if valid_value(slot, value):
+                rendered[slot.name] = render_value(slot, value)
+            else:
+                reasons.refuse(f"param_slot:{surface}:{slot.name}")
+            continue
+        found = (
+            _resolve(surface, None, [value], _PLACE_KINDS, by_id, ambiguous, reasons)
+            if isinstance(value, str) and value in ids
+            else ()
+        )
+        if not found:
+            reasons.refuse(f"param_place:{surface}:{slot.name}")
+            continue
+        items += found
+        rendered[slot.name] = place_text(slot, found[0].value)
+    if len(rendered) != len(template.slots):
+        return None
+    if render(skeleton, rendered) != text:
+        reasons.refuse(f"param_text:{surface}")
+    if set(ids) != {i.evidence_id for i in items} or len(ids) != len(items):
+        reasons.refuse(f"param_evidence:{surface}")
+    cited = SurfaceReview(
+        surface, " ".join(i.value for i in items), tuple(items), kind=PARAM_TEMPLATE
+    )
+    _check_backing(cited, route_ids, "place_not_on_route", policy, reasons)
+    return text, tuple(items)
+
+
+def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -> None:
+    """Refuse a description that is not exactly ``layout``'s blocks in order."""
+    blocks = LAYOUTS.get(layout) if isinstance(layout, str) else None
+    if blocks is None:
+        reasons.refuse(f"layout_unknown:{layout}")
+        return
+    names = [name for name, _ in blocks]
+    last, seen = -1, set()
+    for s in surfaces:
+        if not is_description_surface(s):
+            continue
+        name = (
+            "chapter" if s.kind == CHAPTER else s.surface.partition("description.")[2]
+        )
+        ok = s.kind == CHAPTER or (
+            s.kind in (TEMPLATE, PARAM_TEMPLATE)
+            and str(s.template_id).split(".")[:2] == ["description", name]
+        )
+        if name not in names or not ok:
+            reasons.refuse(f"layout_free_line:{s.surface}")
+            continue
+        position = names.index(name)
+        if position < last or (position == last and name != "chapter"):
+            reasons.refuse(f"layout_order:{s.surface}")
+        last = max(last, position)
+        seen.add(name)
+    for name, required in blocks:
+        if required and name not in seen:
+            reasons.refuse(f"layout_missing:{name}")
+    order = [
+        TAG_ORDER.index(s.template_id) if s.template_id in TAG_ORDER else -1
+        for s in surfaces
+        if s.kind == TAG and s.template_id is not None
+    ]
+    if order != sorted(set(order)) or -1 in order:
+        reasons.refuse("tag_order")
 
 
 def _surface(
@@ -580,7 +699,10 @@ def review_final_text(
     ``final_text_surfaces.VISIBLE_KINDS``; for a ``place_line`` ``scope`` is
     ``whole`` or ``segment`` and a segment also lists its ``segment_places``;
     a ``chapter`` lists its window as ``segment_places``; a ``template``, or
-    a ``tag`` from a tag template, names its ``template_id`` and no evidence.
+    a ``tag`` from a tag template, names its ``template_id`` and no evidence;
+    a ``param_template`` names its ``template_id``, ``skeleton``, ``slots``
+    (``name -> value``) and the evidence ids its place slots cite. An optional
+    ``description_layout`` names a registered layout to enforce.
     ``decision``: the dict form of a ``TitleDecision``. ``evidence``:
     ``{evidence_id, kind, value, source}`` items, ``kind`` being
     ``location``, ``region`` or ``date``.
@@ -633,6 +755,19 @@ def review_final_text(
             reasons.refuse(f"duplicate_surface:{surface}")
             continue
         names.add(surface)
+        if entry.get("kind") == PARAM_TEMPLATE:
+            done = _param(entry, surface, policy, by_id, ambiguous, route_ids, reasons)
+            if done is not None:
+                surfaces.append(
+                    SurfaceReview(
+                        surface,
+                        done[0],
+                        done[1],
+                        kind=PARAM_TEMPLATE,
+                        template_id=str(entry.get("template_id")),
+                    )
+                )
+            continue
         parsed = _surface(entry, surface, position, policy, reasons)
         if parsed is None:
             continue
@@ -682,6 +817,10 @@ def review_final_text(
         _check_names(
             review_surface, needed, "segment_place_dropped", regions, policy, reasons
         )
+
+    layout = _text(approved.get("description_layout"))
+    if layout is not None:
+        _layout(layout, surfaces, reasons)
 
     final_title, claims = _chosen(decision, reasons)
     title_items = _resolve(
@@ -752,6 +891,7 @@ def review_final_text(
         decision_policy_version=_text(decision.get("policy_version")),
         decision_reason=_text(decision.get("reason")),
         decision_chosen_index=index if isinstance(index, int) else None,
+        description_layout=layout,
         human_gate_required=True,
         fingerprint="",
     )

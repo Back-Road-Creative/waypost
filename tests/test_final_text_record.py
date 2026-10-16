@@ -184,6 +184,8 @@ def test_min_place_seconds_is_the_policy_threshold():
         "region_min_coverage": 1.0,
         "filler_words": DEFAULT_TEXT_POLICY.filler_words,
         "templates": DEFAULT_TEXT_POLICY.templates,
+        "drive_templates": DEFAULT_TEXT_POLICY.drive_templates,
+        "drive_version": DEFAULT_TEXT_POLICY.drive_version,
     }
 
 
