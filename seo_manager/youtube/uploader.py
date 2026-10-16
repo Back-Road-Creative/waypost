@@ -343,6 +343,12 @@ class YouTubeUploader:
         """
         if not isinstance(context, Mapping):
             raise FinalTextReviewRefused(["review_malformed"], "no review context")
+        description = body["snippet"].get("description")
+        if not isinstance(description, str):
+            # None would skip the description bind in ``verify_review``.
+            raise FinalTextReviewRefused(
+                ["stale:description"], "the body carries no description"
+            )
         verify_review(
             review,
             final_title=body["snippet"]["title"],
@@ -350,7 +356,7 @@ class YouTubeUploader:
             source_fingerprint=context.get("source_fingerprint") or "",
             plan_fingerprint=context.get("plan_fingerprint") or "",
             policy_version=DEFAULT_POLICY.version,
-            description=body["snippet"]["description"],
+            description=description,
             tags=list(body["snippet"].get("tags") or []),
         )
 

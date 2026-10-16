@@ -211,6 +211,42 @@ def test_tags_edited_after_review_are_refused_before_any_call(up, dry_run, edit)
     uploader.youtube.videos.assert_not_called()
 
 
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_tags_reordered_after_review_are_refused_before_any_call(up, dry_run):
+    """Order is part of what was reviewed: the same tags in another order are
+    a different payload, never compared as a set."""
+    uploader, video = up
+    review, context = reviewed(TITLE, tags=("tag.scenic_drive", "tag.road_trip"))
+    description, tags = sent_text(review)
+    assert tags == ["scenic drive", "road trip"]
+    kwargs = {"final_text_review": review, "final_text_context": context}
+    with pytest.raises(FinalTextReviewRefused) as caught:
+        uploader.upload_video(
+            video,
+            _metadata(description=description, tags=list(reversed(tags))),
+            dry_run=dry_run,
+            **kwargs,
+        )
+    assert caught.value.code == "stale:tags"
+    uploader.youtube.videos.assert_not_called()
+    assert (
+        uploader.upload_video(
+            video, _metadata(description=description, tags=tags), **kwargs
+        )
+        == "vid123"
+    )
+
+
+@pytest.mark.parametrize("snippet", [{}, {"description": None}])
+def test_a_body_with_no_description_is_refused_not_a_key_error(up, snippet):
+    uploader, _video = up
+    review, context = reviewed(TITLE)
+    body = {"snippet": {"title": TITLE, "tags": sent_text(review)[1], **snippet}}
+    with pytest.raises(FinalTextReviewRefused) as caught:
+        uploader.verify_final_text(body, review, context)
+    assert caught.value.code == "stale:description"
+
+
 def test_every_stale_reason_is_named_together(up):
     uploader, video = up
     with pytest.raises(FinalTextReviewRefused) as caught:
