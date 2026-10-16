@@ -16,6 +16,7 @@ from seo_manager.analytics import metric_source
 from seo_manager.analytics.final_text_review import (
     AGREE,
     DISAGREE,
+    RECORD_VERSION,
     REFUSED,
     FinalTextReviewRefused,
     review_final_text,
@@ -71,6 +72,8 @@ EVIDENCE = [
     },
 ]
 OST_IDS = ["seg-1:gps", "seg-9:gps", "seg-1:geo"]
+SOURCE_FP = "src-" + "1" * 60
+PLAN_FP = "plan-" + "2" * 59
 
 
 def _facts():
@@ -117,9 +120,27 @@ def _approved(**overrides):
         "title": BASELINE_TITLE,
         "recording_date": DATE,
         "date_evidence_id": "rec:date",
+        "record_version": RECORD_VERSION,
+        "source_fingerprint": SOURCE_FP,
+        "plan_fingerprint": PLAN_FP,
+        "route_places": [
+            {"evidence_id": "seg-1:gps", "retained_seconds": 900.0, "required": True},
+            {"evidence_id": "seg-9:gps", "retained_seconds": 600.0, "required": True},
+        ],
+        "region_claims": [],
         "visible": [
-            {"surface": "ost", "text": OST, "evidence_ids": list(OST_IDS)},
-            {"surface": "thumbnail", "text": OST, "evidence_ids": list(OST_IDS)},
+            {
+                "surface": "ost",
+                "text": OST,
+                "evidence_ids": list(OST_IDS),
+                "scope": "whole",
+            },
+            {
+                "surface": "thumbnail",
+                "text": OST,
+                "evidence_ids": list(OST_IDS),
+                "scope": "whole",
+            },
         ],
     }
     approved.update(overrides)
@@ -135,6 +156,13 @@ def _review(approved=None, decision=None, evidence=None):
 
 
 # --- agree -----------------------------------------------------------------
+
+
+def _verify(review, **kwargs):
+    kwargs.setdefault("source_fingerprint", SOURCE_FP)
+    kwargs.setdefault("plan_fingerprint", PLAN_FP)
+    kwargs.setdefault("policy_version", DEFAULT_POLICY.version)
+    verify_review(review, **kwargs)
 
 
 def test_matching_text_title_and_evidence_agree():
@@ -226,8 +254,13 @@ def test_an_evidence_id_not_supplied_is_refused():
 def test_visible_text_without_evidence_is_refused():
     approved = _approved(
         visible=[
-            {"surface": "ost", "text": OST, "evidence_ids": []},
-            {"surface": "thumbnail", "text": OST, "evidence_ids": list(OST_IDS)},
+            {"surface": "ost", "text": OST, "evidence_ids": [], "scope": "whole"},
+            {
+                "surface": "thumbnail",
+                "text": OST,
+                "evidence_ids": list(OST_IDS),
+                "scope": "whole",
+            },
         ]
     )
     review = _review(approved)
@@ -294,8 +327,14 @@ def test_evidence_for_a_place_the_text_does_not_show_is_refused():
                 "surface": "ost",
                 "text": "Quillhaven, Nordale",
                 "evidence_ids": list(OST_IDS),
+                "scope": "whole",
             },
-            {"surface": "thumbnail", "text": OST, "evidence_ids": list(OST_IDS)},
+            {
+                "surface": "thumbnail",
+                "text": OST,
+                "evidence_ids": list(OST_IDS),
+                "scope": "whole",
+            },
         ]
     )
     review = _review(approved)
@@ -306,8 +345,18 @@ def test_evidence_for_a_place_the_text_does_not_show_is_refused():
 def test_a_duplicate_surface_is_refused():
     approved = _approved(
         visible=[
-            {"surface": "ost", "text": OST, "evidence_ids": list(OST_IDS)},
-            {"surface": "ost", "text": "Quillhaven", "evidence_ids": ["seg-9:gps"]},
+            {
+                "surface": "ost",
+                "text": OST,
+                "evidence_ids": list(OST_IDS),
+                "scope": "whole",
+            },
+            {
+                "surface": "ost",
+                "text": "Quillhaven",
+                "evidence_ids": ["seg-9:gps"],
+                "scope": "whole",
+            },
         ]
     )
     review = _review(approved)
@@ -351,6 +400,8 @@ def test_a_short_reviews_its_own_burned_text_and_place_title():
                 "surface": "shorts_ost",
                 "text": "Quillhaven",
                 "evidence_ids": ["seg-9:gps"],
+                "scope": "segment",
+                "segment_places": ["seg-9:gps"],
             }
         ],
     )
@@ -361,11 +412,11 @@ def test_a_short_reviews_its_own_burned_text_and_place_title():
         "title",
         "recording_date",
     ]
-    verify_review(
+    _verify(
         review, final_title="Quillhaven #shorts", visible={"shorts_ost": "Quillhaven"}
     )
     with pytest.raises(FinalTextReviewRefused, match="shorts_ost"):
-        verify_review(
+        _verify(
             review,
             final_title="Quillhaven #shorts",
             visible={"shorts_ost": "Quillhaven Junction"},
@@ -393,17 +444,17 @@ def _visible():
 
 
 def test_verify_passes_for_the_reviewed_payload():
-    verify_review(_review(), final_title=BASELINE_TITLE, visible=_visible())
+    _verify(_review(), final_title=BASELINE_TITLE, visible=_visible())
 
 
 def test_verify_refuses_a_later_title_mutation():
     with pytest.raises(FinalTextReviewRefused, match="title"):
-        verify_review(_review(), final_title=HIGHLIGHT_TITLE, visible=_visible())
+        _verify(_review(), final_title=HIGHLIGHT_TITLE, visible=_visible())
 
 
 def test_verify_refuses_changed_visible_text():
     with pytest.raises(FinalTextReviewRefused, match="thumbnail"):
-        verify_review(
+        _verify(
             _review(),
             final_title=BASELINE_TITLE,
             visible={"ost": OST, "thumbnail": "Quillhaven"},
@@ -412,9 +463,9 @@ def test_verify_refuses_changed_visible_text():
 
 def test_verify_refuses_a_surface_added_or_dropped():
     with pytest.raises(FinalTextReviewRefused, match="surfaces"):
-        verify_review(_review(), final_title=BASELINE_TITLE, visible={"ost": OST})
+        _verify(_review(), final_title=BASELINE_TITLE, visible={"ost": OST})
     with pytest.raises(FinalTextReviewRefused, match="surfaces"):
-        verify_review(
+        _verify(
             _review(),
             final_title=BASELINE_TITLE,
             visible={**_visible(), "shorts_ost": "Quillhaven"},
@@ -427,13 +478,13 @@ def test_verify_refuses_a_review_that_did_not_agree(decision, evidence):
         decision=_highlight_decision() if decision else None, evidence=evidence
     )
     with pytest.raises(FinalTextReviewRefused, match="verdict"):
-        verify_review(review, final_title=review.final_title, visible=_visible())
+        _verify(review, final_title=review.final_title, visible=_visible())
 
 
 def test_verify_refuses_an_edited_review():
     forged = replace(_review(decision=_highlight_decision()), verdict=AGREE, reasons=())
     with pytest.raises(FinalTextReviewRefused, match="fingerprint"):
-        verify_review(forged, final_title=HIGHLIGHT_TITLE, visible=_visible())
+        _verify(forged, final_title=HIGHLIGHT_TITLE, visible=_visible())
 
 
 def test_review_to_dict_is_json_safe():
