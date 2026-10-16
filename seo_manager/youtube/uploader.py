@@ -335,7 +335,12 @@ class YouTubeUploader:
     def verify_final_text(
         self, body: dict, review: Any, context: Mapping[str, Any]
     ) -> None:
-        """Refuse a body whose title or on-screen text was not reviewed as is."""
+        """Refuse a body whose title, description, tags or on-screen text was not reviewed.
+
+        The description and tags in the body are always compared with the
+        reviewed typed surfaces (``compose_description`` / ``compose_tags``);
+        there is no opt-out, so build them with those functions.
+        """
         if not isinstance(context, Mapping):
             raise FinalTextReviewRefused(["review_malformed"], "no review context")
         verify_review(
@@ -345,6 +350,8 @@ class YouTubeUploader:
             source_fingerprint=context.get("source_fingerprint") or "",
             plan_fingerprint=context.get("plan_fingerprint") or "",
             policy_version=DEFAULT_POLICY.version,
+            description=body["snippet"]["description"],
+            tags=list(body["snippet"].get("tags") or []),
         )
 
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str):

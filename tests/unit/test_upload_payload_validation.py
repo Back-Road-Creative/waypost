@@ -15,7 +15,7 @@ from seo_manager.validation.validators import PlatformValidator
 from seo_manager.youtube import uploader as uploader_mod
 from seo_manager.youtube.uploader import YouTubeUploader
 
-from .final_text_fixture import upload_kwargs
+from .final_text_fixture import sent_fields, upload_kwargs
 
 DESCRIPTION = "A walk along the river trail at first light. " * 5
 TAGS = ["river trail", "morning walk", "hiking", "nature"]
@@ -76,7 +76,10 @@ def test_validator_sees_exactly_the_snippet_that_is_sent(sent, seen):
     assert (
         up.upload_video(
             video,
-            _metadata("River trail at first light"),
+            _metadata(
+                "River trail at first light",
+                **sent_fields("River trail at first light"),
+            ),
             **upload_kwargs("River trail at first light"),
         )
         == "vid123"
@@ -127,7 +130,11 @@ def test_title_at_the_api_limit_is_sent(sent):
     # recommendation in YouTubeAdapter, so an API-legal title still uploads.
     up, video, bodies = sent
     assert (
-        up.upload_video(video, _metadata("y" * 100), **upload_kwargs("y" * 100))
+        up.upload_video(
+            video,
+            _metadata("y" * 100, **sent_fields("y" * 100)),
+            **upload_kwargs("y" * 100),
+        )
         == "vid123"
     )
     assert bodies[0]["snippet"]["title"] == "y" * 100
