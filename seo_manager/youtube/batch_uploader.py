@@ -16,7 +16,7 @@ Features:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Mapping, Optional
 
 from ..core.metadata import SEOMetadata
 from .uploader import YouTubeUploader
@@ -38,12 +38,18 @@ class VideoConfig:
         metadata: SEO metadata for the video
         thumbnail_path: Optional custom thumbnail
         privacy: Privacy status ('private', 'public', 'unlisted')
+        final_text_review: This video's final-text review; a video without
+            one is refused at upload
+        final_text_context: ``visible``, ``source_fingerprint`` and
+            ``plan_fingerprint`` for the review check
     """
 
     video_path: str
     metadata: Optional[SEOMetadata]
     privacy: str = "private"
     thumbnail_path: Optional[str] = None
+    final_text_review: Any = None
+    final_text_context: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -367,6 +373,8 @@ class BatchUploader:
                     thumbnail_path=video.thumbnail_path,
                     privacy=video.privacy,
                     dry_run=config.dry_run,
+                    final_text_review=video.final_text_review,
+                    final_text_context=video.final_text_context,
                 )
 
                 # Calculate quota used

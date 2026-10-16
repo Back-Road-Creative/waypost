@@ -15,6 +15,8 @@ from seo_manager.validation.validators import PlatformValidator
 from seo_manager.youtube import uploader as uploader_mod
 from seo_manager.youtube.uploader import YouTubeUploader
 
+from .final_text_fixture import upload_kwargs
+
 DESCRIPTION = "A walk along the river trail at first light. " * 5
 TAGS = ["river trail", "morning walk", "hiking", "nature"]
 
@@ -71,7 +73,14 @@ def seen(monkeypatch):
 
 def test_validator_sees_exactly_the_snippet_that_is_sent(sent, seen):
     up, video, bodies = sent
-    assert up.upload_video(video, _metadata("River trail at first light")) == "vid123"
+    assert (
+        up.upload_video(
+            video,
+            _metadata("River trail at first light"),
+            **upload_kwargs("River trail at first light"),
+        )
+        == "vid123"
+    )
 
     assert len(bodies) == 1 and len(seen) == 1
     snippet = bodies[0]["snippet"]
@@ -85,7 +94,7 @@ def test_validator_sees_exactly_the_snippet_that_is_sent(sent, seen):
 def test_over_limit_title_is_refused_before_any_api_call(sent):
     up, video, bodies = sent
     with pytest.raises(ValueError, match="Title exceeds 100"):
-        up.upload_video(video, _metadata("x" * 101))
+        up.upload_video(video, _metadata("x" * 101), **upload_kwargs("River trail"))
     assert bodies == []
     up.youtube.videos.assert_not_called()
 
@@ -93,14 +102,23 @@ def test_over_limit_title_is_refused_before_any_api_call(sent):
 def test_over_limit_description_is_refused(sent):
     up, video, bodies = sent
     with pytest.raises(ValueError, match="Description exceeds 5000"):
-        up.upload_video(video, _metadata("River trail", description="d" * 5001))
+        up.upload_video(
+            video,
+            _metadata("River trail", description="d" * 5001),
+            **upload_kwargs("River trail"),
+        )
     assert bodies == []
 
 
 def test_dry_run_runs_the_same_gate(sent):
     up, video, bodies = sent
     with pytest.raises(ValueError, match="Title exceeds 100"):
-        up.upload_video(video, _metadata("x" * 101), dry_run=True)
+        up.upload_video(
+            video,
+            _metadata("x" * 101),
+            dry_run=True,
+            **upload_kwargs("River trail"),
+        )
     assert bodies == []
 
 
@@ -108,5 +126,8 @@ def test_title_at_the_api_limit_is_sent(sent):
     # The gate uses YouTube's hard limit (100), not the 70-char display
     # recommendation in YouTubeAdapter, so an API-legal title still uploads.
     up, video, bodies = sent
-    assert up.upload_video(video, _metadata("y" * 100)) == "vid123"
+    assert (
+        up.upload_video(video, _metadata("y" * 100), **upload_kwargs("y" * 100))
+        == "vid123"
+    )
     assert bodies[0]["snippet"]["title"] == "y" * 100
