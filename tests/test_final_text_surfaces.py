@@ -411,3 +411,55 @@ def test_template_words_stay_in_the_closed_vocabulary():
     for tid, text in TEMPLATES.items():
         words = {w.casefold() for w in re.findall(r"[^\W_]+", text)}
         assert words <= TEMPLATE_VOCABULARY, (tid, words - TEMPLATE_VOCABULARY)
+
+
+# --- A template id names its surface: tag.* only on a tag ---------------------
+
+
+def test_a_template_block_with_a_tag_template_id_is_refused():
+    review = _review(_template("description.footer", SCENIC))
+    assert "template_unknown:description.footer:tag.scenic_drive" in review.reasons
+
+
+def test_a_tag_with_a_description_template_id_is_refused():
+    review = _review(_tag("tag.1", TEMPLATES[FOOTER], template_id=FOOTER))
+    assert "template_unknown:tag.1:description.footer" in review.reasons
+
+
+# --- A Short's chapters do not widen what its title must name ----------------
+
+
+def test_a_shorts_chapter_outside_the_title_segment_agrees():
+    facts = TitleFacts(
+        format="short",
+        baseline_title="Quillhaven #shorts",
+        place=Place("Quillhaven", "p-2"),
+    )
+    snap = EvidenceSnapshot(as_of="2026-03-20T00:00:00")
+    decision = record_to_dict(select_title(facts, snap, DEFAULT_POLICY))
+    ost = {
+        "surface": "shorts_ost",
+        "kind": PLACE_LINE,
+        "text": "Quillhaven",
+        "evidence_ids": ["p-2"],
+        "scope": "segment",
+        "segment_places": ["p-2"],
+    }
+    chapter = _chapter("chapter.1", "0:00 Brindlemoor", ["p-1"], ["p-1"])
+    record = {
+        "record_version": RECORD_VERSION,
+        "approval_hash": "c" * 64,
+        "title": "Quillhaven #shorts",
+        "recording_date": DATE,
+        "date_evidence_id": "d-1",
+        "source_fingerprint": SOURCE_FP,
+        "plan_fingerprint": PLAN_FP,
+        "route_places": [
+            {"evidence_id": "p-1", "retained_seconds": 1200.0, "required": True},
+            {"evidence_id": "p-2", "retained_seconds": 480.0, "required": True},
+        ],
+        "region_claims": [],
+        "visible": [ost, chapter],
+    }
+    review = review_final_text(record, decision, EVIDENCE)
+    assert review.verdict == AGREE, review.reasons
