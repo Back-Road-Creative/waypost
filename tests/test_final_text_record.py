@@ -72,7 +72,13 @@ def _region(**overrides):
 
 
 def _whole(surface, text, ids):
-    return {"surface": surface, "text": text, "evidence_ids": ids, "scope": "whole"}
+    return {
+        "surface": surface,
+        "text": text,
+        "evidence_ids": ids,
+        "kind": "place_line",
+        "scope": "whole",
+    }
 
 
 def _record(text=ROUTE, ids=("p-1", "p-2", "r-1"), title=TITLE, **overrides):
@@ -177,6 +183,7 @@ def test_min_place_seconds_is_the_policy_threshold():
         "min_place_seconds": 600.0,
         "region_min_coverage": 1.0,
         "filler_words": DEFAULT_TEXT_POLICY.filler_words,
+        "templates": DEFAULT_TEXT_POLICY.templates,
     }
 
 
@@ -267,6 +274,7 @@ def _short(text="Quillhaven", segment=("p-2",), title="Quillhaven #shorts"):
                 "surface": "shorts_ost",
                 "text": text,
                 "evidence_ids": ["p-2"],
+                "kind": "place_line",
                 "scope": "segment",
                 "segment_places": list(segment),
             }
@@ -455,6 +463,7 @@ def test_a_short_naming_a_place_outside_its_segment_is_refused():
                     "surface": "shorts_ost",
                     "text": "Quillhaven to Brindlemoor",
                     "evidence_ids": ["p-2", "p-1"],
+                    "kind": "place_line",
                     "scope": "segment",
                     "segment_places": ["p-2"],
                 }

@@ -29,6 +29,13 @@ is refused as a name nothing backs, and a cited location must be on the
 retained route (a Short: in its own segment).
 ``verify_review`` refuses a review whose source, plan, title policy or text
 policy changed since it was made.
+
+Record v2 (review v4) types every visible surface (``final_text_surfaces``):
+a ``place_line`` is checked as above, a ``template`` passes only on a
+registered id whose hash matches its exact bytes, a ``chapter`` is a segment
+surface over its own window, and a ``tag`` is backed by evidence or taken
+from a registered tag template. A surface of any other kind is refused, so
+no free prose is ever reviewed.
 """
 
 import hashlib
@@ -37,8 +44,18 @@ import re
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-REVIEW_VERSION = "final-text-review-3"
-RECORD_VERSION = "final-text-record-1"
+from .final_text_surfaces import (
+    CHAPTER,
+    PLACE_LINE,
+    TAG,
+    TEMPLATE,
+    VISIBLE_KINDS,
+    template_hash,
+    template_hashes,
+)
+
+REVIEW_VERSION = "final-text-review-4"
+RECORD_VERSION = "final-text-record-2"
 
 AGREE = "agree"
 DISAGREE = "disagree"
@@ -98,10 +115,12 @@ class FinalTextReviewRefused(ValueError):
 class FinalTextPolicy:
     """The thresholds a review applies; recorded in, and checked against, it."""
 
-    version: str = "final-text-policy-1"
+    version: str = "final-text-policy-2"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
     filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
+    # ``(template_id, sha256)`` of each template a surface may carry.
+    templates: Tuple[Tuple[str, str], ...] = template_hashes()
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -124,6 +143,8 @@ class SurfaceReview:
     evidence: Tuple[EvidenceItem, ...]
     scope: str = WHOLE
     segment_places: Tuple[str, ...] = ()
+    kind: str = PLACE_LINE
+    template_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -474,6 +495,69 @@ def _check_backing(
             reasons.refuse(f"name_unbacked:{surface.surface}:{word}")
 
 
+def _template(
+    surface: str,
+    text: str,
+    template_id: Any,
+    tag: bool,
+    policy: FinalTextPolicy,
+    reasons: _Reasons,
+) -> None:
+    """Refuse a template surface unless its id is registered and its bytes match."""
+    registered = dict(policy.templates)
+    if (
+        not isinstance(template_id, str)
+        or template_id not in registered
+        or template_id.startswith("tag.") != tag
+    ):
+        reasons.refuse(f"template_unknown:{surface}:{template_id}")
+    elif template_hash(text) != registered[template_id]:
+        reasons.refuse(f"template_changed:{surface}:{template_id}")
+
+
+def _surface(
+    entry: Mapping[str, Any],
+    surface: str,
+    position: int,
+    policy: FinalTextPolicy,
+    reasons: _Reasons,
+) -> Optional[Tuple[str, str, Sequence[str], str, Tuple[str, ...], Optional[str]]]:
+    """``(kind, text, evidence_ids, scope, segment_places, template_id)`` or None.
+
+    A template block, or a tag naming a ``template_id``, carries no evidence:
+    its id and bytes are checked here. Anything else cites its evidence.
+    """
+    kind = entry.get("kind")
+    if kind not in VISIBLE_KINDS:
+        reasons.refuse(f"surface_kind:{surface}")
+        return None
+    text = _text(entry.get("text"))
+    ids = entry.get("evidence_ids", () if kind == TEMPLATE else None)
+    if text is None or not isinstance(ids, (list, tuple)):
+        reasons.refuse(f"missing_field:visible[{position}]")
+        return None
+    template_id = entry.get("template_id")
+    if kind == TEMPLATE or (kind == TAG and template_id is not None):
+        if ids:
+            reasons.refuse(f"template_with_evidence:{surface}")
+        _template(surface, text, template_id, kind == TAG, policy, reasons)
+        return kind, text, (), WHOLE, (), str(template_id)
+    if kind == TAG:
+        return kind, text, ids, WHOLE, (), None
+    if kind == CHAPTER:
+        segment = _ids(entry.get("segment_places"))
+        if not segment or entry.get("scope", SEGMENT) != SEGMENT:
+            reasons.refuse(f"chapter_without_window:{surface}")
+            return None
+        return kind, text, ids, SEGMENT, segment, None
+    scope = entry.get("scope")
+    segment = _ids(entry.get("segment_places")) if scope == SEGMENT else ()
+    if scope not in (WHOLE, SEGMENT) or not (segment or scope == WHOLE):
+        reasons.refuse(f"missing_field:visible[{position}]")
+        return None
+    return kind, text, ids, scope, segment or (), None
+
+
 def review_final_text(
     approved: Mapping[str, Any],
     decision: Mapping[str, Any],
@@ -488,8 +572,11 @@ def review_final_text(
     ``plan_fingerprint``, ``route_places`` (``{evidence_id,
     retained_seconds, required}``), ``region_claims`` (``{evidence_id,
     contains, coverage, gaps, samples_outside}``) and ``visible``, a list of
-    ``{surface, text, evidence_ids, scope}`` where ``scope`` is ``whole`` or
-    ``segment`` and a segment also lists its ``segment_places``.
+    ``{surface, kind, text, evidence_ids, scope}``. ``kind`` is one of
+    ``final_text_surfaces.VISIBLE_KINDS``; for a ``place_line`` ``scope`` is
+    ``whole`` or ``segment`` and a segment also lists its ``segment_places``;
+    a ``chapter`` lists its window as ``segment_places``; a ``template``, or
+    a ``tag`` from a tag template, names its ``template_id`` and no evidence.
     ``decision``: the dict form of a ``TitleDecision``. ``evidence``:
     ``{evidence_id, kind, value, source}`` items, ``kind`` being
     ``location``, ``region`` or ``date``.
@@ -532,20 +619,9 @@ def review_final_text(
     names: set = set()
     for position, entry in enumerate(visible):
         surface = _text(entry.get("surface")) if isinstance(entry, Mapping) else None
-        text = _text(entry.get("text")) if surface else None
-        ids = entry.get("evidence_ids") if surface else None
-        scope = entry.get("scope") if surface else None
-        segment = _ids(entry.get("segment_places")) if scope == SEGMENT else ()
-        if (
-            surface is None
-            or text is None
-            or not isinstance(ids, (list, tuple))
-            or scope not in (WHOLE, SEGMENT)
-            or not (segment or scope == WHOLE)
-        ):
+        if surface is None:
             reasons.refuse(f"missing_field:visible[{position}]")
             continue
-        assert segment is not None
         if surface in _RESERVED:
             reasons.refuse(f"reserved_surface:{surface}")
             continue
@@ -553,16 +629,34 @@ def review_final_text(
             reasons.refuse(f"duplicate_surface:{surface}")
             continue
         names.add(surface)
-        if not ids:
-            reasons.refuse(f"surface_without_evidence:{surface}")
-        items = _resolve(surface, text, ids, _PLACE_KINDS, by_id, ambiguous, reasons)
+        parsed = _surface(entry, surface, position, policy, reasons)
+        if parsed is None:
+            continue
+        kind, text, ids, scope, segment, template_id = parsed
+        items: Tuple[EvidenceItem, ...] = ()
+        if template_id is None:
+            if not ids:
+                reasons.refuse(f"surface_without_evidence:{surface}")
+            items = _resolve(
+                surface, text, ids, _PLACE_KINDS, by_id, ambiguous, reasons
+            )
         for place in segment:
             if place not in route_ids:
                 reasons.refuse(f"route_place_unknown:{place}")
-        surfaces.append(SurfaceReview(surface, text, items, scope, segment))
+        surfaces.append(
+            SurfaceReview(surface, text, items, scope, segment, kind, template_id)
+        )
 
     segment_needed: List[str] = []
     for review_surface in surfaces:
+        if review_surface.template_id is not None:
+            continue
+        if review_surface.kind == TAG:
+            # A place tag names one place; it need not carry the whole route.
+            _check_backing(
+                review_surface, route_ids, "place_not_on_route", policy, reasons
+            )
+            continue
         if review_surface.scope == WHOLE:
             _check_backing(
                 review_surface, route_ids, "place_not_on_route", policy, reasons
@@ -579,7 +673,8 @@ def review_final_text(
             reasons,
         )
         needed = [p for p in review_surface.segment_places if p in route_ids]
-        segment_needed += [p for p in needed if p not in segment_needed]
+        if review_surface.kind == PLACE_LINE:
+            segment_needed += [p for p in needed if p not in segment_needed]
         _check_names(
             review_surface, needed, "segment_place_dropped", regions, policy, reasons
         )
@@ -594,7 +689,9 @@ def review_final_text(
         ambiguous,
         reasons,
     )
-    title_surface = SurfaceReview(TITLE_SURFACE, final_title or "", title_items)
+    title_surface = SurfaceReview(
+        TITLE_SURFACE, final_title or "", title_items, kind=TITLE_SURFACE
+    )
     if decision.get("format") == "short" and segment_needed:
         _check_backing(
             title_surface, segment_needed, "place_not_in_segment", policy, reasons
@@ -623,7 +720,9 @@ def review_final_text(
         for item in date_items:
             if item.kind == DATE and recording_date and item.value != recording_date:
                 reasons.refuse(f"date_mismatch:{date_id}")
-    surfaces.append(SurfaceReview(DATE_SURFACE, recording_date or "", date_items))
+    surfaces.append(
+        SurfaceReview(DATE_SURFACE, recording_date or "", date_items, kind=DATE_SURFACE)
+    )
 
     disagree = bool(approved_title and final_title and approved_title != final_title)
     if disagree:

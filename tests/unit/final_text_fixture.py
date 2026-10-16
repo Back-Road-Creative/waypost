@@ -47,7 +47,13 @@ def reviewed(title: str, ost: str = ""):
         ],
         "region_claims": [],
         "visible": [
-            {"surface": "ost", "text": ost, "evidence_ids": ["p-1"], "scope": "whole"}
+            {
+                "surface": "ost",
+                "text": ost,
+                "evidence_ids": ["p-1"],
+                "kind": "place_line",
+                "scope": "whole",
+            }
         ],
     }
     review = review_final_text(record, decision, evidence)
