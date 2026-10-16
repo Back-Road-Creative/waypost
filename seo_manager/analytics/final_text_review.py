@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .drive_templates import (
     DRIVE_TEMPLATES_VERSION,
+    DRIVE_TEXT,
     LAYOUTS,
     PARAMS,
     TAG_ORDER,
@@ -600,6 +601,14 @@ def _param(
     return text, tuple(items)
 
 
+def _is_drive_surface(surface: "SurfaceReview") -> bool:
+    """A parameterized block or a fixed drive ``description.*`` block."""
+    if surface.kind == PARAM_TEMPLATE:
+        return True
+    tid = surface.template_id or ""
+    return tid in DRIVE_TEXT and tid.startswith("description.")
+
+
 def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -> None:
     """Refuse a description that is not exactly ``layout``'s blocks in order."""
     blocks = LAYOUTS.get(layout) if isinstance(layout, str) else None
@@ -821,6 +830,10 @@ def review_final_text(
     layout = _text(approved.get("description_layout"))
     if layout is not None:
         _layout(layout, surfaces, reasons)
+    elif any(_is_drive_surface(s) for s in surfaces):
+        # A drive description is checked only against a named layout; without
+        # one a free line, a dropped block or a reorder would pass unseen.
+        reasons.refuse("layout_required")
 
     final_title, claims = _chosen(decision, reasons)
     title_items = _resolve(

@@ -310,3 +310,36 @@ def test_w10_7_a_review_made_under_policy_n_is_stale_under_n_plus_1():
             text_policy=_changed_policy(),
         )  # fmt: skip
     assert "stale:text_policy" in caught.value.reasons
+
+
+# --- W10c-3: a drive review must name its layout ----------------------------------
+
+
+def _without_layout(entries):
+    return _review(entries, layout=None).reasons
+
+
+def test_w10c_3_a_drive_review_without_a_layout_is_refused():
+    assert "layout_required" in _without_layout(golden_entries())
+
+
+def test_w10c_3_an_extra_free_line_without_a_layout_is_refused():
+    entries = golden_entries()
+    entries.insert(4, _free_line("Quillhaven"))
+    assert "layout_required" in _without_layout(entries)
+
+
+def test_w10c_3_a_dropped_cta_without_a_layout_is_refused():
+    entries = [e for e in golden_entries() if e["surface"] != "description.cta"]
+    assert "layout_required" in _without_layout(entries)
+
+
+def test_w10c_3_swapped_blocks_without_a_layout_are_refused():
+    entries = golden_entries()
+    entries[4], entries[5] = entries[5], entries[4]
+    assert "layout_required" in _without_layout(entries)
+
+
+def test_w10c_3_a_review_with_no_drive_surface_needs_no_layout():
+    entries = [_free_line("Quillhaven", "description.place")]
+    assert "layout_required" not in _without_layout(entries)
