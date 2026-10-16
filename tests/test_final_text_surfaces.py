@@ -463,3 +463,39 @@ def test_a_shorts_chapter_outside_the_title_segment_agrees():
     }
     review = review_final_text(record, decision, EVIDENCE)
     assert review.verdict == AGREE, review.reasons
+
+
+def test_compose_description_keeps_order_and_leaves_ost_and_tags_out():
+    from seo_manager.analytics.final_text_surfaces import (
+        compose_description,
+        compose_tags,
+    )
+
+    entries = [
+        _line("ost", "Brindlemoor"),
+        _line("description", "Brindlemoor to Quillhaven"),
+        _chapter("chapter.1", "0:00 Brindlemoor", ["p-1"], ["p-1"]),
+        _line("thumbnail", "Quillhaven"),
+        _template("description.footer", FOOTER),
+        _line("shorts_ost", "Quillhaven"),
+        {"surface": "tag.1", "kind": TAG, "text": "scenic drive"},
+        {"surface": "tag.2", "kind": TAG, "text": "road trip"},
+        _line("descriptionx", "not a description line"),
+    ]
+    assert compose_description(entries) == (
+        "Brindlemoor to Quillhaven\n0:00 Brindlemoor\nSubscribe for more drives."
+    )
+    assert compose_tags(entries) == ["scenic drive", "road trip"]
+    assert compose_description([]) == ""
+    assert compose_tags([]) == []
+
+
+def test_compose_accepts_review_surfaces():
+    from seo_manager.analytics.final_text_surfaces import (
+        compose_description,
+        compose_tags,
+    )
+
+    review = _review(_template("description.footer", FOOTER))
+    assert compose_description(review.surfaces) == "Subscribe for more drives."
+    assert compose_tags(review.surfaces) == []

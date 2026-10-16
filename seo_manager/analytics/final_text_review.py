@@ -50,6 +50,10 @@ from .final_text_surfaces import (
     TAG,
     TEMPLATE,
     VISIBLE_KINDS,
+    compose_description,
+    compose_tags,
+    is_description_surface,
+    is_tag_surface,
     template_hash,
     template_hashes,
 )
@@ -772,6 +776,8 @@ def _stale(
     plan_fingerprint: str,
     policy_version: str,
     text_policy: FinalTextPolicy,
+    description: Optional[str] = None,
+    tags: Optional[Sequence[str]] = None,
 ) -> List[str]:
     found: List[str] = []
     if body["review_version"] != REVIEW_VERSION:
@@ -791,12 +797,19 @@ def _stale(
         s["surface"]: s["text"]
         for s in body["surfaces"]
         if s["surface"] not in _RESERVED
+        # A sent description or tag is bound by its own comparison below.
+        and not (description is not None and is_description_surface(s))
+        and not (tags is not None and is_tag_surface(s))
     }
     if set(visible) != set(reviewed):
         found.append("stale:surfaces")
     for surface, text in sorted(reviewed.items()):
         if surface in visible and visible[surface] != text:
             found.append(f"stale:text:{surface}")
+    if description is not None and description != compose_description(body["surfaces"]):
+        found.append("stale:description")
+    if tags is not None and list(tags) != compose_tags(body["surfaces"]):
+        found.append("stale:tags")
     return found
 
 
@@ -809,6 +822,8 @@ def verify_review(
     plan_fingerprint: str,
     policy_version: str,
     text_policy: FinalTextPolicy = DEFAULT_TEXT_POLICY,
+    description: Optional[str] = None,
+    tags: Optional[Sequence[str]] = None,
 ) -> None:
     """Refuse an upload unless ``review`` covers exactly what will be sent.
 
@@ -816,7 +831,11 @@ def verify_review(
     ``visible`` maps each surface (``ost``, ``thumbnail``, ``shorts_ost``, …)
     to the text the upload will show; ``source_fingerprint`` and
     ``plan_fingerprint`` are recomputed from current state, and
-    ``policy_version`` is the title policy in force. Raises
+    ``policy_version`` is the title policy in force. When ``description`` or
+    ``tags`` is given it is the text about to be sent: it must equal
+    ``compose_description`` / ``compose_tags`` of the reviewed surfaces
+    (``stale:description``, ``stale:tags``), and those surfaces then drop out
+    of the ``visible`` comparison. Raises
     ``FinalTextReviewRefused`` naming every reason. Passing this is not an
     approval: the caller's human gate still applies.
     """
@@ -847,6 +866,8 @@ def verify_review(
             plan_fingerprint,
             policy_version,
             text_policy,
+            description,
+            tags,
         )
     except (KeyError, TypeError, AttributeError) as exc:
         raise FinalTextReviewRefused([REVIEW_MALFORMED], repr(exc)) from exc

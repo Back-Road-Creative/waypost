@@ -16,11 +16,16 @@ surfaces, each checked its own way by ``review_final_text``:
 It takes template text only from ``TEMPLATES``, so it cannot emit an
 unregistered block. A hash binds a template's bytes, not their meaning:
 templates change only in a reviewed Waypost PR.
+
+``compose_description`` and ``compose_tags`` rebuild, from reviewed entries,
+the exact description and tags an upload may send. A caller must build the
+description and tags it sends with them, so the uploaded bytes are the
+reviewed bytes; ``verify_review`` refuses any other text.
 """
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 PLACE_LINE = "place_line"
 TEMPLATE = "template"
@@ -143,3 +148,50 @@ def _entry(part: Part) -> Dict[str, Any]:
 def build_visible(parts: Sequence[Part]) -> List[Dict[str, Any]]:
     """The record's ``visible`` entries for ``parts``, in order."""
     return [_entry(part) for part in parts]
+
+
+DESCRIPTION_SURFACE = "description"
+
+
+def _field(entry: Any, name: str) -> Any:
+    if isinstance(entry, Mapping):
+        return entry.get(name)
+    return getattr(entry, name, None)
+
+
+def is_description_surface(entry: Any) -> bool:
+    """True for a surface that is part of the sent description or its chapters."""
+    kind = _field(entry, "kind")
+    surface = _field(entry, "surface")
+    if kind == CHAPTER:
+        return True
+    return (
+        kind in (PLACE_LINE, TEMPLATE)
+        and isinstance(surface, str)
+        and (
+            surface == DESCRIPTION_SURFACE
+            or surface.startswith(DESCRIPTION_SURFACE + ".")
+        )
+    )
+
+
+def is_tag_surface(entry: Any) -> bool:
+    """True for a surface that is one of the sent tags."""
+    return _field(entry, "kind") == TAG
+
+
+def compose_description(entries: Sequence[Any]) -> str:
+    """The exact description sent: description and chapter texts joined by newlines.
+
+    ``entries`` are ``visible`` entries (mappings) or review surfaces, in
+    record order. On-screen surfaces (``ost``, ``thumbnail``, ``shorts_ost``)
+    and tags are not part of the description.
+    """
+    return "\n".join(
+        str(_field(e, "text") or "") for e in entries if is_description_surface(e)
+    )
+
+
+def compose_tags(entries: Sequence[Any]) -> List[str]:
+    """The exact tags sent: the text of each tag surface, in record order."""
+    return [str(_field(e, "text") or "") for e in entries if is_tag_surface(e)]
