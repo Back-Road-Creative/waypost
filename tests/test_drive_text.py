@@ -363,31 +363,49 @@ def _move_tag(surface, before):
     return entries
 
 
-def test_w10c_5_tag_order_is_base_year_month_season_season_drive():
+def test_w10c_5_tag_order_follows_gms_base_place_year_month_season():
+    # GMS longform_metadata: base tags, then _location_tags (place parts,
+    # "<place> drive", year, then _seasonal_tags month, season, season drive).
     from seo_manager.analytics.drive_templates import BASE_TAGS
 
     base = len(BASE_TAGS)
-    assert TAG_ORDER[base] == "tag.year"
-    assert TAG_ORDER[base + 1 : base + 13] == tuple(
+    assert TAG_ORDER[base : base + 3] == ("tag.place", "tag.place_drive", "tag.year")
+    assert TAG_ORDER[base + 3 : base + 15] == tuple(
         f"tag.month_{m}" for m in range(1, 13)
     )
-    assert TAG_ORDER[base + 13].startswith("tag.season_")
+    assert TAG_ORDER[base + 15].startswith("tag.season_")
+    assert TAG_ORDER[-1].endswith("_drive")
 
 
 def test_w10c_5_the_golden_tags_in_registered_order_agree():
     entries = golden_entries()
-    assert _tag_surfaces(entries)[-2:] == ["tag.place.1", "tag.place.2"]
+    assert _tag_surfaces(entries)[12:] == [
+        "tag.place.1", "tag.place.2", "tag.place_drive.1", "tag.place_drive.2",
+        "tag.year", "tag.month_9", "tag.season_autumn", "tag.season_autumn_drive",
+    ]  # fmt: skip
     assert _find(entries, "tag.year")["kind"] == "tag"
+    assert _find(entries, "tag.place_drive.1")["text"] == "Brindlemoor drive"
     assert _review(entries).verdict == AGREE
 
 
 @pytest.mark.parametrize(
     ("moved", "before"),
-    [("tag.year", "tag.1"), ("tag.month_9", "tag.year"), ("tag.place.1", "tag.month_9"),
+    [("tag.year", "tag.1"), ("tag.month_9", "tag.year"), ("tag.year", "tag.place.1"),
+     ("tag.place_drive.1", "tag.place.1"), ("tag.place.1", "tag.1"),
      ("tag.season_autumn_drive", "tag.season_autumn")],
 )  # fmt: skip
 def test_w10c_5_one_reordered_tag_is_refused(moved, before):
     assert "tag_order" in _review(_move_tag(moved, before)).reasons
+
+
+def test_w10c_5_a_place_drive_tag_must_cite_a_route_place():
+    entries = _edit(
+        "tag.place_drive.1",
+        slots={"place": "p-4"},
+        evidence_ids=["p-4"],
+        text="Fenwick Reach drive",
+    )
+    assert "place_not_on_route:tag.place_drive.1:p-4" in _review(entries).reasons
 
 
 @pytest.mark.parametrize("value", ["twenty", "2026", 1899, 2201, 2026.5, True])

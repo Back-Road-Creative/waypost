@@ -62,13 +62,17 @@ DRIVE_TEXT: Dict[str, str] = {
     "description.close": RULE,
     "description.chapterhead": "\n\U0001f4cd CHAPTERS",
 }
-# Registered tags keep this order: base, year, month, season, season drive.
-# Place and road tags (cited evidence, no template id) follow them all.
+# Tags keep GMS's order (longform_metadata ``_location_tags``): base, cited
+# place parts (``PLACE_TAG``, no template id), "<place> drive", year, month,
+# season, season drive. Only the place ranks may repeat.
+PLACE_TAG = "tag.place"
 TAG_ORDER: Tuple[str, ...] = ()
 for _tag in BASE_TAGS:
     DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
     TAG_ORDER += (f"tag.{_slug(_tag)}",)
-TAG_ORDER += ("tag.year",)  # parameterized: registered in PARAMS below
+# ``tag.place_drive`` and ``tag.year`` are parameterized: see PARAMS below.
+TAG_ORDER += (PLACE_TAG, "tag.place_drive", "tag.year")
+REPEATABLE_TAGS = frozenset({PLACE_TAG, "tag.place_drive"})
 for _i, _name in enumerate(MONTHS):
     DRIVE_TEXT[f"tag.month_{_i + 1}"] = _name
     TAG_ORDER += (f"tag.month_{_i + 1}",)
@@ -170,6 +174,7 @@ _param(
     Slot("month", "enum", values=MONTH_ABBR),
     _YEAR("year"),
 )
+_param("tag.place_drive", "{place} drive", Slot("place", "place"))
 _param("tag.year", "{year}", _YEAR("year"))
 MAX_THROUGH, MAX_ROUTE, MAX_GEO = 12, 8, 4
 for _n in range(1, MAX_THROUGH + 1):

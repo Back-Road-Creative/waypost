@@ -49,6 +49,8 @@ from .drive_templates import (
     DRIVE_TEXT,
     LAYOUTS,
     PARAMS,
+    PLACE_TAG,
+    REPEATABLE_TAGS,
     TAG_ORDER,
     drive_hashes,
 )
@@ -645,17 +647,12 @@ def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -
     for name, required in blocks:
         if required and name not in seen:
             reasons.refuse(f"layout_missing:{name}")
-    # Registered tags rank by TAG_ORDER, each once; cited place tags rank last.
-    last_rank = len(TAG_ORDER)
-    order = [
-        last_rank
-        if s.template_id is None
-        else (TAG_ORDER.index(s.template_id) if s.template_id in TAG_ORDER else -1)
-        for s in surfaces
-        if s.kind == TAG
-    ]
-    registered = [r for r in order if r != last_rank]
-    if -1 in order or order != sorted(order) or len(set(registered)) != len(registered):
+    # Tags rank by TAG_ORDER (a cited place tag as PLACE_TAG); only place
+    # ranks repeat.
+    ids = [s.template_id or PLACE_TAG for s in surfaces if s.kind == TAG]
+    order = [TAG_ORDER.index(t) if t in TAG_ORDER else -1 for t in ids]
+    once = [t for t in ids if t not in REPEATABLE_TAGS]
+    if -1 in order or order != sorted(order) or len(set(once)) != len(once):
         reasons.refuse("tag_order")
 
 
