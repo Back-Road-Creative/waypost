@@ -398,6 +398,17 @@ def test_w10c_5_one_reordered_tag_is_refused(moved, before):
     assert "tag_order" in _review(_move_tag(moved, before)).reasons
 
 
+@pytest.mark.parametrize(
+    "tag", ["tag.1", "tag.year", "tag.month_9", "tag.season_autumn"]
+)
+def test_w10c_5_a_non_repeatable_tag_sent_twice_is_refused(tag):
+    # The copy sits right after the original, so only the repeat check sees it.
+    entries = golden_entries()
+    original = _find(entries, tag)
+    entries.insert(entries.index(original) + 1, dict(original, surface=tag + ".again"))
+    assert "tag_order" in _review(entries).reasons
+
+
 def test_w10c_5_a_place_drive_tag_must_cite_a_route_place():
     entries = _edit(
         "tag.place_drive.1",
