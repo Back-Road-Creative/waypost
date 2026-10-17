@@ -19,7 +19,11 @@ from seo_manager.analytics.final_text_review import (
     FinalTextReviewRefused,
     verify_review,
 )
-from seo_manager.analytics.final_text_surfaces import ParamBlock, build_visible
+from seo_manager.analytics.final_text_surfaces import (
+    ParamBlock,
+    TemplateBlock,
+    build_visible,
+)
 
 
 def test_w10_a_review_4_record_is_refused_at_upload():
@@ -491,13 +495,14 @@ def _put(entry, after=None, replace=None):
     return entries
 
 
-_BODY = "description.body"
+_BODY, _JOURNEY = "description.body", "description.journey"
+_GAPPED = (_JOURNEY, "description.roads", "description.states", "description.features")
 SHAPES = [
-    (_BODY, "description.body.arc.0", {"a": "p-1", "b": "p-2"}, {"replace": _BODY}),
-    (_BODY, "description.body.arc.1", {"a": "p-1", "b": "p-2", "p1": "p-3"},
+    (_JOURNEY, "description.journey.arc.0", {"a": "p-1", "b": "p-2"}, {"replace": _BODY}),
+    (_JOURNEY, "description.journey.arc.1", {"a": "p-1", "b": "p-2", "p1": "p-3"},
      {"replace": _BODY}),
-    (_BODY, "description.body.towns.2", {"t1": "p-1", "t2": "p-2"}, {"replace": _BODY}),
-    (_BODY, "description.body.towns_roads.2.1", {"t1": "p-1", "t2": "p-2", "r1": "rd-1"},
+    (_JOURNEY, "description.journey.towns.2", {"t1": "p-1", "t2": "p-2"}, {"replace": _BODY}),
+    (_JOURNEY, "description.journey.towns_roads.2.1", {"t1": "p-1", "t2": "p-2", "r1": "rd-1"},
      {"replace": _BODY}),
     ("description.roads", "description.roads.1", {"r1": "rd-1"}, {"after": _BODY}),
     ("description.states", "description.states.2", {"s1": "p-1", "s2": "p-2"},
@@ -515,17 +520,21 @@ SHAPES = [
 @pytest.mark.parametrize(("surface", "tid", "slots", "where"), SHAPES)
 def test_w10c_6_each_registered_gms_shape_agrees(surface, tid, slots, where):
     entries = _put(_block(surface, tid, slots), **where)
+    if surface in _GAPPED:
+        # A GMS body line brings its blank line (W10d ``layout_gap``).
+        gap = build_visible([TemplateBlock("description.gap", "description.gap")])
+        entries.insert(entries.index(_find(entries, surface)) + 1, gap[0])
     assert _review(entries, policy=ALLOW).verdict == AGREE
 
 
 def test_w10c_6_the_gms_body_skeletons_are_the_gms_sentences():
     skel = {t: PARAMS[t].skeleton for t in PARAMS}
-    assert skel["description.body.arc.0"] == "Started in {a}, ended in {b}."
-    assert skel["description.body.arc.2"] == (
+    assert skel["description.journey.arc.0"] == "Started in {a}, ended in {b}."
+    assert skel["description.journey.arc.2"] == (
         "Started in {a}, ended in {b}, passing through {p1}, {p2}."
     )
     assert (
-        skel["description.body.towns_roads.1.2"]
+        skel["description.journey.towns_roads.1.2"]
         == "Driving through {t1} on {r1}, {r2}."
     )
     assert skel["description.roads.1"] == "Roads traveled: {r1}."
@@ -535,7 +544,7 @@ def test_w10c_6_the_gms_body_skeletons_are_the_gms_sentences():
     assert skel["description.cadence.weekly"] == "New {region} drive every {weekday}"
     # Lists past GMS's caps have no template: the generator cannot exceed them.
     assert "description.roads.6" not in PARAMS
-    assert "description.body.arc.6" not in PARAMS
+    assert "description.journey.arc.6" not in PARAMS
     assert "description.features.6" not in PARAMS
 
 
@@ -597,7 +606,9 @@ def test_w10c_6_the_footer_sits_between_cta_and_site():
 
 def test_w10c_6_a_body_shape_naming_an_unbacked_place_is_refused():
     entries = _put(
-        _block(_BODY, "description.body.arc.1", {"a": "p-1", "b": "p-2", "p1": "p-4"}),
+        _block(
+            _JOURNEY, "description.journey.arc.1", {"a": "p-1", "b": "p-2", "p1": "p-4"}
+        ),
         replace=_BODY,
     )
-    assert "place_not_on_route:description.body:p-4" in _review(entries).reasons
+    assert "place_not_on_route:description.journey:p-4" in _review(entries).reasons
