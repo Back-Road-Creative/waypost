@@ -47,6 +47,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from .drive_templates import (
     DRIVE_TEMPLATES_VERSION,
     DRIVE_TEXT,
+    LAYOUT_GAPS,
     LAYOUTS,
     PARAMS,
     PLACE_TAG,
@@ -649,6 +650,9 @@ def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -
     for name, required in blocks:
         if required and name not in seen:
             reasons.refuse(f"layout_missing:{name}")
+    gap, after = LAYOUT_GAPS.get(layout, ("", frozenset()))
+    if gap and (gap in seen) != bool(seen & after):
+        reasons.refuse(f"layout_gap:{gap}")
     # Tags rank by TAG_ORDER (a cited place tag as PLACE_TAG); only place
     # ranks repeat.
     ids = [s.template_id or PLACE_TAG for s in surfaces if s.kind == TAG]
@@ -675,6 +679,8 @@ def _surface(
         reasons.refuse(f"surface_kind:{surface}")
         return None
     text = _text(entry.get("text"))
+    if kind == TEMPLATE and entry.get("text") == "":
+        text = ""  # a blank line (``description.gap``); its hash still binds it
     ids = entry.get("evidence_ids", () if kind == TEMPLATE else None)
     if text is None or not isinstance(ids, (list, tuple)):
         reasons.refuse(f"missing_field:visible[{position}]")

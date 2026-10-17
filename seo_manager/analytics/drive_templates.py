@@ -9,11 +9,11 @@ a fixed line or a tag changes its hash, so it needs a reviewed Waypost PR and
 a bump of ``DRIVE_TEMPLATES_VERSION``.
 """
 
-from typing import Dict, Sequence, Tuple
+from typing import Dict, FrozenSet, Sequence, Tuple
 
 from .final_text_params import ParamTemplate, Slot, param_hash
 
-DRIVE_TEMPLATES_VERSION = "drive-templates-3"
+DRIVE_TEMPLATES_VERSION = "drive-templates-4"
 LAYOUT = "gms-drive-1"
 RULE = "━" * 24
 
@@ -61,6 +61,9 @@ DRIVE_TEXT: Dict[str, str] = {
     "description.site": "\U0001f30d https://gomoveshift.com\n",
     "description.close": RULE,
     "description.chapterhead": "\n\U0001f4cd CHAPTERS",
+    # GMS sets its body lines off with a blank line on each side; the joins
+    # give the one before, this empty line the one after.
+    "description.gap": "",
 }
 # Tags keep GMS's order (longform_metadata ``_location_tags``): base, cited
 # place parts (``PLACE_TAG``, no template id), "<place> drive", year, month,
@@ -227,7 +230,7 @@ def _list(names: Sequence[str]) -> str:
 for _k in range(MAX_PASSING + 1):
     _p = _names("p", _k)
     _param(
-        f"description.body.arc.{_k}",
+        f"description.journey.arc.{_k}",
         "Started in {a}, ended in {b}"
         + (", passing through " + _list(_p) if _p else "")
         + ".",
@@ -236,14 +239,14 @@ for _k in range(MAX_PASSING + 1):
 for _n in range(1, MAX_TOWNS + 1):
     _t = _names("t", _n)
     _param(
-        f"description.body.towns.{_n}",
+        f"description.journey.towns.{_n}",
         f"Driving through {_list(_t)}.",
         *(_PLACE(k) for k in _t),
     )
     for _m in range(1, MAX_ROADS + 1):
         _r = _names("r", _m)
         _param(
-            f"description.body.towns_roads.{_n}.{_m}",
+            f"description.journey.towns_roads.{_n}.{_m}",
             f"Driving through {_list(_t)} on {_list(_r)}.",
             *(_PLACE(k) for k in (*_t, *_r)),
         )
@@ -288,8 +291,9 @@ _param(
 # chapter lines themselves and may repeat.
 LAYOUTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
     LAYOUT: (
-        ("hook", True), ("seo", False), ("body", False), ("roads", False),
-        ("states", False), ("features", False), ("location", True),
+        ("hook", True), ("seo", False), ("body", False), ("journey", False),
+        ("roads", False), ("states", False), ("features", False), ("gap", False),
+        ("location", True),
         ("duration", True), ("distance", False), ("heading", False),
         ("through", False), ("route", False), ("insert", False),
         ("filmed", False), ("rule", True), ("cta", True), ("playlist", False),
@@ -298,6 +302,10 @@ LAYOUTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
         ("hashtags", True),
     ),
 }  # fmt: skip
+# A layout's blank-line block: present exactly when one of its blocks is.
+LAYOUT_GAPS: Dict[str, Tuple[str, FrozenSet[str]]] = {
+    LAYOUT: ("gap", frozenset({"journey", "roads", "states", "features"})),
+}
 
 
 def drive_hashes() -> Tuple[Tuple[str, str], ...]:

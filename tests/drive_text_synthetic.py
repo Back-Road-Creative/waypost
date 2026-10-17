@@ -37,11 +37,13 @@ OCEAN = PlaceRef("p-3", "Oceanmarsh")
 FENWICK = PlaceRef("p-4", "Fenwick Reach")  # evidence, but not on the route
 HARROW = PlaceRef("r-1", "Harrow County")
 ROAD = PlaceRef("rd-1", "Tidewater Road")
+ASHMERE = PlaceRef("r-2", "Ashmere Vale")
 EVIDENCE = [
     {"evidence_id": p.evidence_id, "kind": kind, "value": p.text, "source": "gps"}
     for p, kind in (
         (BRIN, "location"), (QUILL, "location"), (OCEAN, "location"),
         (FENWICK, "location"), (HARROW, "region"), (ROAD, "road"),
+        (ASHMERE, "region"),
     )
 ] + [{"evidence_id": "d-1", "kind": "date", "value": "2026-03-02", "source": "exif"}]  # fmt: skip
 
@@ -98,7 +100,7 @@ def _decision():
     return record_to_dict(select_title(facts, snap, DEFAULT_POLICY))
 
 
-def _review(entries, layout=LAYOUT, policy=DEFAULT_TEXT_POLICY):
+def _review(entries, layout=LAYOUT, policy=DEFAULT_TEXT_POLICY, extra=()):
     record = {
         "record_version": RECORD_VERSION, "approval_hash": "c" * 64, "title": TITLE,
         "recording_date": "2026-03-02", "date_evidence_id": "d-1",
@@ -112,7 +114,7 @@ def _review(entries, layout=LAYOUT, policy=DEFAULT_TEXT_POLICY):
     }  # fmt: skip
     if layout:
         record["description_layout"] = layout
-    return review_final_text(record, _decision(), EVIDENCE, policy)
+    return review_final_text(record, _decision(), [*EVIDENCE, *extra], policy)
 
 
 def golden_entries():

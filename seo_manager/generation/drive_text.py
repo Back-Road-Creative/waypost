@@ -6,9 +6,12 @@ in the registered ``gms-drive-1`` layout order. It never takes a sentence: a
 value of the wrong type raises here, before any review, and a place that
 cannot be cited is not expressible. Pure: no I/O.
 
-Limits of the registered blocks: at most ``MAX_THROUGH`` regions,
-``MAX_ROUTE`` route towns and ``MAX_GEO`` geo hashtags per description; the
-caller truncates, the generator raises.
+Limits of the registered blocks: at most ``MAX_ROUTE`` route towns,
+``MAX_GEO`` geo hashtags, ``MAX_TOWNS`` towns, ``MAX_ROADS`` roads,
+``MAX_STATES`` states, ``MAX_FEATURES`` features and ``MAX_PASSING`` passing
+places per description; over a limit the generator raises, it never
+truncates. ``through`` alone has an overflow slot: past ``MAX_THROUGH`` it
+names the first ``MAX_THROUGH`` and counts the rest.
 """
 
 import math
@@ -18,12 +21,19 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from seo_manager.analytics.drive_templates import (
     BASE_TAGS,
     HEADINGS,
+    MAX_FEATURES,
     MAX_GEO,
+    MAX_PASSING,
+    MAX_ROADS,
     MAX_ROUTE,
+    MAX_STATES,
     MAX_THROUGH,
+    MAX_TOWNS,
     MONTH_ABBR,
+    REGIONS_DISPLAY,
     SEASONS,
     TERRAINS,
+    WEEKDAYS,
 )
 from seo_manager.analytics.final_text_params import format_duration
 from seo_manager.analytics.final_text_surfaces import (
@@ -90,6 +100,17 @@ class DriveTextData:
     year: Optional[int] = None  # the recording year tag (the record's date backs it)
     month: Optional[int] = None  # adds the month, season and season-drive tags
     base_tags: bool = True
+    # GMS body lines: the arc (start to end, passing places) or else towns,
+    # then roads, states (one state prints nothing) and features.
+    journey_start: Optional[PlaceRef] = None
+    journey_end: Optional[PlaceRef] = None
+    passing: Sequence[PlaceRef] = ()
+    towns: Sequence[PlaceRef] = ()
+    roads: Sequence[PlaceRef] = ()
+    states: Sequence[PlaceRef] = ()
+    features: Sequence[PlaceRef] = ()
+    playlist: Optional[Tuple[str, str]] = None  # (region, playlist URL)
+    cadence: Optional[Tuple[str, str]] = None  # (region, weekday)
 
 
 def _number(name: str, value: Any) -> float:
@@ -151,6 +172,9 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
                 raise ValueError(f"terrain {data.terrain!r} is not registered")
             slots = {"duration": final, "terrain": data.terrain, "place": p.evidence_id}
             parts.append(_block("body", "terrain", slots, p))
+    journey = _journey(data)
+    if journey:
+        parts += [*journey, TemplateBlock("description.gap", "description.gap")]
     if data.road is None:
         parts.append(_block("location", "place", {"place": p.evidence_id}, p))
     else:
@@ -176,15 +200,20 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
         if data.heading not in HEADINGS:
             raise ValueError(f"heading {data.heading!r} is not a compass code")
         parts.append(_block("heading", "compass", {"heading": HEADINGS[data.heading]}))
-    for name, refs, cap, floor in (
-        ("through", data.through, MAX_THROUGH, 1),
-        ("route", data.route, MAX_ROUTE, 2),
-    ):
-        if len(refs) > cap:
-            raise ValueError(f"{name} holds at most {cap} places")
-        if len(refs) >= floor:
-            slots = {f"p{i}": r.evidence_id for i, r in enumerate(refs, 1)}
-            parts.append(_block(name, str(len(refs)), slots, *refs))
+    through = list(data.through)
+    if through:
+        head = through[:MAX_THROUGH]
+        slots: Dict[str, Any] = _slots("p", head)
+        tid = str(len(head))
+        if len(through) > MAX_THROUGH:
+            slots["overflow"] = len(through) - MAX_THROUGH
+            tid += ".more"
+        parts.append(_block("through", tid, slots, *head))
+    if len(data.route) > MAX_ROUTE:
+        raise ValueError(f"route holds at most {MAX_ROUTE} places")
+    if len(data.route) >= 2:
+        slots = _slots("p", data.route)
+        parts.append(_block("route", str(len(data.route)), slots, *data.route))
     count = int(_number("insert_count", data.insert_count))
     if count == 1:
         parts.append(TemplateBlock("description.insert", "description.insert.one"))
@@ -199,6 +228,19 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
         )
     for block in ("rule", "cta"):
         parts.append(TemplateBlock(f"description.{block}", f"description.{block}"))
+    if (data.playlist or data.cadence) and not data.site:
+        # The site line closes the footer group with its blank line.
+        raise ValueError("playlist and cadence lines need the site line")
+    if data.playlist is not None:
+        region, url = data.playlist
+        _enum("playlist region", region, REGIONS_DISPLAY)
+        parts.append(_block("playlist", "full", {"region": region, "url": url}))
+    if data.cadence is not None:
+        region, weekday = data.cadence
+        _enum("cadence region", region, REGIONS_DISPLAY)
+        _enum("cadence weekday", weekday, WEEKDAYS)
+        slots = {"region": region, "weekday": weekday}
+        parts.append(_block("cadence", "weekly", slots))
     if data.site:
         parts.append(TemplateBlock("description.site", "description.site"))
     parts.append(TemplateBlock("description.close", "description.close"))
@@ -215,6 +257,61 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
     slots = {f"p{i}": r.evidence_id for i, r in enumerate(geo, 1)}
     parts.append(_block("hashtags", str(len(geo)), slots, *geo))
     parts += _tags(data)
+    return parts
+
+
+def _enum(name: str, value: Any, values: Sequence[str]) -> None:
+    if value not in values:
+        raise ValueError(f"{name} {value!r} is not registered")
+
+
+def _slots(prefix: str, refs: Sequence[PlaceRef]) -> Dict[str, Any]:
+    return {f"{prefix}{i}": r.evidence_id for i, r in enumerate(refs, 1)}
+
+
+def _capped(name: str, refs: Sequence[PlaceRef], cap: int) -> List[PlaceRef]:
+    if len(refs) > cap:
+        raise ValueError(f"{name} holds at most {cap} places")
+    return list(refs)
+
+
+def _journey(data: DriveTextData) -> List[Part]:
+    """GMS body lines: arc or towns (towns and roads share one line), roads,
+    states, features."""
+    towns = _capped("towns", data.towns, MAX_TOWNS)
+    roads = _capped("roads", data.roads, MAX_ROADS)
+    states = _capped("states", data.states, MAX_STATES)
+    features = _capped("features", data.features, MAX_FEATURES)
+    passing = _capped("passing", data.passing, MAX_PASSING)
+    a, b = data.journey_start, data.journey_end
+    parts: List[Part] = []
+    if (a is None) != (b is None):
+        raise ValueError("an arc needs both journey_start and journey_end")
+    if a is not None and b is not None:
+        if a.evidence_id == b.evidence_id:
+            raise ValueError("an arc must end somewhere other than its start")
+        if towns:
+            raise ValueError("towns are the fallback for no arc, not both")
+        slots = {"a": a.evidence_id, "b": b.evidence_id, **_slots("p", passing)}
+        parts.append(_block("journey", f"arc.{len(passing)}", slots, a, b, *passing))
+    elif passing:
+        raise ValueError("passing places need an arc")
+    elif towns and roads:
+        slots = {**_slots("t", towns), **_slots("r", roads)}
+        tid = f"towns_roads.{len(towns)}.{len(roads)}"
+        parts.append(_block("journey", tid, slots, *towns, *roads))
+        roads = []
+    elif towns:
+        parts.append(
+            _block("journey", f"towns.{len(towns)}", _slots("t", towns), *towns)
+        )
+    if roads:
+        parts.append(_block("roads", str(len(roads)), _slots("r", roads), *roads))
+    if len(states) >= 2:
+        parts.append(_block("states", str(len(states)), _slots("s", states), *states))
+    if features:
+        tid = str(len(features))
+        parts.append(_block("features", tid, _slots("f", features), *features))
     return parts
 
 
