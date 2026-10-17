@@ -49,7 +49,7 @@ def golden_drive_data_synthetic() -> DriveTextData:
         chapters=[
             ChapterData(0, BRIN, ("p-1",)), ChapterData(1500, QUILL, ("p-2",))
         ],
-        place_tags=[BRIN, QUILL], month=9,
+        place_tags=[BRIN, QUILL], year=2026, month=9,
     )  # fmt: skip
 
 
@@ -89,10 +89,10 @@ GOLDEN_DESCRIPTION = "\n".join(
     ]
 )
 GOLDEN_TAGS = [
-    "Brindlemoor", "Quillhaven", "September", "autumn", "autumn drive",
     "POV driving", "drive", "road trip", "driving video", "4K driving",
     "relaxing drive", "virtual travel", "dashcam", "drive with me",
     "driving route", "POV", "long drive",
+    "2026", "September", "autumn", "autumn drive", "Brindlemoor", "Quillhaven",
 ]  # fmt: skip
 
 

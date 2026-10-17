@@ -185,8 +185,9 @@ def _with_tags(*tags):
 
 
 def test_w10_3_registered_non_place_tags_and_backed_place_tags_agree():
-    tags = [_tag("tag.1", "Quillhaven", ["p-2"]),
-            _tag("tag.2", "dashcam", template_id="tag.dashcam")]  # fmt: skip
+    # Registered tags come first; cited place tags follow them (W10c-5).
+    tags = [_tag("tag.1", "dashcam", template_id="tag.dashcam"),
+            _tag("tag.2", "Quillhaven", ["p-2"])]  # fmt: skip
     assert _review(_with_tags(*tags)).verdict == AGREE
 
 
@@ -287,7 +288,9 @@ def _changed_policy():
         for tid, digest in DEFAULT_TEXT_POLICY.drive_templates
     )
     return dataclasses.replace(
-        DEFAULT_TEXT_POLICY, drive_templates=changed, drive_version="drive-templates-2"
+        DEFAULT_TEXT_POLICY,
+        drive_templates=changed,
+        drive_version="drive-templates-next",
     )
 
 
@@ -343,3 +346,67 @@ def test_w10c_3_swapped_blocks_without_a_layout_are_refused():
 def test_w10c_3_a_review_with_no_drive_surface_needs_no_layout():
     entries = [_free_line("Quillhaven", "description.place")]
     assert "layout_required" not in _without_layout(entries)
+
+
+# --- W10c-5: tag order and the year tag -------------------------------------------
+
+
+def _tag_surfaces(entries):
+    return [e["surface"] for e in entries if e["kind"] == "tag"]
+
+
+def _move_tag(surface, before):
+    entries = golden_entries()
+    moved = _find(entries, surface)
+    entries.remove(moved)
+    entries.insert(entries.index(_find(entries, before)), moved)
+    return entries
+
+
+def test_w10c_5_tag_order_is_base_year_month_season_season_drive():
+    from seo_manager.analytics.drive_templates import BASE_TAGS
+
+    base = len(BASE_TAGS)
+    assert TAG_ORDER[base] == "tag.year"
+    assert TAG_ORDER[base + 1 : base + 13] == tuple(
+        f"tag.month_{m}" for m in range(1, 13)
+    )
+    assert TAG_ORDER[base + 13].startswith("tag.season_")
+
+
+def test_w10c_5_the_golden_tags_in_registered_order_agree():
+    entries = golden_entries()
+    assert _tag_surfaces(entries)[-2:] == ["tag.place.1", "tag.place.2"]
+    assert _find(entries, "tag.year")["kind"] == "tag"
+    assert _review(entries).verdict == AGREE
+
+
+@pytest.mark.parametrize(
+    ("moved", "before"),
+    [("tag.year", "tag.1"), ("tag.month_9", "tag.year"), ("tag.place.1", "tag.month_9"),
+     ("tag.season_autumn_drive", "tag.season_autumn")],
+)  # fmt: skip
+def test_w10c_5_one_reordered_tag_is_refused(moved, before):
+    assert "tag_order" in _review(_move_tag(moved, before)).reasons
+
+
+@pytest.mark.parametrize("value", ["twenty", "2026", 1899, 2201, 2026.5, True])
+def test_w10c_5_a_year_tag_takes_only_a_year_number(value):
+    entries = _edit("tag.year", slots={"year": value}, text=str(value))
+    assert "param_slot:tag.year:year" in _review(entries).reasons
+
+
+def test_w10c_5_a_year_tag_must_be_the_recording_year():
+    entries = _edit("tag.year", slots={"year": 2025}, text="2025")
+    assert "tag_year_unbacked:tag.year" in _review(entries).reasons
+
+
+def test_w10c_5_a_year_template_under_a_description_surface_is_refused():
+    entries = _edit("tag.year", kind="param_template")
+    assert "template_unknown:tag.year:tag.year" in _review(entries).reasons
+
+
+def test_w10c_5_a_description_template_sent_as_a_tag_is_refused():
+    entries = _edit("description.distance", kind="tag")
+    reasons = _review(entries).reasons
+    assert "template_unknown:description.distance:description.distance.both" in reasons

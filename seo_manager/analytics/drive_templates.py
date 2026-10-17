@@ -13,7 +13,7 @@ from typing import Dict, Tuple
 
 from .final_text_params import ParamTemplate, Slot, param_hash
 
-DRIVE_TEMPLATES_VERSION = "drive-templates-1"
+DRIVE_TEMPLATES_VERSION = "drive-templates-2"
 LAYOUT = "gms-drive-1"
 RULE = "━" * 24
 
@@ -62,7 +62,13 @@ DRIVE_TEXT: Dict[str, str] = {
     "description.close": RULE,
     "description.chapterhead": "\n\U0001f4cd CHAPTERS",
 }
+# Registered tags keep this order: base, year, month, season, season drive.
+# Place and road tags (cited evidence, no template id) follow them all.
 TAG_ORDER: Tuple[str, ...] = ()
+for _tag in BASE_TAGS:
+    DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
+    TAG_ORDER += (f"tag.{_slug(_tag)}",)
+TAG_ORDER += ("tag.year",)  # parameterized: registered in PARAMS below
 for _i, _name in enumerate(MONTHS):
     DRIVE_TEXT[f"tag.month_{_i + 1}"] = _name
     TAG_ORDER += (f"tag.month_{_i + 1}",)
@@ -72,9 +78,6 @@ for _season in SEASONS:
 for _season in SEASONS:
     DRIVE_TEXT[f"tag.season_{_season}_drive"] = f"{_season} drive"
     TAG_ORDER += (f"tag.season_{_season}_drive",)
-for _tag in BASE_TAGS:
-    DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
-    TAG_ORDER += (f"tag.{_slug(_tag)}",)
 
 PARAMS: Dict[str, ParamTemplate] = {}
 
@@ -85,6 +88,9 @@ def _param(template_id: str, skeleton: str, *slots: Slot) -> None:
 
 _PLACE = lambda name: Slot(name, "place")  # noqa: E731
 _DURATION = lambda name: Slot(name, "duration")  # noqa: E731
+_YEAR = lambda name: Slot(  # noqa: E731
+    name, "number", minimum=1900.0, maximum=2200.0, group=False
+)
 
 _param(
     "description.hook.highlights",
@@ -162,8 +168,9 @@ _param(
     "description.filmed.month",
     "\U0001f4c5 Filmed: {month} {year}",
     Slot("month", "enum", values=MONTH_ABBR),
-    Slot("year", "number", minimum=1900.0, maximum=2200.0, group=False),
+    _YEAR("year"),
 )
+_param("tag.year", "{year}", _YEAR("year"))
 MAX_THROUGH, MAX_ROUTE, MAX_GEO = 12, 8, 4
 for _n in range(1, MAX_THROUGH + 1):
     _names = [f"p{k}" for k in range(1, _n + 1)]

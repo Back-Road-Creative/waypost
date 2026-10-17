@@ -86,6 +86,7 @@ class DriveTextData:
     geo_hashtags: Sequence[PlaceRef] = ()
     chapters: Sequence[ChapterData] = ()
     place_tags: Sequence[PlaceRef] = ()
+    year: Optional[int] = None  # the recording year tag (the record's date backs it)
     month: Optional[int] = None  # adds the month, season and season-drive tags
     base_tags: bool = True
 
@@ -217,21 +218,25 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
 
 
 def _tags(data: DriveTextData) -> List[Part]:
-    tags: List[Part] = [
-        Tag(f"tag.place.{i}", t.text, (t.evidence_id,))
-        for i, t in enumerate(data.place_tags, 1)
-    ]
-    ids: List[str] = []
+    """Tags in ``TAG_ORDER``: base, year, month, season, season drive, places."""
+    tags: List[Part] = []
+    if data.base_tags:
+        tags += [
+            Tag(f"tag.{n}", template_id="tag." + t.lower().replace(" ", "_"))
+            for n, t in enumerate(BASE_TAGS, 1)
+        ]
+    if data.year is not None:
+        tags.append(ParamBlock("tag.year", "tag.year", {"year": data.year}))
     if data.month is not None:
         month = int(_number("month", data.month))
         if not 1 <= month <= 12:
             raise ValueError("month must be 1-12")
         season = _SEASON_BY_MONTH[month]
-        ids += [
-            f"tag.month_{month}",
-            f"tag.season_{season}",
-            f"tag.season_{season}_drive",
+        tags += [
+            Tag(f"tag.{t}", template_id=f"tag.{t}")
+            for t in (f"month_{month}", f"season_{season}", f"season_{season}_drive")
         ]
-    if data.base_tags:
-        ids += ["tag." + t.lower().replace(" ", "_") for t in BASE_TAGS]
-    return tags + [Tag(f"tag.{n}", template_id=t) for n, t in enumerate(ids, 1)]
+    return tags + [
+        Tag(f"tag.place.{i}", t.text, (t.evidence_id,))
+        for i, t in enumerate(data.place_tags, 1)
+    ]

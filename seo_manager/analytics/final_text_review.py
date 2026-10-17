@@ -601,6 +601,13 @@ def _param(
     return text, tuple(items)
 
 
+def _year_backed(entry: Mapping[str, Any], recording_date: Optional[str]) -> bool:
+    """True when a year tag names the recording date's year."""
+    slots = entry.get("slots")
+    year = slots.get("year") if isinstance(slots, Mapping) else None
+    return bool(recording_date) and str(year) == str(recording_date)[:4]
+
+
 def _is_drive_surface(surface: "SurfaceReview") -> bool:
     """A parameterized block or a fixed drive ``description.*`` block."""
     if surface.kind == PARAM_TEMPLATE:
@@ -638,12 +645,17 @@ def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -
     for name, required in blocks:
         if required and name not in seen:
             reasons.refuse(f"layout_missing:{name}")
+    # Registered tags rank by TAG_ORDER, each once; cited place tags rank last.
+    last_rank = len(TAG_ORDER)
     order = [
-        TAG_ORDER.index(s.template_id) if s.template_id in TAG_ORDER else -1
+        last_rank
+        if s.template_id is None
+        else (TAG_ORDER.index(s.template_id) if s.template_id in TAG_ORDER else -1)
         for s in surfaces
-        if s.kind == TAG and s.template_id is not None
+        if s.kind == TAG
     ]
-    if order != sorted(set(order)) or -1 in order:
+    registered = [r for r in order if r != last_rank]
+    if -1 in order or order != sorted(order) or len(set(registered)) != len(registered):
         reasons.refuse("tag_order")
 
 
@@ -764,18 +776,22 @@ def review_final_text(
             reasons.refuse(f"duplicate_surface:{surface}")
             continue
         names.add(surface)
-        if entry.get("kind") == PARAM_TEMPLATE:
+        kind, template_id = entry.get("kind"), entry.get("template_id")
+        if kind == PARAM_TEMPLATE or (kind == TAG and template_id in PARAMS):
+            # A parameterized tag is sent as a tag; any other block is not.
+            if str(template_id).startswith("tag.") != (kind == TAG):
+                reasons.refuse(f"template_unknown:{surface}:{template_id}")
+                continue
             done = _param(entry, surface, policy, by_id, ambiguous, route_ids, reasons)
-            if done is not None:
-                surfaces.append(
-                    SurfaceReview(
-                        surface,
-                        done[0],
-                        done[1],
-                        kind=PARAM_TEMPLATE,
-                        template_id=str(entry.get("template_id")),
-                    )
+            if done is None:
+                continue
+            if template_id == "tag.year" and not _year_backed(entry, recording_date):
+                reasons.refuse(f"tag_year_unbacked:{surface}")
+            surfaces.append(
+                SurfaceReview(
+                    surface, done[0], done[1], kind=kind, template_id=str(template_id)
                 )
+            )
             continue
         parsed = _surface(entry, surface, position, policy, reasons)
         if parsed is None:

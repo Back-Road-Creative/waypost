@@ -3,7 +3,8 @@
 A ``ParamTemplate`` is a registered skeleton, the template bytes with
 ``{slot}`` markers, plus one typed ``Slot`` per marker. Its hash covers the
 skeleton and the slot specs, never the filled text. A slot never carries a
-free word: ``number`` is a finite number (rendered here), ``unit`` and
+free word: ``number`` is a finite number (rendered here; whole
+when it renders no decimals), ``unit`` and
 ``enum`` take one of their registered values (case-sensitive), ``duration``
 takes the one format ``format_duration`` emits, and ``place`` names an
 evidence id, whose cited value is backed by the review like a place line. A
@@ -81,6 +82,8 @@ def valid_value(slot: Slot, value: Any) -> bool:
             and not isinstance(value, bool)
             and math.isfinite(value)
             and slot.minimum <= value <= slot.maximum
+            # Rendered with no decimals, a fraction would show a rounded fact.
+            and (slot.decimals > 0 or float(value).is_integer())
         )
     if not isinstance(value, str):
         return False
