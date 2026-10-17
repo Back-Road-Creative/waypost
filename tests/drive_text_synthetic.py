@@ -72,12 +72,19 @@ GOLDEN_PARTS = [
     Chapter("chapter.1", 0, "Brindlemoor", ("p-1",), ("p-1",)),
     Chapter("chapter.2", 1500, "Quillhaven", ("p-2",), ("p-2",)),
     _p("hashtags", "2", {"p1": "p-1", "p2": "p-2"}, BRIN, QUILL),
+    # Tag order (GMS): base, place parts, "<place> drive", year, month,
+    # season, season drive.
+    *(Tag(f"tag.{n}", template_id=f"tag.{t}") for n, t in enumerate((
+        "pov_driving", "drive", "road_trip", "driving_video", "4k_driving",
+        "relaxing_drive", "virtual_travel", "dashcam", "drive_with_me",
+        "driving_route", "pov", "long_drive"), 1)),
     Tag("tag.place.1", "Brindlemoor", ("p-1",)),
     Tag("tag.place.2", "Quillhaven", ("p-2",)),
-    *(Tag(f"tag.{n}", template_id=f"tag.{t}") for n, t in enumerate((
-        "month_9", "season_autumn", "season_autumn_drive", "pov_driving", "drive",
-        "road_trip", "driving_video", "4k_driving", "relaxing_drive", "virtual_travel",
-        "dashcam", "drive_with_me", "driving_route", "pov", "long_drive"), 1)),
+    ParamBlock("tag.place_drive.1", "tag.place_drive", {"place": "p-1"}, {"p-1": "Brindlemoor"}),
+    ParamBlock("tag.place_drive.2", "tag.place_drive", {"place": "p-2"}, {"p-2": "Quillhaven"}),
+    ParamBlock("tag.year", "tag.year", {"year": 2026}),
+    *(Tag(f"tag.{t}", template_id=f"tag.{t}")
+      for t in ("month_9", "season_autumn", "season_autumn_drive")),
 ]  # fmt: skip
 
 

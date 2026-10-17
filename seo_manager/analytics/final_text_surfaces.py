@@ -144,7 +144,8 @@ def _param_entry(part: ParamBlock) -> Dict[str, Any]:
             raise ValueError(f"slot_value:{part.surface}:{slot.name}")
     return {
         "surface": part.surface,
-        "kind": PARAM_TEMPLATE,
+        # A parameterized tag (``tag.year``) is still sent as a tag.
+        "kind": TAG if part.template_id.startswith("tag.") else PARAM_TEMPLATE,
         "text": render(template.skeleton, rendered),
         "template_id": part.template_id,
         "skeleton": template.skeleton,

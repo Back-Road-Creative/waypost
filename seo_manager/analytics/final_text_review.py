@@ -46,8 +46,11 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .drive_templates import (
     DRIVE_TEMPLATES_VERSION,
+    DRIVE_TEXT,
     LAYOUTS,
     PARAMS,
+    PLACE_TAG,
+    REPEATABLE_TAGS,
     TAG_ORDER,
     drive_hashes,
 )
@@ -129,7 +132,7 @@ class FinalTextReviewRefused(ValueError):
 class FinalTextPolicy:
     """The thresholds a review applies; recorded in, and checked against, it."""
 
-    version: str = "final-text-policy-3"
+    version: str = "final-text-policy-4"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
     filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
@@ -139,6 +142,8 @@ class FinalTextPolicy:
     # a record written under one version is refused under another.
     drive_templates: Tuple[Tuple[str, str], ...] = drive_hashes()
     drive_version: str = DRIVE_TEMPLATES_VERSION
+    # Playlist list ids a ``playlist_url`` slot may name; empty refuses all.
+    playlist_allowlist: Tuple[str, ...] = ()
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -572,7 +577,7 @@ def _param(
     for slot in template.slots:
         value = slots[slot.name]
         if slot.type != "place":
-            if valid_value(slot, value):
+            if valid_value(slot, value, policy.playlist_allowlist):
                 rendered[slot.name] = render_value(slot, value)
             else:
                 reasons.refuse(f"param_slot:{surface}:{slot.name}")
@@ -598,6 +603,21 @@ def _param(
     )
     _check_backing(cited, route_ids, "place_not_on_route", policy, reasons)
     return text, tuple(items)
+
+
+def _year_backed(entry: Mapping[str, Any], recording_date: Optional[str]) -> bool:
+    """True when a year tag names the recording date's year."""
+    slots = entry.get("slots")
+    year = slots.get("year") if isinstance(slots, Mapping) else None
+    return bool(recording_date) and str(year) == str(recording_date)[:4]
+
+
+def _is_drive_surface(surface: "SurfaceReview") -> bool:
+    """A parameterized block or a fixed drive ``description.*`` block."""
+    if surface.kind == PARAM_TEMPLATE:
+        return True
+    tid = surface.template_id or ""
+    return tid in DRIVE_TEXT and tid.startswith("description.")
 
 
 def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -> None:
@@ -629,12 +649,12 @@ def _layout(layout: Any, surfaces: Sequence[SurfaceReview], reasons: _Reasons) -
     for name, required in blocks:
         if required and name not in seen:
             reasons.refuse(f"layout_missing:{name}")
-    order = [
-        TAG_ORDER.index(s.template_id) if s.template_id in TAG_ORDER else -1
-        for s in surfaces
-        if s.kind == TAG and s.template_id is not None
-    ]
-    if order != sorted(set(order)) or -1 in order:
+    # Tags rank by TAG_ORDER (a cited place tag as PLACE_TAG); only place
+    # ranks repeat.
+    ids = [s.template_id or PLACE_TAG for s in surfaces if s.kind == TAG]
+    order = [TAG_ORDER.index(t) if t in TAG_ORDER else -1 for t in ids]
+    once = [t for t in ids if t not in REPEATABLE_TAGS]
+    if -1 in order or order != sorted(order) or len(set(once)) != len(once):
         reasons.refuse("tag_order")
 
 
@@ -755,18 +775,22 @@ def review_final_text(
             reasons.refuse(f"duplicate_surface:{surface}")
             continue
         names.add(surface)
-        if entry.get("kind") == PARAM_TEMPLATE:
+        kind, template_id = entry.get("kind"), entry.get("template_id")
+        if kind == PARAM_TEMPLATE or (kind == TAG and template_id in PARAMS):
+            # A parameterized tag is sent as a tag; any other block is not.
+            if str(template_id).startswith("tag.") != (kind == TAG):
+                reasons.refuse(f"template_unknown:{surface}:{template_id}")
+                continue
             done = _param(entry, surface, policy, by_id, ambiguous, route_ids, reasons)
-            if done is not None:
-                surfaces.append(
-                    SurfaceReview(
-                        surface,
-                        done[0],
-                        done[1],
-                        kind=PARAM_TEMPLATE,
-                        template_id=str(entry.get("template_id")),
-                    )
+            if done is None:
+                continue
+            if template_id == "tag.year" and not _year_backed(entry, recording_date):
+                reasons.refuse(f"tag_year_unbacked:{surface}")
+            surfaces.append(
+                SurfaceReview(
+                    surface, done[0], done[1], kind=kind, template_id=str(template_id)
                 )
+            )
             continue
         parsed = _surface(entry, surface, position, policy, reasons)
         if parsed is None:
@@ -821,6 +845,10 @@ def review_final_text(
     layout = _text(approved.get("description_layout"))
     if layout is not None:
         _layout(layout, surfaces, reasons)
+    elif any(_is_drive_surface(s) for s in surfaces):
+        # A drive description is checked only against a named layout; without
+        # one a free line, a dropped block or a reorder would pass unseen.
+        reasons.refuse("layout_required")
 
     final_title, claims = _chosen(decision, reasons)
     title_items = _resolve(

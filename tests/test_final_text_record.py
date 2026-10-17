@@ -186,6 +186,7 @@ def test_min_place_seconds_is_the_policy_threshold():
         "templates": DEFAULT_TEXT_POLICY.templates,
         "drive_templates": DEFAULT_TEXT_POLICY.drive_templates,
         "drive_version": DEFAULT_TEXT_POLICY.drive_version,
+        "playlist_allowlist": (),
     }
 
 

@@ -9,11 +9,11 @@ a fixed line or a tag changes its hash, so it needs a reviewed Waypost PR and
 a bump of ``DRIVE_TEMPLATES_VERSION``.
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Sequence, Tuple
 
 from .final_text_params import ParamTemplate, Slot, param_hash
 
-DRIVE_TEMPLATES_VERSION = "drive-templates-1"
+DRIVE_TEMPLATES_VERSION = "drive-templates-3"
 LAYOUT = "gms-drive-1"
 RULE = "━" * 24
 
@@ -62,7 +62,17 @@ DRIVE_TEXT: Dict[str, str] = {
     "description.close": RULE,
     "description.chapterhead": "\n\U0001f4cd CHAPTERS",
 }
+# Tags keep GMS's order (longform_metadata ``_location_tags``): base, cited
+# place parts (``PLACE_TAG``, no template id), "<place> drive", year, month,
+# season, season drive, then cited phrase tags. Only the place and phrase
+# ranks may repeat.
+PLACE_TAG = "tag.place"
 TAG_ORDER: Tuple[str, ...] = ()
+for _tag in BASE_TAGS:
+    DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
+    TAG_ORDER += (f"tag.{_slug(_tag)}",)
+# ``tag.place_drive`` and ``tag.year`` are parameterized: see PARAMS below.
+TAG_ORDER += (PLACE_TAG, "tag.place_drive", "tag.year")
 for _i, _name in enumerate(MONTHS):
     DRIVE_TEXT[f"tag.month_{_i + 1}"] = _name
     TAG_ORDER += (f"tag.month_{_i + 1}",)
@@ -72,9 +82,8 @@ for _season in SEASONS:
 for _season in SEASONS:
     DRIVE_TEXT[f"tag.season_{_season}_drive"] = f"{_season} drive"
     TAG_ORDER += (f"tag.season_{_season}_drive",)
-for _tag in BASE_TAGS:
-    DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
-    TAG_ORDER += (f"tag.{_slug(_tag)}",)
+# GMS appends analytics phrase tags last; each must cite a route place.
+TAG_ORDER += ("tag.phrase",)
 
 PARAMS: Dict[str, ParamTemplate] = {}
 
@@ -85,6 +94,9 @@ def _param(template_id: str, skeleton: str, *slots: Slot) -> None:
 
 _PLACE = lambda name: Slot(name, "place")  # noqa: E731
 _DURATION = lambda name: Slot(name, "duration")  # noqa: E731
+_YEAR = lambda name: Slot(  # noqa: E731
+    name, "number", minimum=1900.0, maximum=2200.0, group=False
+)
 
 _param(
     "description.hook.highlights",
@@ -162,8 +174,12 @@ _param(
     "description.filmed.month",
     "\U0001f4c5 Filmed: {month} {year}",
     Slot("month", "enum", values=MONTH_ABBR),
-    Slot("year", "number", minimum=1900.0, maximum=2200.0, group=False),
+    _YEAR("year"),
 )
+_param("tag.place_drive", "{place} drive", Slot("place", "place"))
+_param("tag.phrase", "{place}", Slot("place", "place"))
+REPEATABLE_TAGS = frozenset({PLACE_TAG, "tag.place_drive", "tag.phrase"})
+_param("tag.year", "{year}", _YEAR("year"))
 MAX_THROUGH, MAX_ROUTE, MAX_GEO = 12, 8, 4
 for _n in range(1, MAX_THROUGH + 1):
     _names = [f"p{k}" for k in range(1, _n + 1)]
@@ -171,6 +187,14 @@ for _n in range(1, MAX_THROUGH + 1):
         f"description.through.{_n}",
         "\U0001f5fa️ Through: " + ", ".join("{" + k + "}" for k in _names),
         *(_PLACE(k) for k in _names),
+    )
+    _param(
+        f"description.through.{_n}.more",
+        "\U0001f5fa️ Through: "
+        + ", ".join("{" + k + "}" for k in _names)
+        + " … +{overflow} more",
+        *(_PLACE(k) for k in _names),
+        Slot("overflow", "number", minimum=1.0),
     )
 for _n in range(2, MAX_ROUTE + 1):
     _names = [f"p{k}" for k in range(1, _n + 1)]
@@ -188,14 +212,88 @@ for _n in range(MAX_GEO + 1):
         *(Slot(k, "place", hashtag=True) for k in _names),
     )
 
+# GMS longform_metadata body sentences, each list capped as GMS caps it.
+MAX_TOWNS, MAX_ROADS, MAX_STATES, MAX_FEATURES, MAX_PASSING = 12, 5, 12, 5, 5
+
+
+def _names(prefix: str, n: int) -> Tuple[str, ...]:
+    return tuple(f"{prefix}{k}" for k in range(1, n + 1))
+
+
+def _list(names: Sequence[str]) -> str:
+    return ", ".join("{" + k + "}" for k in names)
+
+
+for _k in range(MAX_PASSING + 1):
+    _p = _names("p", _k)
+    _param(
+        f"description.body.arc.{_k}",
+        "Started in {a}, ended in {b}"
+        + (", passing through " + _list(_p) if _p else "")
+        + ".",
+        *(_PLACE(k) for k in ("a", "b", *_p)),
+    )
+for _n in range(1, MAX_TOWNS + 1):
+    _t = _names("t", _n)
+    _param(
+        f"description.body.towns.{_n}",
+        f"Driving through {_list(_t)}.",
+        *(_PLACE(k) for k in _t),
+    )
+    for _m in range(1, MAX_ROADS + 1):
+        _r = _names("r", _m)
+        _param(
+            f"description.body.towns_roads.{_n}.{_m}",
+            f"Driving through {_list(_t)} on {_list(_r)}.",
+            *(_PLACE(k) for k in (*_t, *_r)),
+        )
+for _m in range(1, MAX_ROADS + 1):
+    _r = _names("r", _m)
+    _param(f"description.roads.{_m}", f"Roads traveled: {_list(_r)}.", *map(_PLACE, _r))
+for _n in range(2, MAX_STATES + 1):
+    _st = _names("s", _n)
+    # The count is part of the skeleton, so it cannot disagree with the list.
+    _param(
+        f"description.states.{_n}",
+        f"Spans {_n} states: {_list(_st)}.",
+        *map(_PLACE, _st),
+    )
+for _k in range(1, MAX_FEATURES + 1):
+    _f = _names("f", _k)
+    _param(
+        f"description.features.{_k}",
+        f"Highlights along the route: {_list(_f)}.",
+        *map(_PLACE, _f),
+    )
+
+# Footer (GMS config-driven): playlist link and upload cadence per region.
+REGIONS_DISPLAY = ("Ireland", "USA")
+WEEKDAYS = (
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+)  # fmt: skip
+_param(
+    "description.playlist.full",
+    "\u25b6 Full {region} playlist: {url}",
+    Slot("region", "enum", values=REGIONS_DISPLAY),
+    Slot("url", "playlist_url"),
+)
+_param(
+    "description.cadence.weekly",
+    "New {region} drive every {weekday}",
+    Slot("region", "enum", values=REGIONS_DISPLAY),
+    Slot("weekday", "enum", values=WEEKDAYS),
+)
+
 # Ordered blocks of the layout: (block name, required). ``chapter`` is the
 # chapter lines themselves and may repeat.
 LAYOUTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
     LAYOUT: (
-        ("hook", True), ("seo", False), ("body", False), ("location", True),
+        ("hook", True), ("seo", False), ("body", False), ("roads", False),
+        ("states", False), ("features", False), ("location", True),
         ("duration", True), ("distance", False), ("heading", False),
         ("through", False), ("route", False), ("insert", False),
-        ("filmed", False), ("rule", True), ("cta", True), ("site", False),
+        ("filmed", False), ("rule", True), ("cta", True), ("playlist", False),
+        ("cadence", False), ("site", False),
         ("close", True), ("chapterhead", False), ("chapter", False),
         ("hashtags", True),
     ),
