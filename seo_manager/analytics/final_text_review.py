@@ -132,7 +132,7 @@ class FinalTextReviewRefused(ValueError):
 class FinalTextPolicy:
     """The thresholds a review applies; recorded in, and checked against, it."""
 
-    version: str = "final-text-policy-3"
+    version: str = "final-text-policy-4"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
     filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
@@ -142,6 +142,8 @@ class FinalTextPolicy:
     # a record written under one version is refused under another.
     drive_templates: Tuple[Tuple[str, str], ...] = drive_hashes()
     drive_version: str = DRIVE_TEMPLATES_VERSION
+    # Playlist list ids a ``playlist_url`` slot may name; empty refuses all.
+    playlist_allowlist: Tuple[str, ...] = ()
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -575,7 +577,7 @@ def _param(
     for slot in template.slots:
         value = slots[slot.name]
         if slot.type != "place":
-            if valid_value(slot, value):
+            if valid_value(slot, value, policy.playlist_allowlist):
                 rendered[slot.name] = render_value(slot, value)
             else:
                 reasons.refuse(f"param_slot:{surface}:{slot.name}")

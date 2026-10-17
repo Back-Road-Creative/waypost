@@ -7,8 +7,10 @@ free word: ``number`` is a finite number (rendered here; whole
 when it renders no decimals), ``unit`` and
 ``enum`` take one of their registered values (case-sensitive), ``duration``
 takes the one format ``format_duration`` emits, and ``place`` names an
-evidence id, whose cited value is backed by the review like a place line. A
-string-typed catch-all slot cannot be registered.
+evidence id, whose cited value is backed by the review like a place line.
+``playlist_url`` takes only a YouTube playlist URL, and the review also
+requires its list id to be on the policy's allowlist. A string-typed
+catch-all slot cannot be registered.
 """
 
 import hashlib
@@ -16,9 +18,12 @@ import json
 import math
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Tuple
+from typing import Any, Iterable, Mapping, Optional, Tuple
 
-SLOT_TYPES = ("number", "unit", "duration", "enum", "place")
+SLOT_TYPES = ("number", "unit", "duration", "enum", "place", "playlist_url")
+_PLAYLIST = re.compile(
+    r"https://www\.youtube\.com/playlist\?list=([A-Za-z0-9_-]{10,64})"
+)
 _MARKER = re.compile(r"\{([a-z0-9_]+)\}")
 _DURATION = re.compile(r"(?:\d+h [0-5]?\d)m|[0-5]?\dm [0-5]?\ds")
 
@@ -74,8 +79,14 @@ def format_duration(seconds: float) -> str:
     return f"{minutes}m {secs}s"
 
 
-def valid_value(slot: Slot, value: Any) -> bool:
-    """True when ``value`` is a legal, non-place value for ``slot``."""
+def valid_value(
+    slot: Slot, value: Any, allowlist: Optional[Iterable[str]] = None
+) -> bool:
+    """True when ``value`` is a legal, non-place value for ``slot``.
+
+    A ``playlist_url`` must be a YouTube playlist URL; given ``allowlist`` (the
+    review always passes the policy's), its list id must also be on it.
+    """
     if slot.type == "number":
         return (
             isinstance(value, (int, float))
@@ -89,6 +100,9 @@ def valid_value(slot: Slot, value: Any) -> bool:
         return False
     if slot.type == "duration":
         return _DURATION.fullmatch(value) is not None
+    if slot.type == "playlist_url":
+        match = _PLAYLIST.fullmatch(value)
+        return match is not None and (allowlist is None or match[1] in allowlist)
     return value in (slot.units if slot.type == "unit" else slot.values)
 
 
