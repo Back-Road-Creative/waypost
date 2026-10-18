@@ -17,6 +17,7 @@ from seo_manager.analytics.title_selection import (
     DEFAULT_POLICY,
     PLACE_BASELINE,
     PLACE_TEMPLATES,
+    REGION_BASELINE,
     EvidenceSnapshot,
     Place,
     TemplateObservation,
@@ -235,6 +236,55 @@ def test_equal_scores_break_toward_the_lower_index():
     )
     rec = select_title(_facts(), snap, DEFAULT_POLICY)
     assert rec.candidates[rec.chosen_index].template_id == "highlight_route"
+
+
+# --- region-only long-forms ---------------------------------------------------
+
+
+def _region_only():
+    return TitleFacts(
+        format="longform",
+        baseline_title="Ash County, SC in 4K",
+        region=Place("Ash County, SC", "region-county:gps"),
+        suffix=" in 4K",
+    )
+
+
+def test_verified_region_only_longform_has_its_own_baseline_and_candidates():
+    decision = select_title(_region_only(), _snapshot(), DEFAULT_POLICY)
+    assert decision.chosen_title == "Ash County, SC in 4K"
+    assert decision.reason == "insufficient_evidence"
+    assert decision.candidates[0].template_id == REGION_BASELINE
+    assert decision.candidates[0].claim_evidence == ("region-county:gps",)
+    assert decision.candidates[1].title == "Ash County, SC Drive in 4K"
+    assert decision.candidates[1].claim_evidence == ("region-county:gps",)
+
+
+def test_region_only_longform_variant_needs_measured_lift():
+    snap = _snapshot(_obs(REGION_BASELINE, 0.04), _obs("region_drive_lf", 0.06))
+    decision = select_title(_region_only(), snap, DEFAULT_POLICY)
+    assert decision.chosen_title == "Ash County, SC Drive in 4K"
+    assert decision.reason == "lift_over_baseline"
+
+
+def test_route_measurements_cannot_choose_a_region_only_title():
+    decision = select_title(_region_only(), _winning_snapshot(), DEFAULT_POLICY)
+    assert decision.chosen_index == 0
+    assert decision.reason == "insufficient_evidence"
+    assert decision.candidates[0].excluded_reason == "no_evidence"
+
+
+def test_region_only_facts_do_not_silently_become_a_short_or_partial_route():
+    with pytest.raises(TitleSelectionRefused):
+        select_title(
+            replace(_region_only(), format="short"), _snapshot(), DEFAULT_POLICY
+        )
+    with pytest.raises(TitleSelectionRefused):
+        select_title(
+            replace(_region_only(), origin=Place("Alder", "place:gps")),
+            _snapshot(),
+            DEFAULT_POLICY,
+        )
 
 
 # --- single-place Shorts ------------------------------------------------------

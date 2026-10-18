@@ -6,7 +6,8 @@ returns a ``TitleDecision`` that names every candidate, its score, the evidence
 each of its claims rests on, why it was or was not eligible, and the policy
 version, so a published title can be replayed and audited later.
 
-Facts come in one of two shapes. A route names ``origin``, ``destination`` and
+Facts come in three shapes. A route names ``origin``, ``destination`` and
+``region``; a long-form whose GPS proves a single county or state names just
 ``region``; a single-place Short names one ``place``. Each shape has its own
 baseline id and templates, so neither borrows the other's evidence.
 
@@ -33,6 +34,7 @@ TRAFFIC_SOURCES = ("search", "browse")
 
 BASELINE = "route"
 PLACE_BASELINE = "place"
+REGION_BASELINE = "region_only_lf"
 
 # Templates after the baseline, in candidate order. Each names the facts it
 # claims; a template whose fact is absent is recorded, not generated.
@@ -56,6 +58,10 @@ PLACE_TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("highlight_place", "{highlight}, {place}{suffix}", ("highlight", "place")),
 )
 _PLACE_BASELINE_CLAIMS = ("place",)
+REGION_TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+    ("region_drive_lf", "{region} Drive{suffix}", ("region",)),
+)
+_REGION_BASELINE_CLAIMS = ("region",)
 _ROUTE_KEYS = ("origin", "destination", "region")
 
 # Exclusion vocabulary, checked in this order.
@@ -86,7 +92,7 @@ class Place:
 
 @dataclass(frozen=True)
 class TitleFacts:
-    """A route (``origin``, ``destination``, ``region``) or, for a Short, one ``place``.
+    """A route, a long-form region, or a Short's single place.
 
     Exactly one shape is given; a mix, or neither, is refused.
     """
@@ -131,7 +137,7 @@ class TitlePolicy:
     The defaults are proposed values, not measured ones.
     """
 
-    version: str = "title-policy-1"
+    version: str = "title-policy-2"
     traffic_by_format: Mapping[str, str] = field(
         default_factory=lambda: {"short": "browse", "longform": "search"}
     )
@@ -187,9 +193,11 @@ def _places(facts: TitleFacts) -> Dict[str, Place]:
         places = {"place": facts.place}
     elif len(given) == len(_ROUTE_KEYS):
         places = {k: p for k, p in route.items() if p is not None}
+    elif given == ["region"] and facts.format == "longform":
+        places = {"region": route["region"]}
     else:
         raise TitleSelectionRefused(
-            "facts: give a place, or origin, destination and region"
+            "facts: give a Short's place, a long-form region, or origin, destination and region"
         )
     if facts.highlight is not None:
         places["highlight"] = facts.highlight
@@ -294,6 +302,12 @@ def select_title(
             PLACE_BASELINE,
             _PLACE_BASELINE_CLAIMS,
             PLACE_TEMPLATES,
+        )
+    elif "origin" not in places:
+        baseline_id, baseline_claims, templates = (
+            REGION_BASELINE,
+            _REGION_BASELINE_CLAIMS,
+            REGION_TEMPLATES,
         )
     else:
         baseline_id, baseline_claims, templates = BASELINE, _BASELINE_CLAIMS, TEMPLATES
