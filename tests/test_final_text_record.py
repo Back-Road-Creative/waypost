@@ -333,7 +333,7 @@ def test_a_changed_plan_is_stale():
 
 
 def test_a_changed_title_policy_is_stale():
-    err = _refused(review=_review(), policy_version="title-policy-2")
+    err = _refused(review=_review(), policy_version="unrelated-policy")
     assert err.code == "stale:policy"
 
 
