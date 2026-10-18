@@ -21,7 +21,9 @@ the retained footage spends at a place; a place held for at least
 ``FinalTextPolicy.min_place_seconds`` is required. A whole-video surface,
 and a long-form title, must name every required place, or name a region
 whose ``region_claims`` item contains them all with full GPS coverage, no
-gaps and no samples outside it. A segment surface (a Short's burned text),
+gaps and no samples outside it, or has a matching pinned bounded-route proof
+for coverage and gaps. Observed samples outside always refuse. A segment
+surface (a Short's burned text),
 and a Short's title, must name its own ``segment_places`` the same way.
 The reverse holds too: every name a surface shows needs a claim. Once its
 cited names are taken out, a word outside ``FinalTextPolicy.filler_words``
@@ -40,8 +42,10 @@ no free prose is ever reviewed.
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import asdict, dataclass, fields
+from datetime import date
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .drive_templates import (
@@ -72,8 +76,74 @@ from .final_text_surfaces import (
     template_hashes,
 )
 
-REVIEW_VERSION = "final-text-review-5"
+REVIEW_VERSION = "final-text-review-6"
 RECORD_VERSION = "final-text-record-2"
+BOUNDARY_PROOF_VERSION = "tiger2026-bounded-v1"
+_BOUNDARY_SOURCES = {
+    "county": (
+        "TIGER2026/COUNTY/tl_2026_us_county.zip",
+        "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",
+    ),
+    "state": (
+        "TIGER2026/STATE/tl_2026_us_state.zip",
+        "2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+    ),
+}
+# Canonical TIGER state name -> (postal abbreviation, STATEFP). The state
+# source's full name may appear as its postal abbreviation in GMS titles.
+_US_STATES = {
+    "Alabama": ("AL", "01"),
+    "Alaska": ("AK", "02"),
+    "Arizona": ("AZ", "04"),
+    "Arkansas": ("AR", "05"),
+    "California": ("CA", "06"),
+    "Colorado": ("CO", "08"),
+    "Connecticut": ("CT", "09"),
+    "Delaware": ("DE", "10"),
+    "District of Columbia": ("DC", "11"),
+    "Florida": ("FL", "12"),
+    "Georgia": ("GA", "13"),
+    "Hawaii": ("HI", "15"),
+    "Idaho": ("ID", "16"),
+    "Illinois": ("IL", "17"),
+    "Indiana": ("IN", "18"),
+    "Iowa": ("IA", "19"),
+    "Kansas": ("KS", "20"),
+    "Kentucky": ("KY", "21"),
+    "Louisiana": ("LA", "22"),
+    "Maine": ("ME", "23"),
+    "Maryland": ("MD", "24"),
+    "Massachusetts": ("MA", "25"),
+    "Michigan": ("MI", "26"),
+    "Minnesota": ("MN", "27"),
+    "Mississippi": ("MS", "28"),
+    "Missouri": ("MO", "29"),
+    "Montana": ("MT", "30"),
+    "Nebraska": ("NE", "31"),
+    "Nevada": ("NV", "32"),
+    "New Hampshire": ("NH", "33"),
+    "New Jersey": ("NJ", "34"),
+    "New Mexico": ("NM", "35"),
+    "New York": ("NY", "36"),
+    "North Carolina": ("NC", "37"),
+    "North Dakota": ("ND", "38"),
+    "Ohio": ("OH", "39"),
+    "Oklahoma": ("OK", "40"),
+    "Oregon": ("OR", "41"),
+    "Pennsylvania": ("PA", "42"),
+    "Rhode Island": ("RI", "44"),
+    "South Carolina": ("SC", "45"),
+    "South Dakota": ("SD", "46"),
+    "Tennessee": ("TN", "47"),
+    "Texas": ("TX", "48"),
+    "Utah": ("UT", "49"),
+    "Vermont": ("VT", "50"),
+    "Virginia": ("VA", "51"),
+    "Washington": ("WA", "53"),
+    "West Virginia": ("WV", "54"),
+    "Wisconsin": ("WI", "55"),
+    "Wyoming": ("WY", "56"),
+}
 
 AGREE = "agree"
 DISAGREE = "disagree"
@@ -187,6 +257,7 @@ class RegionClaim:
     coverage: float
     gaps: Tuple[Tuple[float, float], ...]
     samples_outside: int
+    boundary_proof: Optional[Dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -396,8 +467,71 @@ def _gaps(value: Any) -> Optional[Tuple[Tuple[float, float], ...]]:
     return tuple(gaps)
 
 
+def _bounded_proof(
+    raw: Any,
+    *,
+    region: str,
+    recording_date: Optional[str],
+    gaps: Tuple[Tuple[float, float], ...],
+) -> bool:
+    """Validate the GMS producer's pinned proof envelope, not its geometry.
+
+    Geometry is checked by GMS before rendering. The review binds that result
+    to its named region, date and conservative uncertainty policy.
+    """
+    if not isinstance(raw, Mapping) or not isinstance(recording_date, str):
+        return False
+    source = raw.get("source")
+    match = next(
+        (item for item in _BOUNDARY_SOURCES.values() if item[0] == source), None
+    )
+    if match is None or raw.get("sha256") != match[1]:
+        return False
+    if raw.get("recording_date") != recording_date:
+        return False
+    try:
+        recorded_on = date.fromisoformat(recording_date)
+    except ValueError:
+        return False
+    if recorded_on.year != 2026 or raw.get("verified") is not True:
+        return False
+    if raw.get("basis") != "pinned_tiger_polygon_bounded_speed_and_error":
+        return False
+    statefp = raw.get("statefp")
+    if not isinstance(statefp, str) or not re.fullmatch(r"\d{2}", statefp):
+        return False
+    proof_region = raw.get("region")
+    if not isinstance(proof_region, str):
+        return False
+    if source == _BOUNDARY_SOURCES["state"][0]:
+        state = _US_STATES.get(proof_region)
+        if (
+            state is None
+            or statefp != state[1]
+            or region not in (proof_region, state[0])
+        ):
+            return False
+    elif proof_region != region:
+        return False
+    try:
+        speed = float(raw.get("max_speed_m_s"))
+        error = float(raw.get("gps_error_m"))
+        max_gap = float(raw.get("max_gap_s"))
+    except (OverflowError, TypeError, ValueError):
+        return False
+    return (
+        math.isfinite(speed)
+        and speed >= 70.0
+        and math.isfinite(error)
+        and error >= 100.0
+        and math.isfinite(max_gap)
+        and max_gap >= max((end - start for start, end in gaps), default=0.0)
+    )
+
+
 def _regions(
     approved: Mapping[str, Any],
+    recording_date: Optional[str],
     route_ids: Sequence[str],
     by_id: Mapping[str, EvidenceItem],
     ambiguous: set,
@@ -439,8 +573,21 @@ def _regions(
         for place in contains:
             if place not in route_ids:
                 reasons.refuse(f"route_place_unknown:{place}")
+        raw_proof = item.get("boundary_proof")
+        proof = None
+        if raw_proof is not None:
+            region = by_id.get(evidence_id)
+            if not _bounded_proof(
+                raw_proof,
+                region=region.value if region else "",
+                recording_date=recording_date,
+                gaps=gaps,
+            ):
+                reasons.refuse(f"boundary_proof_invalid:{evidence_id}")
+            else:
+                proof = dict(raw_proof)
         claims.append(
-            RegionClaim(evidence_id, contains, float(coverage), gaps, outside)
+            RegionClaim(evidence_id, contains, float(coverage), gaps, outside, proof)
         )
     return tuple(claims)
 
@@ -451,9 +598,9 @@ def _region_faults(
     faults = []
     if not set(needed) <= set(claim.contains):
         faults.append("region_partial")
-    if claim.coverage < policy.region_min_coverage:
+    if claim.coverage < policy.region_min_coverage and claim.boundary_proof is None:
         faults.append("region_coverage")
-    if claim.gaps:
+    if claim.gaps and claim.boundary_proof is None:
         faults.append("region_gaps")
     if claim.samples_outside:
         faults.append("region_outside")
@@ -720,7 +867,7 @@ def review_final_text(
     ``recording_date``, ``date_evidence_id``, ``source_fingerprint``,
     ``plan_fingerprint``, ``route_places`` (``{evidence_id,
     retained_seconds, required}``), ``region_claims`` (``{evidence_id,
-    contains, coverage, gaps, samples_outside}``) and ``visible``, a list of
+    contains, coverage, gaps, samples_outside, boundary_proof?}``) and ``visible``, a list of
     ``{surface, kind, text, evidence_ids, scope}``. ``kind`` is one of
     ``final_text_surfaces.VISIBLE_KINDS``; for a ``place_line`` ``scope`` is
     ``whole`` or ``segment`` and a segment also lists its ``segment_places``;
@@ -761,7 +908,7 @@ def review_final_text(
     route = _route(approved, policy, by_id, ambiguous, reasons)
     route_ids = [p.evidence_id for p in route]
     required = [p.evidence_id for p in route if p.required]
-    regions = _regions(approved, route_ids, by_id, ambiguous, reasons)
+    regions = _regions(approved, recording_date, route_ids, by_id, ambiguous, reasons)
 
     surfaces: List[SurfaceReview] = []
     visible = approved.get("visible")

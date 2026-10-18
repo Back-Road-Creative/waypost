@@ -21,6 +21,9 @@ from seo_manager.analytics.final_text_review import (
     review_to_dict,
     verify_review,
 )
+from seo_manager.analytics.final_text_review import (
+    _bounded_proof as _validate_bounded_proof,
+)
 from seo_manager.analytics.title_selection import (
     DEFAULT_POLICY,
     EvidenceSnapshot,
@@ -239,6 +242,118 @@ def test_a_region_with_gaps_or_low_coverage_is_refused():
     assert "region_coverage:r-1" in low.reasons
     assert "region_not_contained:r-1" in gaps.reasons
     assert "region_not_contained:r-1" in low.reasons
+
+
+def _bounded_proof(**changes):
+    proof = {
+        "verified": True,
+        "basis": "pinned_tiger_polygon_bounded_speed_and_error",
+        "source": "TIGER2026/COUNTY/tl_2026_us_county.zip",
+        "sha256": "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",
+        "region": REGION,
+        "statefp": "45",
+        "recording_date": DATE,
+        "max_speed_m_s": 70.0,
+        "gps_error_m": 100.0,
+        "max_gap_s": 36.0,
+    }
+    proof.update(changes)
+    return proof
+
+
+def test_pinned_bounded_proof_allows_gapped_region_but_keeps_measurements():
+    claim = _region_record(
+        coverage=0.93,
+        gaps=[{"start_s": 410.0, "end_s": 446.0}],
+        boundary_proof=_bounded_proof(),
+    )
+    review = _review(claim)
+    assert review.verdict == AGREE, review.reasons
+    assert review.region_claims[0].coverage == 0.93
+    assert review.region_claims[0].gaps == ((410.0, 446.0),)
+    assert (
+        review.region_claims[0].boundary_proof["sha256"] == _bounded_proof()["sha256"]
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"verified": False},
+        {"sha256": "0" * 64},
+        {"region": "Another County"},
+        {"recording_date": "2025-03-02"},
+        {"max_speed_m_s": 1.0},
+        {"gps_error_m": 1.0},
+        {"max_gap_s": -1.0},
+    ],
+)
+def test_changed_or_weak_bounded_proof_cannot_clear_region_faults(change):
+    claim = _region_record(
+        coverage=0.93,
+        gaps=[{"start_s": 410.0, "end_s": 446.0}],
+        boundary_proof=_bounded_proof(**change),
+    )
+    review = _review(claim)
+    assert review.verdict == REFUSED
+    assert "region_not_contained:r-1" in review.reasons
+
+
+def test_bounded_proof_never_overrides_observed_samples_outside():
+    review = _review(_region_record(samples_outside=1, boundary_proof=_bounded_proof()))
+    assert review.verdict == REFUSED
+    assert "region_outside:r-1" in review.reasons
+
+
+def test_state_proof_binds_an_abbreviated_state_label_to_its_full_name_and_fips():
+    proof = _bounded_proof(
+        source="TIGER2026/STATE/tl_2026_us_state.zip",
+        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+        region="South Carolina",
+    )
+    assert _validate_bounded_proof(proof, region="SC", recording_date=DATE, gaps=())
+    assert not _validate_bounded_proof(proof, region="NC", recording_date=DATE, gaps=())
+    assert not _validate_bounded_proof(
+        {**proof, "statefp": "37"}, region="SC", recording_date=DATE, gaps=()
+    )
+    assert not _validate_bounded_proof(
+        {**proof, "region": []}, region="SC", recording_date=DATE, gaps=()
+    )
+
+
+def test_malformed_bounded_proof_is_a_refusal_not_an_exception():
+    for change in ({"max_speed_m_s": 10**10000}, {"recording_date": "2026-99-99"}):
+        proof = _bounded_proof(**change)
+        assert not _validate_bounded_proof(
+            proof, region=REGION, recording_date=proof["recording_date"], gaps=()
+        )
+
+
+def test_review_accepts_state_abbreviation_with_matching_bounded_proof():
+    title = "Brindlemoor to Quillhaven, SC in 4K"
+    proof = _bounded_proof(
+        source="TIGER2026/STATE/tl_2026_us_state.zip",
+        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+        region="South Carolina",
+    )
+    record = _record(
+        text="SC",
+        ids=("r-1",),
+        title=title,
+        region_claims=[
+            _region(
+                coverage=0.93,
+                gaps=[{"start_s": 410.0, "end_s": 446.0}],
+                boundary_proof=proof,
+            )
+        ],
+    )
+    evidence = [
+        {**item, "value": "SC"} if item["evidence_id"] == "r-1" else item
+        for item in EVIDENCE
+    ]
+    review = review_final_text(record, _decision(title), evidence)
+    assert review.verdict == AGREE, review.reasons
 
 
 def test_a_region_claim_without_its_measurements_is_refused():
