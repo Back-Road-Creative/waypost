@@ -300,11 +300,11 @@ def test_w6_a_template_tag_with_changed_words_is_refused():
     assert "template_changed:tag.1:tag.scenic_drive" in reasons
 
 
-# --- W7: the review is v4; v3 is refused, v4 round-trips ---------------------
+# --- Review version: old reviews are refused; the current one round-trips ---
 
 
-def test_w7_the_review_is_version_5():
-    assert REVIEW_VERSION == "final-text-review-5"
+def test_w7_the_review_is_version_6():
+    assert REVIEW_VERSION == "final-text-review-6"
     assert RECORD_VERSION == "final-text-record-2"
 
 
