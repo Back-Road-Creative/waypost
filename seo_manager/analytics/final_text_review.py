@@ -82,11 +82,11 @@ BOUNDARY_PROOF_VERSION = "tiger2026-bounded-v1"
 _BOUNDARY_SOURCES = {
     "county": (
         "TIGER2026/COUNTY/tl_2026_us_county.zip",
-        "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",
+        "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",  # pragma: allowlist secret
     ),
     "state": (
         "TIGER2026/STATE/tl_2026_us_state.zip",
-        "2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+        "2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",  # pragma: allowlist secret
     ),
 }
 # Canonical TIGER state name -> (postal abbreviation, STATEFP). The state

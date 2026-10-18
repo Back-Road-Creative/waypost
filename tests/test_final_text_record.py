@@ -249,7 +249,7 @@ def _bounded_proof(**changes):
         "verified": True,
         "basis": "pinned_tiger_polygon_bounded_speed_and_error",
         "source": "TIGER2026/COUNTY/tl_2026_us_county.zip",
-        "sha256": "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",
+        "sha256": "b527c9ba7aeb8f17ef118f026eae5e5a938aa1d00b873bc32342d0dce59321c0",  # pragma: allowlist secret
         "region": REGION,
         "statefp": "45",
         "recording_date": DATE,
@@ -308,7 +308,7 @@ def test_bounded_proof_never_overrides_observed_samples_outside():
 def test_state_proof_binds_an_abbreviated_state_label_to_its_full_name_and_fips():
     proof = _bounded_proof(
         source="TIGER2026/STATE/tl_2026_us_state.zip",
-        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",  # pragma: allowlist secret
         region="South Carolina",
     )
     assert _validate_bounded_proof(proof, region="SC", recording_date=DATE, gaps=())
@@ -333,7 +333,7 @@ def test_review_accepts_state_abbreviation_with_matching_bounded_proof():
     title = "Brindlemoor to Quillhaven, SC in 4K"
     proof = _bounded_proof(
         source="TIGER2026/STATE/tl_2026_us_state.zip",
-        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",
+        sha256="2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",  # pragma: allowlist secret
         region="South Carolina",
     )
     record = _record(
