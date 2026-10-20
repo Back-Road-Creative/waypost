@@ -14,7 +14,8 @@ SHA-256, region, Census state FIPS, recording date, maximum speed, GPS error
 allowance and longest gap. Waypost accepts the envelope only for the pinned
 archives, a matching 2026 recording date and region, at least 70 m/s speed and
 100 m GPS error allowances, and a longest gap no shorter than the recorded
-gaps. A state abbreviation must match the full state and FIPS code. An
+gaps, both compared at millisecond precision (a gap end rebuilt as start plus
+length carries float noise). A state abbreviation must match the full state and FIPS code. An
 observed sample outside the region always refuses, even with a proof.
 
 Waypost does **not** recompute the geometry from GPX. GMS owns that calculation

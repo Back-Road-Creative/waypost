@@ -299,6 +299,24 @@ def test_changed_or_weak_bounded_proof_cannot_clear_region_faults(change):
     assert "region_not_contained:r-1" in review.reasons
 
 
+def test_bounded_proof_compares_gap_lengths_at_millisecond_precision():
+    # GMS rounds the proof's max gap to 3 decimals and rebuilds each gap end
+    # as start + length, so the longest gap carries float noise:
+    # 941.129 + 35.999 - 941.129 == 35.999000000000024 > 35.999.
+    gap = (941.129, 941.129 + 35.999)
+    assert gap[1] - gap[0] > 35.999
+    proof = _bounded_proof(max_gap_s=35.999)
+    assert _validate_bounded_proof(
+        proof, region=REGION, recording_date=DATE, gaps=(gap,)
+    )
+    assert not _validate_bounded_proof(
+        proof, region=REGION, recording_date=DATE, gaps=((941.129, 941.129 + 36.5),)
+    )
+    assert not _validate_bounded_proof(
+        proof, region=REGION, recording_date=DATE, gaps=((941.129, 941.129 + 36.001),)
+    )
+
+
 def test_bounded_proof_never_overrides_observed_samples_outside():
     review = _review(_region_record(samples_outside=1, boundary_proof=_bounded_proof()))
     assert review.verdict == REFUSED

@@ -525,7 +525,11 @@ def _bounded_proof(
         and math.isfinite(error)
         and error >= 100.0
         and math.isfinite(max_gap)
-        and max_gap >= max((end - start for start, end in gaps), default=0.0)
+        # Both sides carry times to the millisecond; comparing at that
+        # precision keeps float noise in end - start from refusing a gap
+        # exactly as long as the proof's bound.
+        and round(max_gap, 3)
+        >= round(max((end - start for start, end in gaps), default=0.0), 3)
     )
 
 
