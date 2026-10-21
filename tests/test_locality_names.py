@@ -126,26 +126,23 @@ FORT_FREMONT = {
 }
 
 
-def test_real_beaufort_records_name_island_and_fort_not_longwood():
+def test_real_beaufort_records_drop_longwood_keep_fort():
     out = viewer_localities([LONGWOOD, FORT_FREMONT])
-    assert out.names == ["St. Helena Island", "Fort Fremont"]
-    assert out.substitutions == {"Longwood": "St. Helena Island"}
-
-
-def test_vicinity_outside_any_named_island_is_dropped_not_guessed():
-    far = dict(LONGWOOD, entry_latitude=35.0, entry_longitude=-82.0)
-    out = viewer_localities([far])
-    assert out.names == []
+    assert out.names == ["Fort Fremont"]
     assert out.substitutions == {"Longwood": ""}
 
 
-def test_island_from_coordinates_uses_latitude_longitude_keys_too():
-    rec = dict(LONGWOOD)
-    rec["latitude"], rec["longitude"] = (
-        rec.pop("entry_latitude"),
-        rec.pop("entry_longitude"),
+def test_no_island_is_inferred_from_coordinates():
+    # Census COUSUB "St. Helena Island" (a county division, tl_2026_45_cousub.zip)
+    # also covers Ladys Island Drive points from the real geocode cache, so
+    # coordinates cannot say which island a name lies on. A Lady's Island fix
+    # (32.3937, -80.6727) must never come out as St. Helena Island.
+    ladys = dict(
+        LONGWOOD, name="Tractname", entry_latitude=32.3937, entry_longitude=-80.6727
     )
-    assert viewer_localities([rec]).names == ["St. Helena Island"]
+    out = viewer_localities([ladys])
+    assert out.names == []
+    assert out.substitutions == {"Tractname": ""}
 
 
 def test_class_only_record_without_match_type_or_addresstype_is_kept():

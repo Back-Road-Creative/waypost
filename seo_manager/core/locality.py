@@ -13,12 +13,10 @@ based only on fields the geocoder record already carries
 - keep a named LANDMARK: ``place_class`` historic / leisure / tourism /
   military, or a Fort / Park / Battlefield ... name;
 - keep a named ISLAND (name ends in "Island");
-- drop everything else. When the dropped name lies on a named island, that
-  island stands in for it: the island named in its ``full_address``, else the
-  one whose bounding box (``NAMED_ISLANDS``) holds its coordinates
-  (``entry_latitude``/``entry_longitude`` or ``latitude``/``longitude``).
-  Geocoder records seldom carry the island in the address (Beaufort SC: no
-  record names St. Helena Island), hence the offline table.
+- drop everything else. When the dropped name's own ``full_address`` names an
+  island, that island stands in for it; otherwise the name is just dropped.
+  No island is ever inferred from coordinates (Census COUSUB "St. Helena
+  Island" also covers Lady's Island points, so it cannot say which island).
 
 A record with no geocoder facts at all is kept (no evidence to judge by).
 Names are deduplicated, first-seen order, case-insensitive.
@@ -37,9 +35,6 @@ _LANDMARK_NAME = re.compile(
     r"\b(Fort|Park|Battlefield|Lighthouse|Monument|Preserve|Forest|Beach|Pier)\b"
 )
 _ISLAND_NAME = re.compile(r"\bIsland$")
-# (name, south, north, west, east) - approximate extents of named islands where
-# obscure tract names are common; offline, no lookups. Add rows, never guess.
-NAMED_ISLANDS = (("St. Helena Island", 32.27, 32.44, -80.66, -80.47),)
 _FACT_KEYS = ("match_type", "place_class", "addresstype")
 
 
@@ -65,17 +60,6 @@ def dedupe_places(names: Iterable[Any]) -> list[str]:
     return out
 
 
-def _island_at(record: dict) -> str | None:
-    lat = record.get("entry_latitude", record.get("latitude"))
-    lon = record.get("entry_longitude", record.get("longitude"))
-    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-        return None
-    for name, south, north, west, east in NAMED_ISLANDS:
-        if south <= lat <= north and west <= lon <= east:
-            return name
-    return None
-
-
 def _island_of(record: dict) -> str | None:
     for part in str(record.get("full_address") or "").split(","):
         part = part.strip()
@@ -84,7 +68,7 @@ def _island_of(record: dict) -> str | None:
             and part.lower() != str(record.get("name", "")).lower()
         ):
             return part
-    return _island_at(record)
+    return None
 
 
 def _is_reliable(record: dict) -> bool:
