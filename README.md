@@ -374,6 +374,20 @@ metadata = manager.generate(
   Google API client and auth packages, cryptography, Pillow, structlog); all are
   imported unconditionally, so install the package rather than picking from the list
 
+## Releasing
+
+A release is a git tag on `main`; there is no publish workflow. The tag is
+`v` plus the `version` in `pyproject.toml`, so bump that version in a pull
+request first, then tag the merge commit once `ci.yml` has passed on it:
+
+```bash
+git fetch origin && git tag -a v0.1.0 origin/main -m "seo-manager 0.1.0"
+git push origin v0.1.0
+```
+
+Consumers pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.1.0`)
+rather than a commit SHA.
+
 ## License
 
 The package declares the MIT license in `pyproject.toml`.
