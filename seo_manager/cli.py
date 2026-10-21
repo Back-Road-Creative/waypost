@@ -67,12 +67,18 @@ _CREATES_DB = frozenset(
 
 def _schedule_context(args):
     from seo_manager.core.profile import load_cadence
+    from seo_manager.inputs import default_brand_yaml
     from seo_manager.scheduling.store import ScheduleStore
 
-    if not args.brand_yaml:
-        raise ValueError("--brand-yaml (or SEO_BRAND_YAML) is required")
+    # flag > $SEO_BRAND_YAML > brand.yaml in $SEO_INPUTS_DIR
+    brand_yaml = args.brand_yaml or default_brand_yaml()
+    if not brand_yaml:
+        raise ValueError(
+            "--brand-yaml (or SEO_BRAND_YAML, or brand.yaml in SEO_INPUTS_DIR) "
+            "is required"
+        )
     # yaml `dow` is the seed; a decisions db overlays Waypost's decided weekdays
-    cadence = load_cadence(args.brand_yaml, getattr(args, "decisions_db", None))
+    cadence = load_cadence(brand_yaml, getattr(args, "decisions_db", None))
     if (
         not args.db
     ):  # no code-relative default: two checkouts must not each grow their own database
@@ -260,7 +266,7 @@ def _add_schedule_parser(sub) -> None:
     sp.add_argument(
         "--brand-yaml",
         default=os.environ.get("SEO_BRAND_YAML"),
-        help="tenant brand.yaml with seo.cadence (env SEO_BRAND_YAML)",
+        help="tenant brand.yaml with seo.cadence (env SEO_BRAND_YAML, else brand.yaml in SEO_INPUTS_DIR)",
     )
     sp.add_argument(
         "--db",
