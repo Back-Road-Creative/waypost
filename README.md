@@ -303,6 +303,10 @@ configured" and the code says which variable or option to set:
 - **Title selection**: [docs/title-selection.md](docs/title-selection.md)
 - **Viewer-facing locality names**: [docs/viewer-locality-names.md](docs/viewer-locality-names.md)
 - **Continuous optimization daemon**: [docs/continuous-optimization-daemon.md](docs/continuous-optimization-daemon.md)
+- **Anomaly statistics kernel**: [docs/anomaly-statistics-kernel.md](docs/anomaly-statistics-kernel.md)
+- **Bounded retained-route region review**: [docs/bounded-region-review.md](docs/bounded-region-review.md)
+- **Titles for a verified single region**: [docs/region-only-title-decisions.md](docs/region-only-title-decisions.md)
+- **Thumbnail Test & Compare companion**: [docs/thumbnail-test-and-compare.md](docs/thumbnail-test-and-compare.md)
 - **YouTube Analytics setup**: [docs/YOUTUBE_ANALYTICS_SETUP.md](docs/YOUTUBE_ANALYTICS_SETUP.md)
 
 ## Testing
