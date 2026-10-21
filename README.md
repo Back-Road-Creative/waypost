@@ -290,6 +290,7 @@ configured" and the code says which variable or option to set:
 - **Scheduling and slot booking**: [docs/scheduling.md](docs/scheduling.md)
 - **Cadence and volume decisions**: [docs/cadence-decisions.md](docs/cadence-decisions.md)
 - **Title selection**: [docs/title-selection.md](docs/title-selection.md)
+- **Viewer-facing locality names**: [docs/viewer-locality-names.md](docs/viewer-locality-names.md)
 - **Continuous optimization daemon**: [docs/continuous-optimization-daemon.md](docs/continuous-optimization-daemon.md)
 - **YouTube Analytics setup**: [docs/YOUTUBE_ANALYTICS_SETUP.md](docs/YOUTUBE_ANALYTICS_SETUP.md)
 
