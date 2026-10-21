@@ -224,7 +224,7 @@ environment variable:
 
 | Variable | Flag | Meaning |
 |---|---|---|
-| `SEO_BRAND_YAML` | `--brand-yaml` | the tenant's `brand.yaml` holding `seo.cadence` |
+| `SEO_BRAND_YAML` | `--brand-yaml` | the tenant's `brand.yaml` holding `seo.cadence`; when neither is set but `SEO_INPUTS_DIR` is, `brand.yaml` in that directory |
 | `SEO_SCHEDULE_DB` | `--db` | the tenant's `schedule.sqlite3`; required, never defaulted |
 | `SEO_DECISIONS_DB` | `--decisions-db` | the tenant's `cadence_decisions.sqlite3`; when set, its decided LF weekdays replace the yaml `dow` (the seed) |
 
@@ -267,6 +267,17 @@ importer's event store, the YouTube theme sync's state directory) goes under
 optimisation daemon's state take an explicit path and otherwise use a `data/...`
 directory relative to the working directory.
 
+### Private inputs directory
+
+A deployment's private input files (the tenant's `brand.yaml`, site configs,
+link maps) stay outside this package. `$SEO_INPUTS_DIR` names the directory
+holding them; unset, it is `inputs` under the data home. A directory that does
+not exist is an error naming the variable and the path, never an empty
+default. `seo_manager.inputs` has the helpers: `inputs_dir()` (resolve only),
+`require_inputs_dir()` and `input_path(*parts)` (checked), and
+`default_brand_yaml()`, which gives `--brand-yaml` the order flag, then
+`SEO_BRAND_YAML`, then `brand.yaml` in `SEO_INPUTS_DIR`.
+
 ### Locations with no default ("not configured")
 
 Locations that belong to one deployment have no default; unset means "not
@@ -276,7 +287,7 @@ configured" and the code says which variable or option to set:
 |---|---|---|
 | event ledger for `report` | `--ledger` | exits 2 naming `--ledger` |
 | `videos.yaml` for `report` | `--videos-yaml` | exits 2 naming `--videos-yaml` |
-| tenant `brand.yaml` | `SEO_BRAND_YAML` / `--brand-yaml` | `schedule` fails naming it; `volume_decide` then decides only the volume knobs |
+| tenant `brand.yaml` | `SEO_BRAND_YAML` / `--brand-yaml` (or `brand.yaml` in `SEO_INPUTS_DIR`) | `schedule` fails naming it; `volume_decide` then decides only the volume knobs |
 | `schedule.sqlite3` | `SEO_SCHEDULE_DB` / `--db` (`--schedule-db` for `volume_decide`) | `schedule` fails naming it; `volume_decide` counts ready depth as 0 and says why |
 | `cadence_decisions.sqlite3` | `SEO_DECISIONS_DB` / `--decisions-db` (`schedule`); `--db` (`volume_decide`) | `schedule`: the yaml `dow` seed is used; `volume_decide`: `--db` is required and argparse exits 2 without it |
 | directory holding `intel_db.py` | `INTEL_SCRIPTS_DIR` | the IntelDB integration is off |
