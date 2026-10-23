@@ -23,6 +23,27 @@ _WORD_RE = re.compile(r"[a-z0-9]+")
 _SENTENCE_END_RE = re.compile(r"[.!?]+")
 
 
+# A word is a run of letters/digits, with apostrophes allowed between them
+# ("Don't"), so an apostrophe never starts a new word the way it does for
+# `str.title()` ("Don'T").
+_TITLE_WORD_RE = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*")
+
+
+def _capitalise_word(match: "re.Match[str]") -> str:
+    word = match.group(0)
+    # Only an all-lowercase word is capitalised. All-caps words ("GPS", "II")
+    # and mixed-case words ("iPhone", "McDonald") were typed that way on
+    # purpose, and `str.title()` would flatten them to "Gps", "Ii", "Iphone".
+    if word.islower():
+        return word[0].upper() + word[1:]
+    return word
+
+
+def _title_case(title: str) -> str:
+    """Capitalise each lowercase word; keep acronyms, apostrophes and numerals."""
+    return _TITLE_WORD_RE.sub(_capitalise_word, title)
+
+
 class BaseSEOGenerator:
     """
     Base class for SEO metadata generation.
@@ -129,7 +150,7 @@ class BaseSEOGenerator:
             Optimized title
         """
         # Apply title case
-        title = title.title()
+        title = _title_case(title)
 
         # Truncate if needed
         if len(title) > limit:
