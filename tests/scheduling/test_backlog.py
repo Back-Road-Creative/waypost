@@ -109,3 +109,40 @@ def test_next_row_returns_a_row_still_auditing_but_skips_every_finished_state(
     assert backlog.next_row(rows, "south", store).project == "routec"
     store.finish_claim("c1", ok=True)  # complete
     assert backlog.next_row(rows, "south", store).project == "routec"
+
+
+GPX_ROW = """\
+- project: day12
+  region: south
+  sources: ["D:/v.mp4"]
+  ingest_mode: generic
+  lf_mode: full_drive
+  day_gpx: D:/day12.gpx
+  camera_utc_offset_hours: -4
+"""
+
+
+def test_day_gpx_row_carries_the_track_and_camera_offset(tmp_path):
+    (row,) = _load(tmp_path, GPX_ROW)
+    assert row.day_gpx == "D:/day12.gpx" and row.camera_utc_offset_hours == -4.0
+
+
+def test_rows_without_a_day_gpx_have_none(tmp_path):
+    row = _load(tmp_path)[0]
+    assert row.day_gpx == "" and row.camera_utc_offset_hours is None
+
+
+@pytest.mark.parametrize(
+    "edit,match",
+    [
+        # A track with no offset would be sliced on the wrong clock: hours off, no error.
+        (lambda t: t.replace("  camera_utc_offset_hours: -4\n", ""), "set together"),
+        (lambda t: t.replace("  day_gpx: D:/day12.gpx\n", ""), "set together"),
+        (lambda t: t.replace("-4\n", "minus four\n"), "a number"),
+        (lambda t: t.replace("-4\n", "true\n"), "a number"),
+        (lambda t: t.replace("-4\n", "-15\n"), "-14 and 14"),
+    ],
+)
+def test_day_gpx_and_offset_are_validated_together(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        _load(tmp_path, edit(GPX_ROW))

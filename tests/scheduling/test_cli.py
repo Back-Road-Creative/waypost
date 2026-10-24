@@ -386,6 +386,7 @@ def test_backlog_next_names_the_first_row_not_ready_failed_or_complete(run, tmp_
     got = run("backlog-next", "--manifest", str(m), "--region", "south")
     assert got["project"] == "routea" and got["sources"] == ["D:/a"]
     assert got["region"] == "south" and got["ingest_mode"] == "copy"
+    assert got["day_gpx"] == "" and got["camera_utc_offset_hours"] is None
     run("register", "--project", "routea", "--region", "south", "--lf-count", "1",
         "--mirror-sha", "s")  # fmt: skip
     assert run("backlog-next", "--manifest", str(m), "--region", "south")[

@@ -231,6 +231,8 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
                     "ingest_mode": row.ingest_mode,
                     "lf_mode": row.lf_mode,
                     "notes": row.notes,
+                    "day_gpx": row.day_gpx,
+                    "camera_utc_offset_hours": row.camera_utc_offset_hours,
                 }
                 if row
                 else {"row": None}
