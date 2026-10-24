@@ -270,7 +270,7 @@ learned ranges applied to the titles it generates.
 
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
-| Core Language | Python | 3.8+ | Main implementation |
+| Core Language | Python | 3.12+ | Main implementation |
 | Data Structures | dataclasses | stdlib | Type-safe, immutable |
 | Persistence | JSONL | N/A | Append-only event store |
 | File Locking | filelock | 3.9+ | Concurrent safety |

@@ -1,9 +1,9 @@
 """Shared fixtures: a two-region cadence (north Sun 14:00, south Tue 16:00 / Fri 15:00)."""
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
-from zoneinfo import ZoneInfo
 
 from seo_manager.core.profile import load_cadence
 from seo_manager.scheduling.store import ScheduleStore

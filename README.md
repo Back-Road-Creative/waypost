@@ -372,7 +372,7 @@ metadata = manager.generate(
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.12+
 - The runtime dependencies declared in `pyproject.toml` (filelock, PyYAML, the
   Google API client and auth packages, cryptography, Pillow, structlog); all are
   imported unconditionally, so install the package rather than picking from the list
