@@ -7,6 +7,8 @@ reads ``.choices``, the same mechanism the video pipeline's CLI test uses.
 """
 
 import argparse
+import subprocess
+import sys
 
 import pytest
 
@@ -68,3 +70,36 @@ def test_schedule_action_help_builds_and_exits_zero(name, capsys):
         build_parser().parse_args(["schedule", name, "--help"])
     assert exc_info.value.code == 0
     assert capsys.readouterr().out.strip() != ""
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "seo_manager.analytics.volume_decide",
+        "seo_manager.analytics.continuous_optimization_daemon",
+        "seo_manager.analytics.metricool_pdf_import",
+    ],
+)
+def test_python_dash_m_help_has_no_runtime_warning(module):
+    """``python -m`` must not warn that the module was already imported.
+
+    The analytics package used to import every submodule eagerly, so running
+    one of them as ``__main__`` printed runpy's RuntimeWarning.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-W", "error", "-m", module, "--help"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr[-600:]
+    assert "RuntimeWarning" not in proc.stderr
+
+
+def test_analytics_public_names_still_resolve_lazily():
+    import seo_manager.analytics as analytics
+
+    for name in analytics.__all__:
+        assert getattr(analytics, name) is not None, name
+    with pytest.raises(AttributeError):
+        analytics.not_a_real_export  # noqa: B018

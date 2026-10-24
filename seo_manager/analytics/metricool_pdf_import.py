@@ -891,7 +891,14 @@ def main():
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Import Metricool PDF analytics into SEO event store"
+        # --site-id and --accounts are required for an import but are checked
+        # after parsing (--dump-text is an exclusive mode that needs neither),
+        # so argparse cannot print them unbracketed on its own.
+        usage=(
+            "%(prog)s [-h] [--store-path STORE_PATH] [--dry-run] [-v] "
+            "(--dump-text | --site-id SITE_ID --accounts ACCOUNTS) pdf_path"
+        ),
+        description="Import Metricool PDF analytics into SEO event store",
     )
     ap.add_argument("pdf_path", help="Path to Metricool PDF report (or .extracted.txt)")
     ap.add_argument("--site-id", default=None, help="Base site ID (required)")
