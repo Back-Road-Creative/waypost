@@ -11,7 +11,6 @@ A Python library for generating, validating, tracking, and auto-optimizing SEO m
 - ✅ **SEO Validation**: Platform-specific rules and best practices
 - ✅ **Upload gate**: `YouTubeUploader.upload_video` runs `PlatformValidator.validate` on the exact `videos.insert` snippet it is about to send (dry runs included), against YouTube's API limits (title 100, description 5000), and raises `ValueError` before any API call if it fails
 - ✅ **Final-text review**: `analytics.final_text_review.review_final_text` puts the approved on-screen, thumbnail and Shorts text, the final title, and the location/date evidence behind each into one fingerprinted record; `verify_review` refuses an upload that differs from it, and nothing is ever auto-approved. See [docs/final-text-review.md](docs/final-text-review.md).
-- 🤖 **Auto-Fix Engine**: Confidence-based automatic corrections
 - 📊 **Analytics Tracking**: Performance metrics, CTR, engagement rates
 - 🏢 **Multi-Site Management**: Isolated data for multiple websites/channels
 - 📝 **Event Sourcing**: Complete audit trail with rollback capability
@@ -147,7 +146,6 @@ seo_manager/
 ├── storage/           # Event store, metadata persistence
 ├── analytics/         # Performance tracking and reporting
 ├── validation/        # SEO validation rules
-├── autofix/           # Auto-fix engine with confidence scoring
 └── platforms/         # Platform adapters (YouTube, Blog, Twitter, etc.)
 ```
 
@@ -167,12 +165,6 @@ All metadata changes are stored as immutable events:
 # Latest metadata for a piece of content, rebuilt from its events
 latest = manager.get_metadata(metadata.content_id)
 ```
-
-### Auto-Fix Confidence
-Fixes are applied based on confidence levels:
-- **High (≥0.9)**: Auto-applied (e.g., title truncation to platform limit)
-- **Medium (0.6-0.89)**: Flagged for review (e.g., keyword insertion)
-- **Low (<0.6)**: Logged only (e.g., readability suggestions)
 
 ## Analytics
 
@@ -261,7 +253,7 @@ cycle collects nothing and reports which input was missing. See
 ### Where data lives
 
 What seo-manager owns when the caller names no location (the Metricool PDF
-importer's event store, the YouTube theme sync's state directory) goes under
+importer's event store) goes under
 `$SEO_MANAGER_DATA_HOME`, else `$XDG_DATA_HOME/seo-manager`, else
 `~/.local/share/seo-manager`. The per-site event store, quota counters and the
 optimisation daemon's state take an explicit path and otherwise use a `data/...`
