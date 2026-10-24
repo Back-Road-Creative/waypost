@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from seo_manager.analytics.perf_report import build_report
+from seo_manager.analytics.perf_report import ReportError, analyze
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
@@ -36,11 +36,17 @@ def _cmd_report(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    text = build_report(ledger, Path(args.videos_yaml))
-    if args.out:
-        Path(args.out).write_text(text, encoding="utf-8")
-    else:
-        sys.stdout.write(text)
+    try:
+        text, cause = analyze(ledger, Path(args.videos_yaml))
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+        else:
+            sys.stdout.write(text)
+    except (ReportError, OSError) as exc:
+        print(f"seo-manager report: {exc}", file=sys.stderr)
+        return 2
+    if cause:
+        print(f"seo-manager report: nothing to report: {cause}", file=sys.stderr)
     return 0
 
 

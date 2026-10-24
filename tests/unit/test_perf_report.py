@@ -132,3 +132,148 @@ def test_measured_zero_views_is_still_a_row(fixture_paths):
     by_id = {r["id"]: r for r in rows}
     assert by_id["g"]["views"] == 0
     assert by_id["g"]["views_per_day"] == 0.0
+
+
+def _report(cli_args, capsys):
+    code = cli.main(["report", *cli_args])
+    return code, capsys.readouterr()
+
+
+def _assert_one_line_exit_2(code, captured, *needles):
+    assert code == 2
+    assert captured.out == ""
+    lines = captured.err.strip().splitlines()
+    assert len(lines) == 1, captured.err
+    assert lines[0].startswith("seo-manager report: ")
+    assert "Traceback" not in captured.err
+    for needle in needles:
+        assert needle in lines[0]
+
+
+def test_cli_report_missing_videos_yaml_exits_2(fixture_paths, tmp_path, capsys):
+    ledger, _ = fixture_paths
+    missing = tmp_path / "nope.yaml"
+    code, cap = _report(
+        ["--ledger", str(ledger), "--videos-yaml", str(missing)], capsys
+    )
+    _assert_one_line_exit_2(code, cap, "videos.yaml", "nope.yaml")
+
+
+def test_cli_report_bad_ledger_json_line_exits_2(fixture_paths, capsys):
+    ledger, videos = fixture_paths
+    with open(ledger, "a", encoding="utf-8") as fh:
+        fh.write("{not json\n")
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(videos)], capsys)
+    _assert_one_line_exit_2(code, cap, "ledger", "line 7", "JSON")
+
+
+def test_cli_report_missing_videos_key_exits_2(fixture_paths, tmp_path, capsys):
+    ledger, _ = fixture_paths
+    bad = tmp_path / "other.yaml"
+    bad.write_text("clips:\n- {id: a}\n")
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(bad)], capsys)
+    _assert_one_line_exit_2(code, cap, "videos")
+
+
+def test_cli_report_video_missing_field_exits_2(fixture_paths, tmp_path, capsys):
+    ledger, _ = fixture_paths
+    bad = tmp_path / "videos.yaml"
+    bad.write_text("videos:\n- {id: a, title: T}\n")
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(bad)], capsys)
+    _assert_one_line_exit_2(code, cap, "date")
+
+
+def test_cli_report_unparseable_yaml_exits_2(fixture_paths, tmp_path, capsys):
+    ledger, _ = fixture_paths
+    bad = tmp_path / "videos.yaml"
+    bad.write_text("videos: [unclosed\n")
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(bad)], capsys)
+    _assert_one_line_exit_2(code, cap, "videos.yaml")
+
+
+def test_cli_report_event_without_timestamp_exits_2(fixture_paths, capsys):
+    ledger, videos = fixture_paths
+    ev = json.loads(_ev("a", 1, "2026-08-12T00:00:00"))
+    del ev["timestamp"]
+    with open(ledger, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(ev) + "\n")
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(videos)], capsys)
+    _assert_one_line_exit_2(code, cap, "timestamp", "line 7")
+
+
+def _empty_join(tmp_path, ledger_lines, videos_text):
+    ledger = tmp_path / "e.jsonl"
+    ledger.write_text("".join(line + "\n" for line in ledger_lines))
+    videos = tmp_path / "v.yaml"
+    videos.write_text(videos_text)
+    return ledger, videos
+
+
+@pytest.mark.parametrize(
+    ("ledger_lines", "videos_text", "cause"),
+    [
+        ([_ev("a", 1, "2026-08-11T00:00:00")], "videos: []\n", "no videos"),
+        (
+            [json.dumps({"event_type": "metadata_generated", "timestamp": "x"})],
+            "videos:\n- {id: a, title: T, date: '2026-08-01'}\n",
+            "no performance_updated events",
+        ),
+        (
+            [_ev("zz", 1, "2026-08-11T00:00:00")],
+            "videos:\n- {id: a, title: T, date: '2026-08-01'}\n",
+            "no video id in common",
+        ),
+        (
+            [_ev("a", None, "2026-08-11T00:00:00")],
+            "videos:\n- {id: a, title: T, date: '2026-08-01'}\n",
+            "no views measurement",
+        ),
+    ],
+)
+def test_cli_report_empty_join_names_the_cause(
+    tmp_path, capsys, ledger_lines, videos_text, cause
+):
+    ledger, videos = _empty_join(tmp_path, ledger_lines, videos_text)
+    out_file = tmp_path / "r.md"
+    code, cap = _report(
+        [
+            "--ledger",
+            str(ledger),
+            "--videos-yaml",
+            str(videos),
+            "--out",
+            str(out_file),
+        ],
+        capsys,
+    )
+    assert code == 0
+    assert cause in cap.err
+    assert cause in out_file.read_text()
+    assert "Videos joined: 0" in out_file.read_text()
+
+
+def test_cli_report_populated_join_has_no_notice(fixture_paths, capsys):
+    ledger, videos = fixture_paths
+    code, cap = _report(["--ledger", str(ledger), "--videos-yaml", str(videos)], capsys)
+    assert code == 0
+    assert cap.err == ""
+    assert "Note:" not in cap.out
+
+
+def test_cli_report_unwritable_out_exits_2(fixture_paths, tmp_path, capsys):
+    ledger, videos = fixture_paths
+    out = tmp_path / "no_such_dir" / "r.md"
+    code, cap = _report(
+        [
+            "--ledger",
+            str(ledger),
+            "--videos-yaml",
+            str(videos),
+            "--out",
+            str(out),
+        ],
+        capsys,
+    )
+    assert code == 2
+    assert cap.err.startswith("seo-manager report: ")
+    assert "Traceback" not in cap.err
