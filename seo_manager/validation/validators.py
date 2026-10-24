@@ -5,7 +5,6 @@ Validates metadata against platform-specific rules and SEO best practices.
 """
 
 from dataclasses import dataclass, replace
-from typing import List
 
 from ..core.metadata import SEOMetadata
 from ..platforms.base import BasePlatformAdapter
@@ -16,8 +15,8 @@ class ValidationResult:
     """Result of SEO validation"""
 
     is_valid: bool
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
     metadata: SEOMetadata
 
 

@@ -15,8 +15,9 @@ names the first ``MAX_THROUGH`` and counts the rest.
 """
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from seo_manager.analytics.drive_templates import (
     BASE_TAGS,
@@ -46,7 +47,9 @@ from seo_manager.analytics.final_text_surfaces import (
 
 _SEASON_BY_MONTH = {
     m: s
-    for s, months in zip(SEASONS, ((12, 1, 2), (3, 4, 5), (6, 7, 8), (9, 10, 11)))
+    for s, months in zip(
+        SEASONS, ((12, 1, 2), (3, 4, 5), (6, 7, 8), (9, 10, 11)), strict=False
+    )
     for m in months
 }
 
@@ -62,55 +65,55 @@ class PlaceRef:
 @dataclass(frozen=True)
 class SeoArc:
     region: PlaceRef
-    a: Optional[PlaceRef] = None
-    b: Optional[PlaceRef] = None
-    road: Optional[PlaceRef] = None
+    a: PlaceRef | None = None
+    b: PlaceRef | None = None
+    road: PlaceRef | None = None
 
 
 @dataclass(frozen=True)
 class ChapterData:
     start_s: int
     place: PlaceRef
-    window: Tuple[str, ...]  # evidence ids of the places in this chapter's window
+    window: tuple[str, ...]  # evidence ids of the places in this chapter's window
 
 
 @dataclass(frozen=True)
 class DriveTextData:
     place: PlaceRef
     final_seconds: float
-    source_seconds: Optional[float] = None  # footage length before the cut
+    source_seconds: float | None = None  # footage length before the cut
     highlights: bool = False  # the hook says "Highlights from <source>"
     edited: bool = False  # "Final cut ... edited from" rather than "Duration"
-    seo: Optional[SeoArc] = None
-    terrain: Optional[str] = None  # one of TERRAINS; None omits the body line
+    seo: SeoArc | None = None
+    terrain: str | None = None  # one of TERRAINS; None omits the body line
     body: bool = False
-    road: Optional[PlaceRef] = None
-    distance_km: Optional[float] = None
+    road: PlaceRef | None = None
+    distance_km: float | None = None
     us: bool = False  # miles only
-    heading: Optional[str] = None  # compass code, a key of HEADINGS
+    heading: str | None = None  # compass code, a key of HEADINGS
     through: Sequence[PlaceRef] = ()
     route: Sequence[PlaceRef] = ()
     insert_count: int = 0
-    filmed: Optional[Tuple[int, int]] = None  # (year, month)
+    filmed: tuple[int, int] | None = None  # (year, month)
     site: bool = True
     geo_hashtags: Sequence[PlaceRef] = ()
     chapters: Sequence[ChapterData] = ()
     place_tags: Sequence[PlaceRef] = ()
     place_drive_tags: Sequence[PlaceRef] = ()  # "<place> drive" tags
-    year: Optional[int] = None  # the recording year tag (the record's date backs it)
-    month: Optional[int] = None  # adds the month, season and season-drive tags
+    year: int | None = None  # the recording year tag (the record's date backs it)
+    month: int | None = None  # adds the month, season and season-drive tags
     base_tags: bool = True
     # GMS body lines: the arc (start to end, passing places) or else towns,
     # then roads, states (one state prints nothing) and features.
-    journey_start: Optional[PlaceRef] = None
-    journey_end: Optional[PlaceRef] = None
+    journey_start: PlaceRef | None = None
+    journey_end: PlaceRef | None = None
     passing: Sequence[PlaceRef] = ()
     towns: Sequence[PlaceRef] = ()
     roads: Sequence[PlaceRef] = ()
     states: Sequence[PlaceRef] = ()
     features: Sequence[PlaceRef] = ()
-    playlist: Optional[Tuple[str, str]] = None  # (region, playlist URL)
-    cadence: Optional[Tuple[str, str]] = None  # (region, weekday)
+    playlist: tuple[str, str] | None = None  # (region, playlist URL)
+    cadence: tuple[str, str] | None = None  # (region, weekday)
 
 
 def _number(name: str, value: Any) -> float:
@@ -121,12 +124,12 @@ def _number(name: str, value: Any) -> float:
     return value
 
 
-def _places(blocks: Sequence[PlaceRef]) -> Dict[str, str]:
+def _places(blocks: Sequence[PlaceRef]) -> dict[str, str]:
     return {p.evidence_id: p.text for p in blocks}
 
 
 def _block(
-    surface: str, tid: str, slots: Dict[str, Any], *places: Optional[PlaceRef]
+    surface: str, tid: str, slots: dict[str, Any], *places: PlaceRef | None
 ) -> ParamBlock:
     refs = [p for p in places if p is not None]
     return ParamBlock(
@@ -134,13 +137,13 @@ def _block(
     )
 
 
-def build_drive_text(data: DriveTextData) -> List[Part]:
+def build_drive_text(data: DriveTextData) -> list[Part]:
     """The typed parts for ``data``: description blocks, then tags."""
     final = format_duration(_number("final_seconds", data.final_seconds))
     source = None
     if data.source_seconds is not None:
         source = format_duration(_number("source_seconds", data.source_seconds))
-    parts: List[Part] = []
+    parts: list[Part] = []
     p = data.place
     if data.highlights:
         if source is None:
@@ -203,7 +206,7 @@ def build_drive_text(data: DriveTextData) -> List[Part]:
     through = list(data.through)
     if through:
         head = through[:MAX_THROUGH]
-        slots: Dict[str, Any] = _slots("p", head)
+        slots: dict[str, Any] = _slots("p", head)
         tid = str(len(head))
         if len(through) > MAX_THROUGH:
             slots["overflow"] = len(through) - MAX_THROUGH
@@ -265,17 +268,17 @@ def _enum(name: str, value: Any, values: Sequence[str]) -> None:
         raise ValueError(f"{name} {value!r} is not registered")
 
 
-def _slots(prefix: str, refs: Sequence[PlaceRef]) -> Dict[str, Any]:
+def _slots(prefix: str, refs: Sequence[PlaceRef]) -> dict[str, Any]:
     return {f"{prefix}{i}": r.evidence_id for i, r in enumerate(refs, 1)}
 
 
-def _capped(name: str, refs: Sequence[PlaceRef], cap: int) -> List[PlaceRef]:
+def _capped(name: str, refs: Sequence[PlaceRef], cap: int) -> list[PlaceRef]:
     if len(refs) > cap:
         raise ValueError(f"{name} holds at most {cap} places")
     return list(refs)
 
 
-def _journey(data: DriveTextData) -> List[Part]:
+def _journey(data: DriveTextData) -> list[Part]:
     """GMS body lines: arc or towns (towns and roads share one line), roads,
     states, features."""
     towns = _capped("towns", data.towns, MAX_TOWNS)
@@ -284,7 +287,7 @@ def _journey(data: DriveTextData) -> List[Part]:
     features = _capped("features", data.features, MAX_FEATURES)
     passing = _capped("passing", data.passing, MAX_PASSING)
     a, b = data.journey_start, data.journey_end
-    parts: List[Part] = []
+    parts: list[Part] = []
     if (a is None) != (b is None):
         raise ValueError("an arc needs both journey_start and journey_end")
     if a is not None and b is not None:
@@ -315,9 +318,9 @@ def _journey(data: DriveTextData) -> List[Part]:
     return parts
 
 
-def _tags(data: DriveTextData) -> List[Part]:
+def _tags(data: DriveTextData) -> list[Part]:
     """Tags in ``TAG_ORDER``: base, places, place drives, year, month, season."""
-    tags: List[Part] = []
+    tags: list[Part] = []
     if data.base_tags:
         tags += [
             Tag(f"tag.{n}", template_id="tag." + t.lower().replace(" ", "_"))

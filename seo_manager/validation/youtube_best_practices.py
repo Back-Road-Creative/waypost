@@ -8,7 +8,6 @@ Best Practices Source: YouTube Creator Academy + SEO research
 """
 
 from dataclasses import dataclass
-from typing import Dict, List
 
 
 @dataclass
@@ -38,7 +37,7 @@ class YouTubeBestPracticesValidator:
         """Initialize validator"""
         pass
 
-    def validate(self, metadata: "SEOMetadata") -> List[ValidationIssue]:  # noqa: F821
+    def validate(self, metadata: "SEOMetadata") -> list[ValidationIssue]:  # noqa: F821
         """
         Validate metadata against YouTube best practices.
 
@@ -64,7 +63,7 @@ class YouTubeBestPracticesValidator:
 
         return issues
 
-    def _validate_title(self, title: str) -> List[ValidationIssue]:
+    def _validate_title(self, title: str) -> list[ValidationIssue]:
         """Validate title against best practices"""
         issues = []
 
@@ -143,7 +142,7 @@ class YouTubeBestPracticesValidator:
 
         return issues
 
-    def _validate_description(self, description: str) -> List[ValidationIssue]:
+    def _validate_description(self, description: str) -> list[ValidationIssue]:
         """Validate description against best practices"""
         issues = []
 
@@ -214,7 +213,7 @@ class YouTubeBestPracticesValidator:
 
         return issues
 
-    def _validate_tags(self, tags: List[str]) -> List[ValidationIssue]:
+    def _validate_tags(self, tags: list[str]) -> list[ValidationIssue]:
         """Validate tags against best practices"""
         issues = []
 
@@ -270,7 +269,7 @@ class YouTubeBestPracticesValidator:
 
         return issues
 
-    def _validate_seo_quality(self, metadata: "SEOMetadata") -> List[ValidationIssue]:  # noqa: F821
+    def _validate_seo_quality(self, metadata: "SEOMetadata") -> list[ValidationIssue]:  # noqa: F821
         """Validate overall SEO quality"""
         issues = []
 
@@ -311,7 +310,7 @@ class YouTubeBestPracticesValidator:
 
         return issues
 
-    def generate_validation_report(self, metadata: "SEOMetadata") -> Dict:  # noqa: F821
+    def generate_validation_report(self, metadata: "SEOMetadata") -> dict:  # noqa: F821
         """
         Generate comprehensive validation report.
 
@@ -344,7 +343,7 @@ class YouTubeBestPracticesValidator:
             ],
         }
 
-    def _calculate_validation_score(self, issues: List[ValidationIssue]) -> float:
+    def _calculate_validation_score(self, issues: list[ValidationIssue]) -> float:
         """
         Calculate validation score (0.0-1.0).
 

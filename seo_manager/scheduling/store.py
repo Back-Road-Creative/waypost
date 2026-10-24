@@ -9,11 +9,10 @@ from __future__ import annotations
 import contextlib
 import os
 import sqlite3
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, Iterator
-
 from zoneinfo import ZoneInfo
 
 from seo_manager.core.profile import canon_region

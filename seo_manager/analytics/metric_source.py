@@ -13,8 +13,6 @@ Every click rate crossing a module boundary carries one of these. An absent
 tag is ``UNKNOWN`` and is never assumed to be thumbnail data.
 """
 
-from typing import Optional
-
 YOUTUBE_CARD_CLICK_RATE = "youtube_card_click_rate"
 YOUTUBE_THUMBNAIL_IMPRESSION_CTR = "youtube_thumbnail_impression_ctr"
 UNKNOWN = "unknown"
@@ -25,11 +23,11 @@ _KNOWN = frozenset({YOUTUBE_CARD_CLICK_RATE, YOUTUBE_THUMBNAIL_IMPRESSION_CTR, U
 _THUMBNAIL_SOURCES = frozenset({YOUTUBE_THUMBNAIL_IMPRESSION_CTR})
 
 
-def normalize(source: Optional[str]) -> str:
+def normalize(source: str | None) -> str:
     """Absent or unrecognized provenance reads as UNKNOWN."""
     return source if source in _KNOWN else UNKNOWN
 
 
-def is_thumbnail_click_through(source: Optional[str]) -> bool:
+def is_thumbnail_click_through(source: str | None) -> bool:
     """True only for rates whose denominator is thumbnail impressions."""
     return source in _THUMBNAIL_SOURCES

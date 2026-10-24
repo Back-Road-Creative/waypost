@@ -12,7 +12,7 @@ YouTube Shorts criteria (2026):
 import json
 import subprocess
 from pathlib import Path
-from typing import Literal, Optional, Tuple
+from typing import Literal
 
 ContentTypeResult = Literal["SHORT", "VIDEO"]
 
@@ -118,7 +118,7 @@ class ContentDetector:
         except (KeyError, json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to parse duration: {e}")  # noqa: B904
 
-    def get_video_dimensions(self, video_path: str) -> Tuple[int, int]:
+    def get_video_dimensions(self, video_path: str) -> tuple[int, int]:
         """
         Extract video dimensions (width, height) using ffprobe.
 
@@ -166,7 +166,7 @@ class ContentDetector:
             raise ValueError(f"Failed to parse dimensions: {e}")  # noqa: B904
 
     def detect_from_file(
-        self, video_path: str, force_type: Optional[ContentTypeResult] = None
+        self, video_path: str, force_type: ContentTypeResult | None = None
     ) -> ContentTypeResult:
         """
         Detect content type from video file.

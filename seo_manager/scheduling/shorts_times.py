@@ -26,9 +26,10 @@ zone as the evidence's ``hour_local`` and the yaml times.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from seo_manager.analytics import volume_policy as policy
 

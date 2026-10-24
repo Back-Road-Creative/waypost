@@ -42,7 +42,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from seo_manager.fsio import atomic_write_json
 
@@ -188,16 +188,16 @@ class RateEvidence:
     promoted to "adequate".
     """
 
-    ctr: Optional[float]
-    impressions: Optional[int]
-    clicks: Optional[int] = None
+    ctr: float | None
+    impressions: int | None
+    clicks: int | None = None
 
     @property
     def is_measured(self) -> bool:
         """Whether a rate was measured at all. A measured 0.0 counts."""
         return self.ctr is not None
 
-    def supports_a_direction(self, floor: int) -> Optional[bool]:
+    def supports_a_direction(self, floor: int) -> bool | None:
         """True, False, or None when the denominator was never reported."""
         if self.impressions is None:
             return None
@@ -217,7 +217,7 @@ def classify_ctr_movement(
     current: RateEvidence,
     previous: RateEvidence,
     floor: int = MIN_IMPRESSIONS_FOR_DIRECTION,
-) -> Tuple[List[str], str, Optional[float]]:
+) -> tuple[list[str], str, float | None]:
     """Say what, if anything, may be claimed about a movement between two rates.
 
     Pure: no clock, no I/O, no state, so the rule can be exercised directly
@@ -267,7 +267,7 @@ def classify_ctr_movement(
     return tokens, EVIDENCE_SUFFICIENT, change_percent
 
 
-def changed_learned_sections(previous: Optional[Dict], current: Dict) -> List[str]:
+def changed_learned_sections(previous: dict | None, current: dict) -> list[str]:
     """Which learned sections differ, ignoring keys that move every cycle.
 
     ``generated_at`` is regenerated on every call, so comparing it would report
@@ -299,24 +299,24 @@ class CycleRunRecord:
     here -- staleness is reported, and judging it is a product decision.
     """
 
-    started_at: Optional[str] = None
+    started_at: str | None = None
     #: ``None`` when the cycle never reached the end -- it did not finish.
-    finished_at: Optional[str] = None
+    finished_at: str | None = None
     #: ``None`` when nobody recorded which mode the cycle ran in.
-    dry_run: Optional[bool] = None
-    completion: Optional[str] = None
+    dry_run: bool | None = None
+    completion: str | None = None
     #: ``None`` when no sync step reported one, e.g. a cycle that raised
     #: before the first step returned. Unknown, not ``unconfigured``.
-    sync_outcome: Optional[str] = None
-    failed_steps: Tuple[str, ...] = ()
-    error: Optional[str] = None
+    sync_outcome: str | None = None
+    failed_steps: tuple[str, ...] = ()
+    error: str | None = None
 
     @property
-    def age_days(self) -> Optional[float]:
+    def age_days(self) -> float | None:
         """Days since the cycle started, or ``None`` when that is unknowable."""
         return _age_days(self.started_at)
 
-    def as_status(self) -> Dict[str, Any]:
+    def as_status(self) -> dict[str, Any]:
         """The record plus its age, for a status surface. Not what is stored."""
         return {
             "started_at": self.started_at,
@@ -330,7 +330,7 @@ class CycleRunRecord:
         }
 
 
-def read_last_run(state_dir) -> Optional[CycleRunRecord]:
+def read_last_run(state_dir) -> CycleRunRecord | None:
     """The last cycle's record, or ``None`` when no cycle has ever run.
 
     ``None`` is the whole point of this function: an operator, a health check
@@ -365,31 +365,31 @@ class OptimizationResult:
     cycle_type: OptimizationCycleType
     timestamp: str
     success: bool
-    changes_made: List[str] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    changes_made: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
     #: Set by the analytics-sync step only; ``None`` for every other step,
     #: which define no outcome vocabulary of their own.
-    sync_outcome: Optional[SyncOutcome] = None
+    sync_outcome: SyncOutcome | None = None
 
 
 @dataclass
 class DaemonState:
     """Persistent state for the daemon."""
 
-    last_analytics_sync: Optional[str] = None
-    last_pattern_analysis: Optional[str] = None
-    last_template_update: Optional[str] = None
+    last_analytics_sync: str | None = None
+    last_pattern_analysis: str | None = None
+    last_template_update: str | None = None
     total_videos_synced: int = 0
     total_patterns_learned: int = 0
     total_templates_updated: int = 0
-    optimization_history: List[Dict] = field(default_factory=list)
+    optimization_history: list[dict] = field(default_factory=list)
 
     # Learned optimal values
     optimal_title_length_min: int = 50
     optimal_title_length_max: int = 70
-    top_performing_tags: List[str] = field(default_factory=list)
-    thumbnail_style_performance: Dict[str, float] = field(default_factory=dict)
+    top_performing_tags: list[str] = field(default_factory=list)
+    thumbnail_style_performance: dict[str, float] = field(default_factory=dict)
 
 
 class ContinuousOptimizationDaemon:
@@ -430,12 +430,12 @@ class ContinuousOptimizationDaemon:
         self,
         manager,
         youtube_sync=None,
-        state_dir: Optional[Path] = None,
-        video_mapping_file: Optional[Path] = None,
+        state_dir: Path | None = None,
+        video_mapping_file: Path | None = None,
         sync_interval_hours: int = DEFAULT_SYNC_INTERVAL_HOURS,
         min_views_for_analysis: int = DEFAULT_MIN_VIEWS_FOR_ANALYSIS,
         dry_run: bool = False,
-        sync_unconfigured_reason: Optional[str] = None,
+        sync_unconfigured_reason: str | None = None,
     ):
         """
         Initialize the daemon.
@@ -469,7 +469,7 @@ class ContinuousOptimizationDaemon:
         # Load state
         self.state = self._load_state()
 
-    def run_optimization_cycle(self) -> List[OptimizationResult]:
+    def run_optimization_cycle(self) -> list[OptimizationResult]:
         """Run one cycle, and leave evidence on disk that it was attempted.
 
         The record is written on every exit, including the one where a step
@@ -483,7 +483,7 @@ class ContinuousOptimizationDaemon:
             List of OptimizationResult for each step
         """
         started_at = datetime.now().isoformat()
-        results: List[OptimizationResult] = []
+        results: list[OptimizationResult] = []
         try:
             results = self._run_cycle_steps(results)
         except BaseException as e:
@@ -499,9 +499,9 @@ class ContinuousOptimizationDaemon:
     def _build_run_record(
         self,
         started_at: str,
-        results: List[OptimizationResult],
+        results: list[OptimizationResult],
         finished: bool = False,
-        error: Optional[BaseException] = None,
+        error: BaseException | None = None,
     ) -> CycleRunRecord:
         """Describe the run from what actually happened, inventing nothing."""
         failed = tuple(r.cycle_type.value for r in results if not r.success)
@@ -544,8 +544,8 @@ class ContinuousOptimizationDaemon:
             logger.error(f"could not write the run record to {path}: {e}")
 
     def _run_cycle_steps(
-        self, results: List[OptimizationResult]
-    ) -> List[OptimizationResult]:
+        self, results: list[OptimizationResult]
+    ) -> list[OptimizationResult]:
         """The cycle itself. Separated so every exit records that it ran."""
 
         logger.info("=" * 60)
@@ -584,7 +584,7 @@ class ContinuousOptimizationDaemon:
 
         return results
 
-    def run_forever(self, interval_hours: Optional[int] = None):
+    def run_forever(self, interval_hours: int | None = None):
         """
         Run the daemon continuously.
 
@@ -735,7 +735,7 @@ class ContinuousOptimizationDaemon:
                 sync_outcome=SyncOutcome.FAILED,
             )
 
-    def _unconfigured_reasons(self) -> List[str]:
+    def _unconfigured_reasons(self) -> list[str]:
         """Which inputs a real sync is still waiting for.
 
         Each missing input is named, not just the first: telling an operator
@@ -1025,7 +1025,7 @@ class ContinuousOptimizationDaemon:
             )
 
     @staticmethod
-    def _log_movement(tokens: List[str], change: Optional[float]) -> None:
+    def _log_movement(tokens: list[str], change: float | None) -> None:
         """Log only what was actually claimed.
 
         A refused direction is not a decline, and must not reach an operator's
@@ -1062,7 +1062,7 @@ class ContinuousOptimizationDaemon:
                 )
 
     @staticmethod
-    def _read_learned_config(path: Path) -> Optional[Dict]:
+    def _read_learned_config(path: Path) -> dict | None:
         """The config already on disk, or ``None`` when there is none to read.
 
         Unreadable is not "unchanged": a file this cannot parse yields ``None``
@@ -1079,7 +1079,7 @@ class ContinuousOptimizationDaemon:
             return None
         return loaded if isinstance(loaded, dict) else None
 
-    def _generate_template_config(self) -> Dict:
+    def _generate_template_config(self) -> dict:
         """Generate configuration based on learned patterns."""
         return {
             "generated_at": datetime.now().isoformat(),
@@ -1095,7 +1095,7 @@ class ContinuousOptimizationDaemon:
             "thumbnails": {"style_performance": self.state.thumbnail_style_performance},
         }
 
-    def _load_video_mapping(self) -> Dict[str, str]:
+    def _load_video_mapping(self) -> dict[str, str]:
         """Load video_id -> content_id mapping."""
         if self.video_mapping_file and self.video_mapping_file.exists():
             with open(self.video_mapping_file) as f:
@@ -1112,7 +1112,7 @@ class ContinuousOptimizationDaemon:
 
         return datetime.now() >= next_sync
 
-    def _get_next_run_time(self) -> Optional[datetime]:
+    def _get_next_run_time(self) -> datetime | None:
         """Get the next scheduled run time."""
         if not self.state.last_analytics_sync:
             return datetime.now()
@@ -1157,7 +1157,7 @@ class ContinuousOptimizationDaemon:
 
         atomic_write_json(state_file, asdict(self.state))
 
-    def _log_cycle_summary(self, results: List[OptimizationResult]):
+    def _log_cycle_summary(self, results: list[OptimizationResult]):
         """Log a summary of the optimization cycle."""
         logger.info("")
         logger.info("=" * 60)
@@ -1181,7 +1181,7 @@ class ContinuousOptimizationDaemon:
         )
         logger.info("=" * 60)
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get current daemon status.
 
         ``last_cycle_run_state`` is the field that answers "has this thing
@@ -1220,8 +1220,8 @@ def build_daemon(
     dry_run,
     site_id="default",
     storage=Path("data/seo"),
-    youtube_credentials: Optional[Path] = None,
-    video_mapping_file: Optional[Path] = None,
+    youtube_credentials: Path | None = None,
+    video_mapping_file: Path | None = None,
 ):
     """Daemon over the real SEO store; imported late to keep the CLI testable.
 
@@ -1256,8 +1256,8 @@ def build_daemon(
 
 
 def _build_collector(
-    youtube_credentials: Optional[Path], video_mapping_file: Optional[Path]
-) -> Tuple[Any, Optional[str]]:
+    youtube_credentials: Path | None, video_mapping_file: Path | None
+) -> tuple[Any, str | None]:
     """The collector, or ``None`` and the reason there isn't one.
 
     Half a collector is not a collector: credentials with no mapping would
@@ -1286,7 +1286,7 @@ def _build_collector(
         return None, COLLECTOR_UNAVAILABLE
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Run ONE cycle, dry run unless --apply. There is deliberately no
     `--forever`: cron owns the schedule, and a process that loops under it is a
     second, competing scheduler."""

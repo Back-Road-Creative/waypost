@@ -14,7 +14,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -47,7 +46,7 @@ class TestCompareManifest:
 
     video_title: str
     generated_at: str
-    variants: List[TestCompareVariant]
+    variants: list[TestCompareVariant]
     manifest_path: str
 
 
@@ -66,7 +65,7 @@ class YouTubeThumbnailGenerator:
     THUMBNAIL_SIZE = (1280, 720)  # YouTube standard
     SAFE_ZONE = (1120, 630)  # Avoid edges for mobile
 
-    def __init__(self, branding_config: Optional[Dict] = None):
+    def __init__(self, branding_config: dict | None = None):
         """
         Initialize thumbnail generator.
 
@@ -84,13 +83,13 @@ class YouTubeThumbnailGenerator:
 
     def generate_thumbnail(
         self,
-        video_path: Optional[str],
+        video_path: str | None,
         title: str,
-        episode_number: Optional[int] = None,
-        output_path: Optional[str] = None,
+        episode_number: int | None = None,
+        output_path: str | None = None,
         key_frame_time: float = 30.0,
         style: str = "classic",
-        logo_path: Optional[str] = None,
+        logo_path: str | None = None,
     ) -> str:
         """
         Generate YouTube thumbnail.
@@ -359,9 +358,9 @@ class YouTubeThumbnailGenerator:
         self,
         background_image: Path,
         title: str,
-        subtitle: Optional[str] = None,
+        subtitle: str | None = None,
         output_dir: Path = Path("./thumbnails"),
-    ) -> List[Path]:
+    ) -> list[Path]:
         """
         Generate 3 thumbnail variations from user-provided background image.
 
@@ -399,7 +398,7 @@ class YouTubeThumbnailGenerator:
         self,
         background_image: Path,
         title: str,
-        subtitle: Optional[str] = None,
+        subtitle: str | None = None,
         output_dir: Path = Path("./thumbnails"),
     ) -> TestCompareManifest:
         """
@@ -443,7 +442,7 @@ class YouTubeThumbnailGenerator:
 
         variants = [
             TestCompareVariant(style=style.value, path=str(path))
-            for style, path in zip(ThumbnailStyle, variant_paths)
+            for style, path in zip(ThumbnailStyle, variant_paths, strict=False)
         ]
 
         manifest_path = output_dir / "test_compare_manifest.json"
@@ -463,7 +462,7 @@ class YouTubeThumbnailGenerator:
         self,
         image: Image.Image,
         title: str,
-        subtitle: Optional[str],
+        subtitle: str | None,
         style: ThumbnailStyle,
     ) -> Image.Image:
         """
@@ -492,7 +491,7 @@ class YouTubeThumbnailGenerator:
         image: Image.Image,
         draw: ImageDraw.Draw,
         title: str,
-        subtitle: Optional[str],
+        subtitle: str | None,
     ) -> Image.Image:
         """Minimal style: Clean text at bottom with semi-transparent overlay."""
         width, height = image.size
@@ -548,7 +547,7 @@ class YouTubeThumbnailGenerator:
         image: Image.Image,
         draw: ImageDraw.Draw,
         title: str,
-        subtitle: Optional[str],
+        subtitle: str | None,
     ) -> Image.Image:
         """Bold style: High contrast text with strong border and background."""
         width, height = image.size
@@ -623,7 +622,7 @@ class YouTubeThumbnailGenerator:
         image: Image.Image,
         draw: ImageDraw.Draw,
         title: str,
-        subtitle: Optional[str],
+        subtitle: str | None,
     ) -> Image.Image:
         """Immersive style: Very subtle text, focus on scenic image."""
         _width, _height = image.size

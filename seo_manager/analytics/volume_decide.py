@@ -24,10 +24,11 @@ import json
 import os
 import sqlite3
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import fields, replace
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 from seo_manager.core.profile import DAY_ABBR, Cadence, canon_region, load_cadence
 from seo_manager.scheduling import lf_days, shorts_times
@@ -77,7 +78,7 @@ _STATE_FIELDS = [
 ]
 
 
-def _state_to_json(state: KnobState) -> Dict[str, Any]:
+def _state_to_json(state: KnobState) -> dict[str, Any]:
     out = {}
     for name in _STATE_FIELDS:
         v = getattr(state, name)
@@ -86,7 +87,7 @@ def _state_to_json(state: KnobState) -> Dict[str, Any]:
 
 
 def _state_from_row(row: store.StoredDecision) -> KnobState:
-    kw: Dict[str, Any] = {}
+    kw: dict[str, Any] = {}
     for name in _STATE_FIELDS:
         if name in row.state:
             v = row.state[name]
@@ -95,9 +96,9 @@ def _state_from_row(row: store.StoredDecision) -> KnobState:
 
 
 def _knob_keys(
-    bundle: EvidenceBundle, db: Path, cadence: Optional[Cadence] = None
-) -> List[Tuple[str, Optional[str]]]:
-    regions: List[Optional[str]] = sorted(
+    bundle: EvidenceBundle, db: Path, cadence: Cadence | None = None
+) -> list[tuple[str, str | None]]:
+    regions: list[str | None] = sorted(
         {s.region for s in bundle.shorts if s.region}
     ) or [None]
     if cadence is not None:  # the yaml's regions, whether or not they posted shorts
@@ -115,8 +116,8 @@ def _knob_keys(
 
 def _evidence(
     bundle: EvidenceBundle,
-    depth_by_region: Optional[Mapping[str, int]] = None,
-    fenced: Optional[Mapping[str, Sequence[int]]] = None,
+    depth_by_region: Mapping[str, int] | None = None,
+    fenced: Mapping[str, Sequence[int]] | None = None,
     canon: bool = False,
 ) -> Evidence:
     shorts = [
@@ -137,9 +138,9 @@ def _evidence(
     )
 
 
-def _fence(states: Sequence[KnobState]) -> Dict[str, List[int]]:
+def _fence(states: Sequence[KnobState]) -> dict[str, list[int]]:
     """Per region, the hours every OTHER region currently posts shorts at."""
-    mine: Dict[str, List[int]] = {}
+    mine: dict[str, list[int]] = {}
     for s in states:
         if s.knob == "shorts_times" and s.region is not None:
             try:
@@ -150,8 +151,8 @@ def _fence(states: Sequence[KnobState]) -> Dict[str, List[int]]:
 
 
 def _with_ranked(
-    decisions: List[Decision], evidence: Evidence, now: datetime
-) -> List[Decision]:
+    decisions: list[Decision], evidence: Evidence, now: datetime
+) -> list[Decision]:
     """Every per-region ``shorts_times`` row carries the measured hours, best first."""
     cutoff = now - timedelta(days=policy.SETTLE_DAYS)
     out = []
@@ -173,8 +174,8 @@ def _with_ranked(
 
 
 def _carry_check(
-    decisions: List[Decision], states: Sequence[KnobState]
-) -> List[Decision]:
+    decisions: list[Decision], states: Sequence[KnobState]
+) -> list[Decision]:
     """A move a region's shorts windows cannot carry becomes a ``JOINT_CEILING`` hold.
 
     One LF's drive posts at its share of the region's windows
@@ -202,7 +203,7 @@ def _carry_check(
     live = [s.value for s in states if s.knob == "shorts_per_lf"]
     spl = live[0] if live and isinstance(live[0], int) else policy.SHORTS_FLOOR
 
-    def carries(region: Optional[str], n_days: int) -> int:
+    def carries(region: str | None, n_days: int) -> int:
         return shorts_times.share_size(windows[region], n_days) * cap
 
     out = []
@@ -236,9 +237,9 @@ def _carry_check(
 def _new_row(
     d: Decision,
     prior: KnobState,
-    last_ok: Optional[int],
+    last_ok: int | None,
     now: datetime,
-    dow: Optional[Sequence[int]] = None,
+    dow: Sequence[int] | None = None,
 ) -> store.NewRow:
     blind = d.reason_code.startswith("ANALYTICS_")
     status = "blind" if blind else _STATUS.get(d.action, "hold")
@@ -267,7 +268,7 @@ def _new_row(
     )
 
 
-def _line(d: Decision, status: str, dow: Optional[Sequence[int]] = None) -> str:
+def _line(d: Decision, status: str, dow: Sequence[int] | None = None) -> str:
     blind = d.reason_code.startswith("ANALYTICS_")
     parts = [
         "VOLUME_DECISION",
@@ -295,8 +296,8 @@ def _load(source: str) -> Any:
 
 
 def _ready_depths(
-    cadence: Cadence, schedule_db: Optional[Path]
-) -> Tuple[Dict[str, int], Optional[str]]:
+    cadence: Cadence, schedule_db: Path | None
+) -> tuple[dict[str, int], str | None]:
     """Ready drives per region, and why unreadable (then 0 everywhere). Never creates the db."""
     zeros = {r: 0 for r in cadence.regions}
     if schedule_db is None:
@@ -311,8 +312,8 @@ def _ready_depths(
 
 
 def _prior(
-    db: Path, row: store.StoredDecision, cadence: Optional[Cadence]
-) -> Tuple[KnobState, Optional[Tuple[int, ...]]]:
+    db: Path, row: store.StoredDecision, cadence: Cadence | None
+) -> tuple[KnobState, tuple[int, ...] | None]:
     """State and (``lf_days`` under ``--brand-yaml``) weekday set; no weekday row = yaml seed."""
     if (
         cadence is not None
@@ -340,11 +341,11 @@ def _prior(
 
 def _dow_for(
     d: Decision,
-    prior_dow: Tuple[int, ...],
+    prior_dow: tuple[int, ...],
     taken: frozenset,
     medians: Mapping[int, float],
     earlier: Sequence[store.StoredDecision],
-) -> Tuple[int, ...]:
+) -> tuple[int, ...]:
     """The weekday set a decision implies; ``ValueError`` if none can be chosen."""
     if d.action not in (STEP, ROLLBACK, BLIND_REVERT) or d.value == len(prior_dow):
         return prior_dow
@@ -361,16 +362,20 @@ def _lf_dows(
     db: Path,
     bundle: EvidenceBundle,
     cadence: Cadence,
-    decisions: List[Decision],
-    priors: List[Tuple[KnobState, Optional[Tuple[int, ...]]]],
-) -> Tuple[List[Decision], List[Optional[Tuple[int, ...]]]]:
+    decisions: list[Decision],
+    priors: list[tuple[KnobState, tuple[int, ...] | None]],
+) -> tuple[list[Decision], list[tuple[int, ...] | None]]:
     """A weekday set per ``lf_days`` decision; a raise with no free day becomes a ``JOINT_CEILING`` hold."""
     now_utc = parse_ts(bundle.as_of)
-    prior = {d.region: p[1] for d, p in zip(decisions, priors) if p[1] is not None}
+    prior = {
+        d.region: p[1]
+        for d, p in zip(decisions, priors, strict=False)
+        if p[1] is not None
+    }
     fixed = set() if cadence.superlong_day is None else {cadence.superlong_day}
-    out_d: List[Decision] = []
-    out_w: List[Optional[Tuple[int, ...]]] = []
-    for d, (_, mine) in zip(decisions, priors):
+    out_d: list[Decision] = []
+    out_w: list[tuple[int, ...] | None] = []
+    for d, (_, mine) in zip(decisions, priors, strict=False):
         if d.knob != "lf_days" or mine is None:
             out_d.append(d)
             out_w.append(None)
@@ -399,15 +404,15 @@ def run(
     evidence_src: str,
     db: Path,
     today: date,
-    brand_yaml: Optional[str] = None,
-    schedule_db: Optional[Path] = None,
+    brand_yaml: str | None = None,
+    schedule_db: Path | None = None,
 ) -> int:
     try:
         bundle = parse_bundle(_load(evidence_src))
     except (EvidenceRefused, ValueError, OSError) as exc:
         print(f"EVIDENCE_REFUSED reason={exc}")
         return EXIT_REFUSED
-    cadence: Optional[Cadence] = None
+    cadence: Cadence | None = None
     if brand_yaml:
         try:
             cadence = load_cadence(brand_yaml)
@@ -423,8 +428,8 @@ def run(
     except (store.DecisionStoreUnreadable, ValueError) as exc:
         print(f"STATE_UNREADABLE reason={exc}")
         return EXIT_UNREADABLE
-    depths: Dict[str, int] = {}
-    unread: Optional[str] = None
+    depths: dict[str, int] = {}
+    unread: str | None = None
     if cadence is not None:
         depths, unread = _ready_depths(cadence, schedule_db)
     states = [p for p, _ in priors]
@@ -454,7 +459,7 @@ def run(
         return EXIT_UNREADABLE
     if cadence is not None:
         decisions = _carry_check(_with_ranked(decisions, evidence, now), states)
-    dows: List[Optional[Tuple[int, ...]]] = [None] * len(decisions)
+    dows: list[tuple[int, ...] | None] = [None] * len(decisions)
     if cadence is not None:
         decisions, dows = _lf_dows(db, bundle, cadence, decisions, priors)
         if unread is not None:
@@ -465,7 +470,9 @@ def run(
                 for d in decisions
             ]
     rows = []
-    for ((prior, _), d), dow in zip(zip(priors, decisions), dows):
+    for ((prior, _), d), dow in zip(
+        zip(priors, decisions, strict=False), dows, strict=False
+    ):
         ok = [
             h.id
             for h in store.history(db, d.knob, d.region)
@@ -477,12 +484,12 @@ def run(
     except (store.DecisionStoreUnreadable, store.DecisionRejected) as exc:
         print(f"STATE_UNREADABLE reason={exc}")
         return EXIT_UNREADABLE
-    for d, dow in zip(decisions, dows):
+    for d, dow in zip(decisions, dows, strict=False):
         print(_line(d, status, dow))
     return 0
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="volume_decide", description=__doc__)
     p.add_argument("--evidence", required=True, help="EvidenceBundle JSON file, or -")
     p.add_argument("--db", required=True, type=Path, help="cadence_decisions.sqlite3")

@@ -5,7 +5,6 @@ Defines the contract that all platform adapters must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import List
 
 from ..core.metadata import Platform
 
@@ -40,7 +39,7 @@ class BasePlatformAdapter(ABC):
         pass
 
     @abstractmethod
-    def format_tags(self, tags: List[str]):
+    def format_tags(self, tags: list[str]):
         """
         Format tags according to platform convention.
 
@@ -77,7 +76,7 @@ class BasePlatformAdapter(ABC):
         """
         return len(description) <= self.get_description_limit()
 
-    def validate_tags(self, tags: List[str]) -> bool:
+    def validate_tags(self, tags: list[str]) -> bool:
         """
         Check if tag count/format is valid.
 

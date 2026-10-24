@@ -9,7 +9,7 @@ a fixed line or a tag changes its hash, so it needs a reviewed Waypost PR and
 a bump of ``DRIVE_TEMPLATES_VERSION``.
 """
 
-from typing import Dict, FrozenSet, Sequence, Tuple
+from collections.abc import Sequence
 
 from .final_text_params import ParamTemplate, Slot, param_hash
 
@@ -50,7 +50,7 @@ def _hashtag(tag: str) -> str:
     return "#" + "".join(word.capitalize() for word in tag.split())
 
 
-DRIVE_TEXT: Dict[str, str] = {
+DRIVE_TEXT: dict[str, str] = {
     "description.insert.one": "\U0001f4f8 1 photo/clip insert",
     "description.rule": "\n" + RULE + "\n",
     "description.cta": (
@@ -70,7 +70,7 @@ DRIVE_TEXT: Dict[str, str] = {
 # season, season drive, then cited phrase tags. Only the place and phrase
 # ranks may repeat.
 PLACE_TAG = "tag.place"
-TAG_ORDER: Tuple[str, ...] = ()
+TAG_ORDER: tuple[str, ...] = ()
 for _tag in BASE_TAGS:
     DRIVE_TEXT[f"tag.{_slug(_tag)}"] = _tag
     TAG_ORDER += (f"tag.{_slug(_tag)}",)
@@ -88,7 +88,7 @@ for _season in SEASONS:
 # GMS appends analytics phrase tags last; each must cite a route place.
 TAG_ORDER += ("tag.phrase",)
 
-PARAMS: Dict[str, ParamTemplate] = {}
+PARAMS: dict[str, ParamTemplate] = {}
 
 
 def _param(template_id: str, skeleton: str, *slots: Slot) -> None:
@@ -219,7 +219,7 @@ for _n in range(MAX_GEO + 1):
 MAX_TOWNS, MAX_ROADS, MAX_STATES, MAX_FEATURES, MAX_PASSING = 12, 5, 12, 5, 5
 
 
-def _names(prefix: str, n: int) -> Tuple[str, ...]:
+def _names(prefix: str, n: int) -> tuple[str, ...]:
     return tuple(f"{prefix}{k}" for k in range(1, n + 1))
 
 
@@ -289,7 +289,7 @@ _param(
 
 # Ordered blocks of the layout: (block name, required). ``chapter`` is the
 # chapter lines themselves and may repeat.
-LAYOUTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
+LAYOUTS: dict[str, tuple[tuple[str, bool], ...]] = {
     LAYOUT: (
         ("hook", True), ("seo", False), ("body", False), ("journey", False),
         ("roads", False), ("states", False), ("features", False), ("gap", False),
@@ -303,12 +303,12 @@ LAYOUTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
     ),
 }  # fmt: skip
 # A layout's blank-line block: present exactly when one of its blocks is.
-LAYOUT_GAPS: Dict[str, Tuple[str, FrozenSet[str]]] = {
+LAYOUT_GAPS: dict[str, tuple[str, frozenset[str]]] = {
     LAYOUT: ("gap", frozenset({"journey", "roads", "states", "features"})),
 }
 
 
-def drive_hashes() -> Tuple[Tuple[str, str], ...]:
+def drive_hashes() -> tuple[tuple[str, str], ...]:
     """``(id, hash)`` for every drive template, sorted by id."""
     from .final_text_surfaces import template_hash
 

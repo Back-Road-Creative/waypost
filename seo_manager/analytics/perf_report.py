@@ -5,10 +5,10 @@ site's ``videos.yaml``. Pure functions; no network."""
 import json
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
 from statistics import median
-from typing import Dict, Iterable, List, Optional, Tuple
 
 import yaml
 
@@ -33,9 +33,9 @@ def classify_title(title: str) -> str:
     return OTHER_CLASS
 
 
-def load_latest_views(ledger: Path) -> Dict[str, dict]:
+def load_latest_views(ledger: Path) -> dict[str, dict]:
     """Latest ``performance_updated`` event per ``data.video_id``."""
-    latest: Dict[str, dict] = {}
+    latest: dict[str, dict] = {}
     try:
         with open(ledger, encoding="utf-8") as fh:
             for lineno, line in enumerate(fh, start=1):
@@ -71,7 +71,7 @@ def load_latest_views(ledger: Path) -> Dict[str, dict]:
     return latest
 
 
-def load_videos(videos_yaml: Path) -> List[dict]:
+def load_videos(videos_yaml: Path) -> list[dict]:
     try:
         with open(videos_yaml, encoding="utf-8") as fh:
             doc = yaml.safe_load(fh)
@@ -96,7 +96,7 @@ def _present(video: object, key: str) -> bool:
     return isinstance(video, dict) and video.get(key) not in (None, "")
 
 
-def join_rows(videos: Iterable[dict], latest: Dict[str, dict]) -> List[dict]:
+def join_rows(videos: Iterable[dict], latest: dict[str, dict]) -> list[dict]:
     """One row per video that has a ledger entry WITH a views measurement: month,
     title class, views, views/day. An entry whose ``views`` is missing or ``None``
     yields no row — a median over measured values cannot absorb an unknown as 0.
@@ -138,8 +138,8 @@ def join_rows(videos: Iterable[dict], latest: Dict[str, dict]) -> List[dict]:
     return rows
 
 
-def _table(rows: List[dict], key: str, header: str) -> List[str]:
-    groups: Dict[str, List[dict]] = defaultdict(list)
+def _table(rows: list[dict], key: str, header: str) -> list[str]:
+    groups: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         groups[r[key]].append(r)
     lines = [
@@ -155,8 +155,8 @@ def _table(rows: List[dict], key: str, header: str) -> List[str]:
 
 
 def empty_join_cause(
-    videos: List[dict], latest: Dict[str, dict], rows: List[dict]
-) -> Optional[str]:
+    videos: list[dict], latest: dict[str, dict], rows: list[dict]
+) -> str | None:
     """Why a report has no rows, or ``None`` when it has some."""
     if rows:
         return None
@@ -173,10 +173,10 @@ def empty_join_cause(
 
 
 def render_markdown(
-    rows: List[dict],
-    synced_at: Optional[str] = None,
+    rows: list[dict],
+    synced_at: str | None = None,
     unmeasured: int = 0,
-    note: Optional[str] = None,
+    note: str | None = None,
 ) -> str:
     head = ["# Long-form performance report", ""]
     if synced_at:
@@ -190,7 +190,7 @@ def render_markdown(
     return "\n".join(head + body) + "\n"
 
 
-def analyze(ledger: Path, videos_yaml: Path) -> Tuple[str, Optional[str]]:
+def analyze(ledger: Path, videos_yaml: Path) -> tuple[str, str | None]:
     """The markdown report and, when the join is empty, the one-line cause."""
     latest = load_latest_views(ledger)
     videos = load_videos(videos_yaml)

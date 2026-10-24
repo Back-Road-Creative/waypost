@@ -18,11 +18,12 @@ import contextlib
 import json
 import os
 import sqlite3
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from ..scheduling import shorts_times
 from ..storage.event_store import _LOCK_MODE, _group_writable_filelock
@@ -88,9 +89,9 @@ class StoredDecision:
     """One row (or the seed, ``id is None``). ``state`` is the controller's
     ``KnobState`` fields after this row, as JSON-safe values."""
 
-    id: Optional[int]
+    id: int | None
     knob: str
-    region: Optional[str]
+    region: str | None
     value: Any
     prev: Any
     reason_code: str
@@ -98,22 +99,22 @@ class StoredDecision:
     status: str
     source: str
     policy_rev: int
-    applied_at: Optional[str]
-    evidence_window_start: Optional[str] = None
-    evidence_window_end: Optional[str] = None
+    applied_at: str | None
+    evidence_window_start: str | None = None
+    evidence_window_end: str | None = None
     evidence_n: int = 0
     need_n: int = 0
-    floor: Optional[int] = None
-    ceiling: Optional[int] = None
-    rollback_of: Optional[int] = None
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    state: Dict[str, Any] = field(default_factory=dict)
+    floor: int | None = None
+    ceiling: int | None = None
+    rollback_of: int | None = None
+    evidence: dict[str, Any] = field(default_factory=dict)
+    state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class NewRow:
     knob: str
-    region: Optional[str]
+    region: str | None
     value: Any
     prev: Any
     status: str
@@ -122,14 +123,14 @@ class NewRow:
     basis: str
     applied_at: datetime
     policy_rev: int = policy.POLICY_REV
-    evidence_window: Optional[Tuple[datetime, datetime]] = None
+    evidence_window: tuple[datetime, datetime] | None = None
     evidence_n: int = 0
     need_n: int = 0
-    floor: Optional[int] = None
-    ceiling: Optional[int] = None
-    rollback_of: Optional[int] = None
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    state: Dict[str, Any] = field(default_factory=dict)
+    floor: int | None = None
+    ceiling: int | None = None
+    rollback_of: int | None = None
+    evidence: dict[str, Any] = field(default_factory=dict)
+    state: dict[str, Any] = field(default_factory=dict)
 
 
 def _dumps(value: Any) -> str:
@@ -146,7 +147,7 @@ def _seed_value(knob: str, seed: Any) -> Any:
     return None
 
 
-def _seed(knob: str, region: Optional[str], seed: Any) -> StoredDecision:
+def _seed(knob: str, region: str | None, seed: Any) -> StoredDecision:
     v = _seed_value(knob, seed)
     return StoredDecision(
         None, knob, region, v, v, "SEED", "no decision recorded yet",
@@ -170,7 +171,7 @@ def _is_empty_file_error(exc: sqlite3.Error) -> bool:
     return "no such table" in str(exc)
 
 
-def _read(db: Path, sql: str, args: Sequence[Any]) -> Optional[List[Sequence[Any]]]:
+def _read(db: Path, sql: str, args: Sequence[Any]) -> list[Sequence[Any]] | None:
     """Rows for a read-only query; None when there is no file or no table."""
     db = Path(db)
     if not db.exists():
@@ -187,7 +188,7 @@ def _read(db: Path, sql: str, args: Sequence[Any]) -> Optional[List[Sequence[Any
 
 
 def current(
-    db: Path, knob: str, region: Optional[str] = None, seed: Any = None
+    db: Path, knob: str, region: str | None = None, seed: Any = None
 ) -> StoredDecision:
     """The latest decision for ``(knob, region)``, else the seed (no file made)."""
     rows = _read(
@@ -200,8 +201,8 @@ def current(
 
 
 def history(
-    db: Path, knob: Optional[str] = None, region: Any = _ANY
-) -> List[StoredDecision]:
+    db: Path, knob: str | None = None, region: Any = _ANY
+) -> list[StoredDecision]:
     """Rows oldest first, optionally for one knob and/or region."""
     where, args = [], []
     if knob is not None:
@@ -217,7 +218,7 @@ def history(
     return [_row(r) for r in rows or []]
 
 
-def keys(db: Path) -> List[Tuple[str, Optional[str]]]:
+def keys(db: Path) -> list[tuple[str, str | None]]:
     """Every ``(knob, region)`` that has a row."""
     rows = _read(
         db,
@@ -239,7 +240,7 @@ class _writer:
     def __init__(self, db: Path) -> None:
         self.db = db
         self.lock: Any = None
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
 
     def __enter__(self) -> sqlite3.Connection:
         self.db.parent.mkdir(parents=True, exist_ok=True)
@@ -277,7 +278,7 @@ class _writer:
             self._release()
 
 
-def _latest(conn: sqlite3.Connection, knob: str, region: Optional[str]) -> Any:
+def _latest(conn: sqlite3.Connection, knob: str, region: str | None) -> Any:
     r = conn.execute(
         "SELECT value_json FROM cadence_decisions "
         "WHERE knob = ? AND region IS ? ORDER BY id DESC LIMIT 1",
@@ -306,7 +307,7 @@ def _check_bounds(row: NewRow) -> None:
         )
 
 
-def _latest_times(conn: sqlite3.Connection) -> List[Tuple[Optional[str], Any]]:
+def _latest_times(conn: sqlite3.Connection) -> list[tuple[str | None, Any]]:
     """``(region, latest shorts_times value)`` of every region (and the global row)."""
     rows = conn.execute(
         "SELECT region, value_json FROM cadence_decisions WHERE id IN ("
@@ -316,7 +317,7 @@ def _latest_times(conn: sqlite3.Connection) -> List[Tuple[Optional[str], Any]]:
     return [(r[0], json.loads(r[1])) for r in rows]
 
 
-def _lf_day_count(conn: sqlite3.Connection, region: Optional[str]) -> int:
+def _lf_day_count(conn: sqlite3.Connection, region: str | None) -> int:
     """The region's decided LF day count; 1 when no ``lf_days`` row says (the yaml
     seed is not in the store, so the nightly decider makes the full check)."""
     n = _latest(conn, "lf_days", region) if region is not None else None
@@ -368,7 +369,7 @@ def _insert(conn: sqlite3.Connection, row: NewRow) -> int:
     return int(cur.lastrowid or 0)
 
 
-def _default_bounds(knob: str) -> Tuple[Optional[int], Optional[int]]:
+def _default_bounds(knob: str) -> tuple[int | None, int | None]:
     if knob == "shorts_per_lf":
         return policy.SHORTS_FLOOR, policy.SHORTS_CEILING
     if knob == "lf_days":
@@ -376,7 +377,7 @@ def _default_bounds(knob: str) -> Tuple[Optional[int], Optional[int]]:
     return None, None
 
 
-def append_many(db: Path, rows: Sequence[NewRow]) -> List[int]:
+def append_many(db: Path, rows: Sequence[NewRow]) -> list[int]:
     """Append ``rows`` in one transaction: all land, or none (and no new file
     when the first row is rejected). Returns the new ids."""
     for row in rows:  # reject the plainly invalid before any file is created

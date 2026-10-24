@@ -25,8 +25,9 @@ Names are deduplicated, first-seen order, case-insensitive.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 SETTLEMENT_TYPES = frozenset({"city", "town", "village", "hamlet"})
 _ADDRESSTYPE_SETTLEMENTS = frozenset({"city", "town", "village"})

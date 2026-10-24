@@ -13,7 +13,6 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from ..analytics.tracker import AnalyticsTracker
 from ..generation.base import BaseSEOGenerator
@@ -128,8 +127,8 @@ class SEOManager:
         self,
         site_id: str,
         platform: BasePlatformAdapter,
-        storage_path: Optional[Path] = None,
-        config: Optional[Dict] = None,
+        storage_path: Path | None = None,
+        config: dict | None = None,
     ):
         """
         Initialize SEO Manager for a specific site and platform.
@@ -181,11 +180,11 @@ class SEOManager:
         self,
         content_type: ContentType,
         topic: str,
-        body: Optional[str] = None,
-        transcript: Optional[List[Dict]] = None,
-        existing_tags: Optional[List[str]] = None,
-        base_tags: Optional[List[str]] = None,
-        title_length_range: Optional[Tuple[int, int]] = None,
+        body: str | None = None,
+        transcript: list[dict] | None = None,
+        existing_tags: list[str] | None = None,
+        base_tags: list[str] | None = None,
+        title_length_range: tuple[int, int] | None = None,
         **kwargs,
     ) -> SEOMetadata:
         """
@@ -321,7 +320,7 @@ class SEOManager:
 
         return event_id
 
-    def get_metadata(self, content_id: str) -> Optional[SEOMetadata]:
+    def get_metadata(self, content_id: str) -> SEOMetadata | None:
         """
         Retrieve latest metadata for content.
 
@@ -356,7 +355,7 @@ class SEOManager:
         # Deserialize metadata from event data
         return SEOMetadata.from_dict(latest_event.data)
 
-    def _generate_title(self, topic: str, keywords: List[str], **kwargs) -> str:
+    def _generate_title(self, topic: str, keywords: list[str], **kwargs) -> str:
         """
         Generate title from topic.
 
@@ -368,9 +367,9 @@ class SEOManager:
     def _generate_description(
         self,
         topic: str,
-        body: Optional[str],
-        transcript: Optional[List[Dict]],
-        keywords: List[str],
+        body: str | None,
+        transcript: list[dict] | None,
+        keywords: list[str],
         **kwargs,
     ) -> str:
         """
@@ -395,10 +394,10 @@ class SEOManager:
 
     def _generate_tags(
         self,
-        keywords: List[str],
-        existing_tags: Optional[List[str]],
-        base_tags: Optional[List[str]],
-    ) -> List[str]:
+        keywords: list[str],
+        existing_tags: list[str] | None,
+        base_tags: list[str] | None,
+    ) -> list[str]:
         """
         Generate tag list from keywords and existing tags.
 
@@ -434,7 +433,7 @@ class SEOManager:
 
         return unique_tags
 
-    def _get_platform_metadata(self, **kwargs) -> Dict:
+    def _get_platform_metadata(self, **kwargs) -> dict:
         """
         Extract platform-specific metadata from kwargs.
 

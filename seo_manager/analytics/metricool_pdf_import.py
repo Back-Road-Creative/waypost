@@ -19,10 +19,10 @@ import logging
 import re
 import subprocess
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Tuple
 
 import yaml
 
@@ -50,7 +50,7 @@ ACCOUNT_ROLES = (
 )
 
 
-def load_accounts(path) -> Dict[str, str]:
+def load_accounts(path) -> dict[str, str]:
     """Read an ``{account display name: role}`` mapping from a YAML/JSON file."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -58,7 +58,7 @@ def load_accounts(path) -> Dict[str, str]:
     return validate_accounts(data)
 
 
-def validate_accounts(accounts: Mapping[str, str]) -> Dict[str, str]:
+def validate_accounts(accounts: Mapping[str, str]) -> dict[str, str]:
     """Return ``accounts`` as a plain dict, rejecting an unknown role."""
     bad = sorted({str(r) for r in accounts.values() if r not in ACCOUNT_ROLES})
     if bad:
@@ -150,7 +150,7 @@ class ExtractedPost:
     published_date: str  # "2025-03-08"
     published_time: str  # "17:04" or ""
     caption_snippet: str  # First ~100 chars of caption
-    metrics: Dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict)
     row_index: int = 0
 
 
@@ -248,14 +248,14 @@ class MetricoolPDFParser:
     EXPECT_DATE = "expect_date"
     EXPECT_CONTENT = "expect_content"
 
-    def __init__(self, accounts: Optional[Mapping[str, str]] = None):
+    def __init__(self, accounts: Mapping[str, str] | None = None):
         # display name -> role (see ACCOUNT_ROLES); empty means nothing is
         # recognised, so no section is attributed to a network
-        self.accounts: Dict[str, str] = validate_accounts(accounts or {})
-        self.posts: List[ExtractedPost] = []
-        self.community: Dict[str, Dict] = {}
-        self.demographics: Dict[str, Dict] = {}
-        self.report_period: Dict[str, str] = {}
+        self.accounts: dict[str, str] = validate_accounts(accounts or {})
+        self.posts: list[ExtractedPost] = []
+        self.community: dict[str, dict] = {}
+        self.demographics: dict[str, dict] = {}
+        self.report_period: dict[str, str] = {}
 
     def parse(self, text: str) -> dict:
         """Parse the full pdftotext layout output."""
@@ -263,10 +263,10 @@ class MetricoolPDFParser:
 
         state = self.SCANNING
         current_platform = None
-        column_headers: List[Tuple[str, int]] = []
+        column_headers: list[tuple[str, int]] = []
         current_date = ""
         current_time = ""
-        caption_lines: List[str] = []
+        caption_lines: list[str] = []
         row_index = 0
 
         # Track platform section occurrences for disambiguation
@@ -465,7 +465,7 @@ class MetricoolPDFParser:
 
         return platform, column_headers, skip_to
 
-    def _parse_column_headers(self, header_line: str) -> List[Tuple[str, int]]:
+    def _parse_column_headers(self, header_line: str) -> list[tuple[str, int]]:
         """Parse column header line to get (name, char_position) pairs."""
         found = []
         used_positions = set()
@@ -499,7 +499,7 @@ class MetricoolPDFParser:
             if name not in ("Published", "Type", "Text")
         ]
 
-    def _has_metrics(self, line: str, column_headers: List[Tuple[str, int]]) -> bool:
+    def _has_metrics(self, line: str, column_headers: list[tuple[str, int]]) -> bool:
         """Check if a line has numeric values at expected column positions."""
         if not column_headers:
             return False
@@ -526,8 +526,8 @@ class MetricoolPDFParser:
         return metric_count >= 2
 
     def _extract_metrics(
-        self, line: str, column_headers: List[Tuple[str, int]]
-    ) -> Dict[str, object]:
+        self, line: str, column_headers: list[tuple[str, int]]
+    ) -> dict[str, object]:
         """Extract metric values from a line using column positions."""
         metrics = {}
 
@@ -550,7 +550,7 @@ class MetricoolPDFParser:
         return metrics
 
     def _extract_text_part(
-        self, line: str, column_headers: List[Tuple[str, int]]
+        self, line: str, column_headers: list[tuple[str, int]]
     ) -> str:
         """Extract the text/caption portion before the metrics."""
         if not column_headers:
@@ -577,7 +577,7 @@ class MetricoolPDFParser:
         """Check if a line marks a section boundary."""
         return any(stripped.startswith(b) for b in SECTION_BOUNDARIES)
 
-    def _parse_community_growth(self, lines: List[str], start_idx: int, platform: str):
+    def _parse_community_growth(self, lines: list[str], start_idx: int, platform: str):
         """Parse community growth section for followers/gained/lost.
 
         Real Metricool PDFs place values ABOVE their labels:
@@ -627,9 +627,7 @@ class MetricoolPDFParser:
         if any(v > 0 for v in data.values()):
             self.community[platform] = data
 
-    def _find_values_line_above(
-        self, section: List[str], label_idx: int
-    ) -> Optional[int]:
+    def _find_values_line_above(self, section: list[str], label_idx: int) -> int | None:
         """Find the nearest values line above a labels line, skipping % lines."""
         for k in range(label_idx - 1, -1, -1):
             stripped = section[k].strip()
@@ -642,9 +640,7 @@ class MetricoolPDFParser:
             break
         return None
 
-    def _find_values_line_below(
-        self, section: List[str], label_idx: int
-    ) -> Optional[int]:
+    def _find_values_line_below(self, section: list[str], label_idx: int) -> int | None:
         """Find the nearest values line below a labels line."""
         for k in range(label_idx + 1, len(section)):
             stripped = section[k].strip()
@@ -691,7 +687,7 @@ class MetricoolPDFParser:
 class ContentMatcher:
     """Match PDF posts to known content IDs using caption similarity."""
 
-    def __init__(self, known_content: Optional[Dict[str, Dict]] = None):
+    def __init__(self, known_content: dict[str, dict] | None = None):
         """
         Args:
             known_content: Dict of content_id -> {date, caption, platform}
@@ -704,7 +700,7 @@ class ContentMatcher:
         text = re.sub(r"[^\w\s]", "", text, flags=re.UNICODE)
         return text.lower().strip()
 
-    def match(self, post: ExtractedPost) -> Optional[str]:
+    def match(self, post: ExtractedPost) -> str | None:
         """Match a post to a known content_id.
 
         Pass 1: exact date + first 35 chars normalized caption.
@@ -739,9 +735,9 @@ class MetricoolPDFImporter:
 
     def __init__(
         self,
-        event_store: Optional[SEOEventStore] = None,
-        content_matcher: Optional[ContentMatcher] = None,
-        accounts: Optional[Mapping[str, str]] = None,
+        event_store: SEOEventStore | None = None,
+        content_matcher: ContentMatcher | None = None,
+        accounts: Mapping[str, str] | None = None,
     ):
         """``accounts`` maps account display names to roles (``ACCOUNT_ROLES``)."""
         self.accounts = validate_accounts(accounts or {})
@@ -821,7 +817,7 @@ class MetricoolPDFImporter:
                 event_type=EventType.PERFORMANCE_UPDATED,
                 site_id=f"{site_id}_{post.platform}",
                 content_id=content_id,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 data={
                     **post.metrics,
                     "source": "metricool_pdf",
@@ -840,7 +836,7 @@ class MetricoolPDFImporter:
                 event_type=EventType.COMMUNITY_UPDATED,
                 site_id=f"{site_id}_{platform}",
                 content_id=f"community_{platform}",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 data={**data, "source": "metricool_pdf"},
             )
             self.event_store.append_event(event)
@@ -853,7 +849,7 @@ class MetricoolPDFImporter:
                 event_type=EventType.DEMOGRAPHICS_UPDATED,
                 site_id=f"{site_id}_{platform}",
                 content_id=f"demographics_{platform}",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 data={**data, "source": "metricool_pdf"},
             )
             self.event_store.append_event(event)

@@ -10,11 +10,11 @@ decision row's ``evidence["dow"]``, else the ``brand.yaml`` ``dow`` as the seed)
 from __future__ import annotations
 
 import statistics
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
-
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from seo_manager.analytics import cadence_decisions
@@ -105,7 +105,7 @@ def lf_weekday_medians(
         posted = parse_ts(rec.posted_at)
         if posted > cutoff:
             continue
-        local = posted.replace(tzinfo=timezone.utc).astimezone(tz)
+        local = posted.replace(tzinfo=UTC).astimezone(tz)
         by_day.setdefault(local.weekday(), []).append(float(rec.day7_views))
     return {d: float(statistics.median(v)) for d, v in by_day.items()}
 

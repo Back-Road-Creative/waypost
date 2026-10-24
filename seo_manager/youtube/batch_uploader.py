@@ -14,9 +14,10 @@ Features:
 - Comprehensive result tracking
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional
+from typing import Any
 
 from ..core.metadata import SEOMetadata
 from .uploader import YouTubeUploader
@@ -45,9 +46,9 @@ class VideoConfig:
     """
 
     video_path: str
-    metadata: Optional[SEOMetadata]
+    metadata: SEOMetadata | None
     privacy: str = "private"
-    thumbnail_path: Optional[str] = None
+    thumbnail_path: str | None = None
     final_text_review: Any = None
     final_text_context: Mapping[str, Any] = field(default_factory=dict)
 
@@ -63,7 +64,7 @@ class BatchUploadConfig:
         dry_run: Validate without actually uploading
     """
 
-    videos: List[VideoConfig]
+    videos: list[VideoConfig]
     continue_on_error: bool = True
     dry_run: bool = False
 
@@ -84,10 +85,10 @@ class VideoUploadResult:
 
     video_path: str
     success: bool
-    video_id: Optional[str] = None
-    video_url: Optional[str] = None
+    video_id: str | None = None
+    video_url: str | None = None
     quota_used: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -108,8 +109,8 @@ class BatchUploadResult:
     successful: int
     failed: int
     quota_used: int
-    results: List[VideoUploadResult] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    results: list[VideoUploadResult] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
     def is_complete_success(self) -> bool:
         """
@@ -257,7 +258,7 @@ class BatchUploader:
                 f"Try uploading fewer videos."
             )
 
-    def validate_all_metadata(self, config: BatchUploadConfig) -> List[str]:
+    def validate_all_metadata(self, config: BatchUploadConfig) -> list[str]:
         """
         Validate metadata for all videos before uploading.
 
@@ -306,7 +307,7 @@ class BatchUploader:
     def upload_batch(
         self,
         config: BatchUploadConfig,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> BatchUploadResult:
         """
         Upload multiple videos in batch.

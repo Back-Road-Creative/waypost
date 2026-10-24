@@ -6,8 +6,6 @@ This is a STANDALONE implementation that does NOT depend on or
 interfere with any existing YouTube integration.
 """
 
-from typing import List
-
 from ..core.metadata import Platform
 from .base import BasePlatformAdapter
 
@@ -54,7 +52,7 @@ class YouTubeAdapter(BasePlatformAdapter):
         """
         return 15
 
-    def format_tags(self, tags: List[str]) -> str:
+    def format_tags(self, tags: list[str]) -> str:
         """
         Format tags for YouTube.
 
