@@ -31,13 +31,14 @@ YT_KWARGS = dict(
     episode_number=12,
 )
 
-# Titles captured from the pre-change code path. If one of these moves, the
+# Titles captured from the pre-change code path (the show-name acronym keeps
+# its capitals now that title casing is per word). If one of these moves, the
 # "optional, defaults to today's behaviour" promise has been broken.
 GOLDEN_CASES = [
     (
         YouTubeAdapter,
         YT_KWARGS,
-        "Driving The North Cascades Highway In Early Autumn Light | Ors #12",
+        "Driving The North Cascades Highway In Early Autumn Light | ORS #12",
     ),
     (
         YouTubeAdapter,
