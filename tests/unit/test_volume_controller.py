@@ -321,7 +321,7 @@ def test_property_never_leaves_bounds_one_knob_one_step():
         assert len(out) == len(states)
         moved = [d for d in out if d.action in MOVES]
         assert len(moved) <= 1
-        for s, d in zip(states, out):
+        for s, d in zip(states, out, strict=True):
             assert (d.knob, d.region) == (s.knob, s.region)
             assert d.prev == s.value
             assert abs(d.value - d.prev) <= 1
@@ -329,7 +329,7 @@ def test_property_never_leaves_bounds_one_knob_one_step():
                 assert d.value == d.prev
             assert d.floor <= d.value <= d.ceiling
             kinds.add(d.action)
-        states = [apply_decision(s, d) for s, d in zip(states, out)]
+        states = [apply_decision(s, d) for s, d in zip(states, out, strict=True)]
         moves += len(moved)
         shorts_v = states[0].value
         lf_total = states[1].value + states[2].value

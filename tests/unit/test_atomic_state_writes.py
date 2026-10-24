@@ -10,7 +10,7 @@ to a sibling temporary file and moved over the old one in a single step.
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -174,7 +174,7 @@ class TestCorruptQuotaFile:
         project = tmp_path / "p"
         project.mkdir()
         bad = {
-            "last_reset": datetime.now(timezone.utc).isoformat(),
+            "last_reset": datetime.now(UTC).isoformat(),
             "operations": [{"x": 1}],
         }
         (project / "quota_usage.json").write_text(json.dumps(bad))

@@ -16,6 +16,7 @@ Google API libs are mocked so the suite runs without google-api-python-client.
 
 import json
 import sys
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -223,9 +224,7 @@ class TestAnalyticsReportWindow:
         from seo_manager.analytics.youtube_sync import analytics_report_window
 
         # 02:00 UTC on 2030-01-02 is still 2030-01-01 in Los Angeles.
-        start, end = analytics_report_window(
-            now=datetime(2030, 1, 2, 2, 0, tzinfo=timezone.utc)
-        )
+        start, end = analytics_report_window(now=datetime(2030, 1, 2, 2, 0, tzinfo=UTC))
         assert start == "2005-01-01"
         assert end == "2030-01-01"
 
@@ -236,7 +235,7 @@ class TestAnalyticsReportWindow:
         # The autouse fixture drops the module from sys.modules, so patch the
         # copy a fresh import resolves to, not the package attribute.
         youtube_sync = importlib.import_module("seo_manager.analytics.youtube_sync")
-        fixed = datetime(2030, 1, 2, 2, 0, tzinfo=timezone.utc)
+        fixed = datetime(2030, 1, 2, 2, 0, tzinfo=UTC)
 
         class _FrozenDatetime(datetime):
             @classmethod

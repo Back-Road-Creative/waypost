@@ -12,6 +12,9 @@ tagged is listed under Unreleased.
 
 ### Changed
 
+- Supported Python is 3.12 and later: `requires-python`, the classifiers, the mypy
+  `python_version` and the ruff `target-version` now say what CI tests (it ran 3.12
+  only; the old `>=3.8` was false)
 - README is titled Waypost and the final-text review description moved to its own
   document, `docs/final-text-review.md` (#27)
 - README links the four docs that were missing from its Documentation index (#24)
