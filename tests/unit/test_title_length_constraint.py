@@ -46,11 +46,6 @@ GOLDEN_CASES = [
         "Sunset Run: Overview",
     ),
     (
-        BlogAdapter,
-        dict(content_type=ContentType.BLOG_POST, topic="Mount Si Trail Review"),
-        "Mount Si Trail Review: Overview",
-    ),
-    (
         TwitterAdapter,
         dict(
             content_type=ContentType.BLOG_POST,

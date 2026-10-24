@@ -340,13 +340,13 @@ manager = SEOManager(site_id="my_instagram", platform=InstagramAdapter())
 
 ```python
 # 1. Extend BaseSEOGenerator
-class BlogMetadataGenerator(BaseSEOGenerator):
+class InstagramMetadataGenerator(BaseSEOGenerator):
     def _generate_title(self, topic, keywords, **kwargs):
-        # Blog-specific logic
+        # Instagram-specific logic
         pass
 
 # 2. Register in manager._get_platform_generator()
-# 3. Auto-selected for blog platform
+# 3. Auto-selected for the Instagram platform
 ```
 
 ---
