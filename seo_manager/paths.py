@@ -1,8 +1,8 @@
 """Per-user application directories.
 
 The data home is where seo-manager keeps what it owns when the caller names no
-location: the Metricool PDF importer's default event store and the default
-state directory of ``YouTubeThemeSync``. It is resolved in this order:
+location: the Metricool PDF importer's default event store. It is resolved in
+this order:
 
 1. ``$SEO_MANAGER_DATA_HOME``
 2. ``$XDG_DATA_HOME/seo-manager``
