@@ -35,6 +35,7 @@ tagged is listed under Unreleased.
   quality tracker (#38)
 - Documentation mentions of the removed autofix, theme sync and thumbnail design
   system modules (#39)
+- Unused blog metadata generator and its tests
 
 ## [0.1.0] - 2026-10-21
 

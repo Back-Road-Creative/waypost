@@ -173,10 +173,6 @@ class SEOManager:
             from ..generation.youtube_generator import YouTubeMetadataGenerator
 
             return YouTubeMetadataGenerator(adapter=platform)
-        elif platform.platform_type == PlatformEnum.BLOG:
-            from ..generation.blog_generator import BlogMetadataGenerator
-
-            return BlogMetadataGenerator(adapter=platform)
         else:
             # Default to base generator
             return BaseSEOGenerator()

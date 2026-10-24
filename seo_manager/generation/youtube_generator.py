@@ -94,8 +94,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
             # a neutral ": Overview" descriptor so cold-start titles still meet
             # YouTube's length best practice. Do NOT pad with a fabricated
             # "Scenic Drive"/"POV Drive" claim — ": Overview" asserts
-            # nothing the caller didn't supply, matching the factual descriptor
-            # the blog generator uses for the same short-title case.
+            # nothing the caller didn't supply.
             title = topic
             if len(title) < 40 and len(title) + len(": Overview") <= 70:
                 title = f"{title}: Overview"
