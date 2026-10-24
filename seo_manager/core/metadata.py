@@ -14,8 +14,6 @@ class Platform(Enum):
     """Supported platforms for SEO optimization"""
 
     YOUTUBE = "youtube"
-    BLOG = "blog"
-    TWITTER = "twitter"
     INSTAGRAM = "instagram"
     TIKTOK = "tiktok"
     LINKEDIN = "linkedin"

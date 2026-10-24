@@ -8,7 +8,7 @@
 ## System Overview
 
 **SEO Manager** is a complete social media SEO management library providing:
-- Multi-platform SEO metadata generation (YouTube, Blog, Twitter)
+- Multi-platform SEO metadata generation (YouTube)
 - NLP-powered keyword extraction and optimization
 - Performance analytics tracking with YouTube API integration
 - Thumbnail generation with three A/B style variations
@@ -27,7 +27,7 @@
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │              PRESENTATION LAYER                      │  │
 │  │  - SEOManager (main API)                            │  │
-│  │  - Platform adapters (YouTube, Blog, Twitter)       │  │
+│  │  - Platform adapters (YouTube)                      │  │
 │  │  - Thumbnail generators (validated A/B testing)     │  │
 │  └────────────────┬─────────────────────────────────────┘  │
 │                   │                                         │
@@ -60,7 +60,7 @@ External Integrations:
 ### 1. Core Module (`seo_manager/core/`)
 
 **SEOMetadata** - Immutable dataclass
-- 6 platforms (YouTube, Blog, Twitter, Instagram, TikTok, LinkedIn)
+- 4 platforms (YouTube, Instagram, TikTok, LinkedIn)
 - 6 content types (Video, Short, Blog Post, Social Post, Podcast, Trail Guide)
 - Quality metrics (quality_score, keyword_density, readability_score)
 - Platform-specific metadata dicts
@@ -135,16 +135,6 @@ External Integrations:
 - Title: 70 chars (mobile optimized)
 - Description: 5,000 chars
 - Tags: 15 max, comma-separated, lowercase
-
-**BlogAdapter**
-- Title: 60 chars (Google SERP optimized)
-- Description: 160 chars (meta description)
-- Tags: 10 max, slugified for URLs
-
-**TwitterAdapter**
-- Description: 280 chars
-- Tags: 3 max, hashtag formatted
-- Character limit enforcement
 
 ---
 
@@ -459,8 +449,7 @@ summary = manager.analytics.get_summary()
 - LinkedIn (15-30 min to add)
 
 ### External Integrations
-- Google Analytics API (blog performance)
-- Twitter API (tweet analytics)
+- Google Analytics API
 - Third-party SEO tools (SEMrush, Ahrefs)
 
 ---

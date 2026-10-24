@@ -2,11 +2,11 @@
 
 **Unified Social Media SEO Management System**
 
-A Python library for generating, validating, tracking, and auto-optimizing SEO metadata (titles, descriptions, tags) across multiple platforms (YouTube, blogs, Twitter, etc.).
+A Python library for generating, validating, tracking, and auto-optimizing SEO metadata (titles, descriptions, tags) across multiple platforms (YouTube today; other platforms are planned).
 
 ## Features
 
-- 🎯 **Multi-Platform Support**: YouTube, blogs, Twitter (Instagram, TikTok and LinkedIn are planned)
+- 🎯 **Multi-Platform Support**: YouTube (Instagram, TikTok and LinkedIn are planned)
 - 🔍 **Smart Keyword Extraction**: deterministic, offline TF-based keyword analysis
 - ✅ **SEO Validation**: Platform-specific rules and best practices
 - ✅ **Upload gate**: `YouTubeUploader.upload_video` runs `PlatformValidator.validate` on the exact `videos.insert` snippet it is about to send (dry runs included), against YouTube's API limits (title 100, description 5000), and raises `ValueError` before any API call if it fails
@@ -107,28 +107,6 @@ manager = SEOManager(
 # Optimizations: 70-char titles, 5000-char descriptions, 15 tags
 ```
 
-### Blog/Hugo
-```python
-from seo_manager.platforms import BlogAdapter
-
-manager = SEOManager(
-    site_id="my_blog",
-    platform=BlogAdapter()
-)
-# Optimizations: 60-char titles, 160-char meta descriptions, 10 tags
-```
-
-### Twitter/X
-```python
-from seo_manager.platforms import TwitterAdapter
-
-manager = SEOManager(
-    site_id="my_twitter",
-    platform=TwitterAdapter()
-)
-# Optimizations: 280-char limit, hashtag formatting, 3 tags max
-```
-
 ## Configuration
 
 `SEOManager` takes `site_id`, `platform`, `storage_path` and `config` directly;
@@ -146,7 +124,7 @@ seo_manager/
 ├── storage/           # Event store, metadata persistence
 ├── analytics/         # Performance tracking and reporting
 ├── validation/        # SEO validation rules
-└── platforms/         # Platform adapters (YouTube, Blog, Twitter, etc.)
+└── platforms/         # Platform adapters (YouTube)
 ```
 
 ## Key Concepts
@@ -156,7 +134,7 @@ Every operation is scoped to a `site_id` to prevent data cross-contamination:
 ```python
 # These are completely isolated
 youtube_manager = SEOManager(site_id="my_youtube", ...)
-blog_manager = SEOManager(site_id="my_blog", ...)
+other_manager = SEOManager(site_id="my_other_channel", ...)
 ```
 
 ### Event Sourcing
@@ -349,24 +327,6 @@ metadata = manager.generate(
     transcript=episode_transcript,
     episode_number=42,
     citations=references
-)
-```
-
-### Hiking blog
-```python
-from seo_manager import SEOManager
-from seo_manager.platforms import BlogAdapter
-
-manager = SEOManager(
-    site_id="my_hiking_blog",
-    platform=BlogAdapter()
-)
-
-metadata = manager.generate(
-    content_type=ContentType.BLOG_POST,
-    topic="Ridge Trail Review",
-    body=blog_content,
-    existing_tags=["hiking", "trails"]
 )
 ```
 

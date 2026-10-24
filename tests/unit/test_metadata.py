@@ -53,7 +53,7 @@ class TestSEOMetadata:
         metadata = SEOMetadata(
             site_id="test_site",
             content_id="test_001",
-            platform=Platform.BLOG,
+            platform=Platform.LINKEDIN,
             content_type=ContentType.BLOG_POST,
             title="Test Title",
             description="Test description",
@@ -171,7 +171,7 @@ class TestSEOMetadata:
         original = SEOMetadata(
             site_id="test_site",
             content_id="test_001",
-            platform=Platform.BLOG,
+            platform=Platform.LINKEDIN,
             content_type=ContentType.BLOG_POST,
             title="Test Title",
             description="Test description",
@@ -227,8 +227,6 @@ class TestSEOMetadata:
     def test_platform_enum_values(self):
         """Test Platform enum has expected values"""
         assert Platform.YOUTUBE.value == "youtube"
-        assert Platform.BLOG.value == "blog"
-        assert Platform.TWITTER.value == "twitter"
         assert Platform.INSTAGRAM.value == "instagram"
         assert Platform.TIKTOK.value == "tiktok"
         assert Platform.LINKEDIN.value == "linkedin"
@@ -266,7 +264,7 @@ class TestSEOMetadata:
         blog_meta = SEOMetadata(
             site_id="test_site",
             content_id="post_001",
-            platform=Platform.BLOG,
+            platform=Platform.LINKEDIN,
             content_type=ContentType.BLOG_POST,
             title="Test",
             description="Test",
@@ -303,7 +301,7 @@ class TestSEOMetadata:
         metadata = SEOMetadata(
             site_id="test_site",
             content_id="test_001",
-            platform=Platform.BLOG,
+            platform=Platform.LINKEDIN,
             content_type=ContentType.BLOG_POST,
             title="Test Title",
             description="Test description",

@@ -13,7 +13,6 @@ Tests cover:
 import pytest
 
 from seo_manager.core.metadata import ContentType, Platform, SEOMetadata
-from seo_manager.platforms.blog import BlogAdapter
 from seo_manager.platforms.youtube import YouTubeAdapter
 from seo_manager.validation.validators import PlatformValidator, ValidationResult
 
@@ -153,26 +152,6 @@ class TestPlatformValidator:
         assert result.is_valid is False
         assert any("tag" in err.lower() and "15" in err for err in result.errors)
 
-    def test_validate_blog_title_limit(self):
-        """Test blog title limit (60 chars for SERP)"""
-        adapter = BlogAdapter()
-        validator = PlatformValidator(adapter)
-
-        metadata = SEOMetadata(
-            site_id="test",
-            content_id="test_001",
-            platform=Platform.BLOG,
-            content_type=ContentType.BLOG_POST,
-            title="A" * 65,  # Exceeds 60 char limit
-            description="Test",
-            tags=["test"],
-        )
-
-        result = validator.validate(metadata)
-
-        assert result.is_valid is False
-        assert any("60" in err for err in result.errors)
-
     def test_validate_multiple_errors(self):
         """Test detection of multiple validation errors"""
         adapter = YouTubeAdapter()
@@ -196,14 +175,14 @@ class TestPlatformValidator:
 
     def test_warnings_vs_errors(self):
         """Test that warnings don't invalidate metadata"""
-        adapter = BlogAdapter()
+        adapter = YouTubeAdapter()
         validator = PlatformValidator(adapter)
 
         metadata = SEOMetadata(
             site_id="test",
             content_id="test_001",
-            platform=Platform.BLOG,
-            content_type=ContentType.BLOG_POST,
+            platform=Platform.YOUTUBE,
+            content_type=ContentType.VIDEO,
             title="Short",  # Valid but suboptimal (< 50 chars)
             description="Also short",  # Valid but suboptimal
             tags=["test"],  # Valid but few tags

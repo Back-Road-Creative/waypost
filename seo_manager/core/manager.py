@@ -136,7 +136,7 @@ class SEOManager:
 
         Args:
             site_id: Unique identifier for this site/channel
-            platform: Platform adapter (YouTubeAdapter, BlogAdapter, etc.)
+            platform: Platform adapter (YouTubeAdapter)
             storage_path: Where to store SEO data (defaults to ./data/seo)
             config: Optional configuration overrides
         """
@@ -454,25 +454,5 @@ class SEOManager:
                 youtube_meta["visibility"] = kwargs["visibility"]
             if youtube_meta:
                 result["youtube_metadata"] = youtube_meta
-
-        # Blog-specific
-        elif self.platform.platform_type == Platform.BLOG:
-            blog_meta = {}
-            if "categories" in kwargs:
-                blog_meta["categories"] = kwargs["categories"]
-            if "series" in kwargs:
-                blog_meta["series"] = kwargs["series"]
-            if blog_meta:
-                result["blog_metadata"] = blog_meta
-
-        # Twitter-specific
-        elif self.platform.platform_type == Platform.TWITTER:
-            social_meta = {}
-            if "cta" in kwargs:
-                social_meta["cta"] = kwargs["cta"]
-            if "mention" in kwargs:
-                social_meta["mention"] = kwargs["mention"]
-            if social_meta:
-                result["social_metadata"] = social_meta
 
         return result

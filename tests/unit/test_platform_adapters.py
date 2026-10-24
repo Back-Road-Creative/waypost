@@ -4,17 +4,13 @@ Unit tests for Platform Adapters.
 Tests cover:
 - BasePlatformAdapter interface
 - YouTubeAdapter constraints and formatting
-- BlogAdapter constraints and formatting
-- TwitterAdapter constraints and formatting
-- Tag formatting (comma-separated vs hashtags vs slugs)
+- Tag formatting (comma-separated)
 """
 
 import pytest
 
 from seo_manager.core.metadata import Platform
 from seo_manager.platforms.base import BasePlatformAdapter
-from seo_manager.platforms.blog import BlogAdapter
-from seo_manager.platforms.twitter import TwitterAdapter
 from seo_manager.platforms.youtube import YouTubeAdapter
 
 
@@ -82,101 +78,12 @@ class TestYouTubeAdapter:
         assert adapter.validate_tags(invalid_tags) is False
 
 
-class TestBlogAdapter:
-    """Test Blog platform adapter"""
-
-    @pytest.fixture
-    def adapter(self):
-        return BlogAdapter()
-
-    def test_platform_type(self, adapter):
-        """Test platform type is BLOG"""
-        assert adapter.platform_type == Platform.BLOG
-
-    def test_title_limit(self, adapter):
-        """Test blog title limit (SERP optimized)"""
-        limit = adapter.get_title_limit()
-        # SEO best practice: 50-60 chars for Google SERP
-        assert limit == 60
-
-    def test_description_limit(self, adapter):
-        """Test blog meta description limit"""
-        limit = adapter.get_description_limit()
-        # Meta description: 150-160 chars
-        assert limit == 160
-
-    def test_tag_limit(self, adapter):
-        """Test blog tag limit"""
-        limit = adapter.get_tag_limit()
-        # 5-10 tags is best practice
-        assert limit == 10
-
-    def test_format_tags_slugified(self, adapter):
-        """Test blog tags are slugified (lowercase, hyphenated)"""
-        tags = ["Machine Learning", "AI Technology", "Python 3.11"]
-
-        formatted = adapter.format_tags(tags)
-
-        assert isinstance(formatted, list)
-        assert "machine-learning" in formatted
-        assert "ai-technology" in formatted
-        assert "python-3-11" in formatted or "python-311" in formatted
-
-    def test_slugify_method(self, adapter):
-        """Test slugification utility"""
-        assert adapter._slugify("Machine Learning") == "machine-learning"
-        assert adapter._slugify("AI & ML") == "ai-ml"
-        assert adapter._slugify("Python 3.11") == "python-311"
-        assert adapter._slugify("  Extra  Spaces  ") == "extra-spaces"
-
-
-class TestTwitterAdapter:
-    """Test Twitter/X platform adapter"""
-
-    @pytest.fixture
-    def adapter(self):
-        return TwitterAdapter()
-
-    def test_platform_type(self, adapter):
-        """Test platform type is TWITTER"""
-        assert adapter.platform_type == Platform.TWITTER
-
-    def test_title_limit(self, adapter):
-        """Test Twitter title limit (for thread first tweet)"""
-        limit = adapter.get_title_limit()
-        # Leave room for link preview
-        assert limit == 50
-
-    def test_description_limit(self, adapter):
-        """Test Twitter character limit"""
-        limit = adapter.get_description_limit()
-        # Twitter has 280 char limit
-        assert limit == 280
-
-    def test_tag_limit(self, adapter):
-        """Test Twitter hashtag limit"""
-        limit = adapter.get_tag_limit()
-        # Best practice: 1-2 hashtags, max 3
-        assert limit == 3
-
-    def test_format_tags_hashtags(self, adapter):
-        """Test Twitter tags are formatted as hashtags"""
-        tags = ["ai", "machine learning", "python"]
-
-        formatted = adapter.format_tags(tags)
-
-        # Should be space-separated hashtags
-        assert formatted == "#ai #machinelearning #python"
-        # No spaces in hashtags
-        assert "#machine learning" not in formatted
-
-
 class TestBasePlatformAdapter:
     """Test base adapter interface"""
 
     def test_all_adapters_implement_interface(self):
         """Test that all adapters properly implement the base interface"""
-        adapters = [YouTubeAdapter(), BlogAdapter(), TwitterAdapter()]
+        adapters = [YouTubeAdapter()]
 
         for adapter in adapters:
             # All required methods should exist

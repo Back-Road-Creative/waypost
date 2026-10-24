@@ -39,6 +39,7 @@ tagged is listed under Unreleased.
 - Documentation mentions of the removed autofix, theme sync and thumbnail design
   system modules (#39)
 - Unused blog metadata generator and its tests
+- Unused blog and Twitter platform adapters and their `Platform` enum members
 
 ## [0.1.0] - 2026-10-21
 
