@@ -210,6 +210,12 @@ the option.
 `videos.yaml` (`id`, `title`, `date`); views/day = views / days between publish
 and the last sync.
 
+A missing or unreadable file, a ledger line that is not valid JSON, a
+`videos.yaml` without a `videos` list or with an entry lacking `id`, `title` or
+`date` makes `report` print one line naming the cause and exit 2. A join that
+matches nothing still exits 0, but says why (no videos, no events, no video id
+in common, or no views measurement) in the report and on stderr.
+
 `python -m seo_manager.cli schedule …` books long-form slots (see
 [docs/scheduling.md](docs/scheduling.md)). Its settings, each a flag or an
 environment variable:
