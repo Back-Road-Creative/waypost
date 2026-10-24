@@ -17,9 +17,7 @@ CURRENT = {
     "drive-templates": DRIVE_TEMPLATES_VERSION,
     "title-policy": TitlePolicy().version,
 }
-VERSION_NAME = re.compile(
-    r"\b(" + "|".join(re.escape(k) for k in CURRENT) + r")-\d+\b"
-)
+VERSION_NAME = re.compile(r"\b(" + "|".join(re.escape(k) for k in CURRENT) + r")-\d+\b")
 
 
 def _stale(path):
@@ -52,7 +50,8 @@ def test_readme_title_is_waypost_and_indexes_the_review_doc():
 
 def test_readme_final_text_bullet_is_short():
     bullet = next(
-        line for line in README.read_text(encoding="utf-8").splitlines()
+        line
+        for line in README.read_text(encoding="utf-8").splitlines()
         if line.startswith("- ") and "Final-text review" in line
     )
     assert len(bullet) < 600
