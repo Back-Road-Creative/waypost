@@ -93,7 +93,6 @@ class TestQuotaManager:
         with pytest.raises(QuotaExceededError):
             manager.track_operation("excessive_op", cost=600, enforce=True)
 
-    @pytest.mark.xfail(reason="TDD: requires live cross-instance state synchronization")
     def test_multi_brand_isolation(self, tmp_path):
         """Test quota isolation between different brands/channels"""
         from seo_manager.quota.manager import QuotaManager
@@ -141,9 +140,6 @@ class TestQuotaManager:
         assert usage["total_used"] == 0
         assert usage["remaining"] == 10000
 
-    @pytest.mark.xfail(
-        reason="TDD: get_warnings uses elif, returns only highest severity"
-    )
     def test_quota_warning_thresholds(self, tmp_path):
         """Test warning at 80% and 90% quota usage"""
         from seo_manager.quota.manager import QuotaManager
@@ -254,7 +250,6 @@ class TestQuotaManager:
         # Project B has independent quota
         assert project_b.get_usage()["total_used"] == 0
 
-    @pytest.mark.xfail(reason="TDD: requires live cross-instance state synchronization")
     def test_prevent_quota_exhaustion_loophole(self):
         """Test: Cannot bypass quota limits through multiple managers"""
         from seo_manager.quota.manager import QuotaManager
@@ -284,6 +279,38 @@ class TestQuotaManager:
         import shutil
 
         shutil.rmtree(temp_dir)
+
+    def test_two_instances_do_not_overwrite_each_other(self, tmp_path):
+        """Interleaved writes from two managers must both be kept."""
+        from seo_manager.quota.manager import QuotaManager
+
+        first = QuotaManager(project_id="shared", storage_path=tmp_path)
+        second = QuotaManager(project_id="shared", storage_path=tmp_path)
+
+        first.track_operation("upload", cost=1600)
+        second.track_operation("search", cost=100)
+        first.track_operation("thumbnail", cost=50)
+
+        reloaded = QuotaManager(project_id="shared", storage_path=tmp_path)
+        assert reloaded.get_usage()["total_used"] == 1750
+        assert [op.operation for op in reloaded.operations] == [
+            "upload",
+            "search",
+            "thumbnail",
+        ]
+
+    def test_enforce_uses_usage_written_by_another_instance(self, tmp_path):
+        """enforce=True must see quota another manager already spent."""
+        from seo_manager.quota.manager import QuotaExceededError, QuotaManager
+
+        first = QuotaManager(project_id="shared", storage_path=tmp_path)
+        second = QuotaManager(project_id="shared", storage_path=tmp_path)
+
+        first.track_operation("bulk", cost=9000)
+
+        with pytest.raises(QuotaExceededError):
+            second.track_operation("upload", cost=1600, enforce=True)
+        assert QuotaManager.get_project_usage("shared", storage_path=tmp_path) == 9000
 
     def test_concurrent_access_safety(self):
         """Test quota tracking is thread-safe"""
@@ -360,9 +387,6 @@ class TestQuotaLimitsAndSafety:
         can_upload = manager.can_safely_perform("video_upload")
         assert can_upload is False
 
-    @pytest.mark.xfail(
-        reason="TDD: 9500+200=9700 is within 10000 limit, check_quota returns True"
-    )
     def test_cannot_batch_fetch_if_quota_low(self, tmp_path):
         """Test batch operations blocked when quota insufficient"""
         from seo_manager.quota.manager import QuotaManager
@@ -374,9 +398,12 @@ class TestQuotaLimitsAndSafety:
         # Use quota
         manager.track_operation("uploads", cost=9500)
 
-        # Batch fetch of 50 videos needs ~200 units
-        can_fetch = manager.check_quota(cost=200)
+        # A batch needing 600 units would take 9500 to 10100, over the limit
+        can_fetch = manager.check_quota(cost=600)
         assert can_fetch is False
+
+        # A smaller batch that still fits is allowed
+        assert manager.check_quota(cost=200) is True
 
     def test_quota_report_generation(self, tmp_path):
         """Test generating quota usage report"""

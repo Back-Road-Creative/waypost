@@ -186,29 +186,31 @@ class QuotaManager:
         Raises:
             QuotaExceededError: If enforce=True and quota exceeded
         """
-        # Check if operation would exceed quota
-        if self.total_used + cost > self.daily_limit and enforce:
-            raise QuotaExceededError(
-                f"Operation would exceed daily quota: "
-                f"{self.total_used + cost} > {self.daily_limit} units. "
-                f"Current usage: {self.total_used}/{self.daily_limit} "
-                f"({(self.total_used / self.daily_limit) * 100:.1f}%)"
+        # Read-modify-write under one lock so another manager's writes since
+        # our last load are kept instead of overwritten.
+        with _group_writable_filelock(self.lock_file):
+            self._load_state_inner()
+
+            if self.total_used + cost > self.daily_limit and enforce:
+                raise QuotaExceededError(
+                    f"Operation would exceed daily quota: "
+                    f"{self.total_used + cost} > {self.daily_limit} units. "
+                    f"Current usage: {self.total_used}/{self.daily_limit} "
+                    f"({(self.total_used / self.daily_limit) * 100:.1f}%)"
+                )
+
+            op = QuotaOperation(
+                operation=operation,
+                cost=cost,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                brand_id=self.brand_id,
+                metadata=metadata,
             )
 
-        # Record operation
-        op = QuotaOperation(
-            operation=operation,
-            cost=cost,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            brand_id=self.brand_id,
-            metadata=metadata,
-        )
+            self.operations.append(op)
+            self.total_used += cost
 
-        self.operations.append(op)
-        self.total_used += cost
-
-        # Save state
-        self._save_state()
+            self._save_state_inner()
 
     def check_quota(self, cost: int) -> bool:
         """
@@ -220,6 +222,7 @@ class QuotaManager:
         Returns:
             True if operation is safe, False if would exceed
         """
+        self._load_state()
         return (self.total_used + cost) <= self.daily_limit
 
     def can_safely_perform(self, operation_type: str) -> bool:
@@ -263,6 +266,7 @@ class QuotaManager:
         Returns:
             Dict with usage statistics
         """
+        self._load_state()
         return {
             "project_id": self.project_id,
             "total_used": self.total_used,
@@ -280,19 +284,20 @@ class QuotaManager:
         Returns:
             List of warning messages
         """
+        self._load_state()
         warnings = []
         percentage = (self.total_used / self.daily_limit) * 100
 
+        if percentage >= 80:
+            warnings.append(
+                f"⚠️  WARNING: {percentage:.1f}% quota used "
+                f"({self.total_used}/{self.daily_limit} units)"
+            )
         if percentage >= 90:
             warnings.append(
                 f"⚠️  CRITICAL: {percentage:.1f}% quota used "
                 f"({self.total_used}/{self.daily_limit} units). "
                 f"Only {self.daily_limit - self.total_used} units remaining!"
-            )
-        elif percentage >= 80:
-            warnings.append(
-                f"⚠️  WARNING: {percentage:.1f}% quota used "
-                f"({self.total_used}/{self.daily_limit} units)"
             )
 
         return warnings
@@ -307,6 +312,7 @@ class QuotaManager:
         Returns:
             List of operation dicts
         """
+        self._load_state()
         return [asdict(op) for op in self.operations[-limit:]]
 
     def generate_report(self) -> Dict:
