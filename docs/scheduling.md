@@ -128,6 +128,11 @@ Every slot decision lives here; callers only ask and execute.
   audit: no `ready_drives` entry, or one still `auditing` (a ready, claimed, complete or
   failed row is never returned, so a failed row is not retried on its own); `shortfall` is
   `ready_depth` minus audited drives waiting.
+- A row for footage with no GPS of its own may name a whole-day track, `day_gpx`, and
+  `camera_utc_offset_hours`, the hours the camera clock runs from UTC (US Eastern summer is
+  `-4`). The two are set together or not at all, because a track sliced on the wrong clock
+  lands hours off with no error; the offset is a number from -14 to 14. `backlog-next`
+  prints both (`""` and `null` when unset).
 - CLI adds `report [--now]`, `next --region R [--after]`, `backlog-next --manifest M --region R`
   (the next row to audit as JSON, or `{"row": null}`; an audit job reads it, then
   `register --status auditing`, then `set-status ready`) and `import-ledger <json>`: the

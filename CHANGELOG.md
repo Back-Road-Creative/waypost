@@ -10,6 +10,12 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- A drive backlog row may name a whole-day GPX track (`day_gpx`) and the camera clock's
+  offset from UTC (`camera_utc_offset_hours`), for footage with no GPS of its own; the two
+  are required together, and `backlog-next` prints both
+
 ### Changed
 
 - Supported Python is 3.12 and later: `requires-python`, the classifiers, the mypy

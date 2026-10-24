@@ -15,8 +15,12 @@ import yaml
 from seo_manager.core.profile import Cadence, canon_region
 from seo_manager.scheduling.store import ScheduleStore
 
-_FIELDS = {"project", "region", "sources", "ingest_mode", "lf_mode", "notes"}
-_REQUIRED = _FIELDS - {"notes"}
+_FIELDS = {
+    "project", "region", "sources", "ingest_mode", "lf_mode", "notes",
+    "day_gpx", "camera_utc_offset_hours",
+}  # fmt: skip
+_REQUIRED = _FIELDS - {"notes", "day_gpx", "camera_utc_offset_hours"}
+_MAX_UTC_OFFSET_H = 14
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,10 @@ class BacklogRow:
     ingest_mode: str
     lf_mode: str
     notes: str = ""
+    # A whole-day track for footage with no GPS of its own, and the hours the camera clock
+    # runs from UTC (US Eastern summer = -4); the drive slices the track per file with both.
+    day_gpx: str = ""
+    camera_utc_offset_hours: float | None = None
 
 
 def load(path: Path | str) -> list[BacklogRow]:
@@ -52,12 +60,34 @@ def load(path: Path | str) -> list[BacklogRow]:
                 r["ingest_mode"],
                 r["lf_mode"],
                 r.get("notes") or "",
+                *_day_gpx(r, where),
             )
         )
     names = [r.project for r in rows]
     if dupes := sorted({n for n in names if names.count(n) > 1}):
         raise ValueError(f"{path}: duplicate project(s) {dupes}")
     return rows
+
+
+def _day_gpx(r: dict, where: str) -> tuple[str, float | None]:
+    """``(day_gpx, camera_utc_offset_hours)``: both or neither, since a track sliced on the
+    wrong clock lands hours off without any error."""
+    gpx, off = str(r.get("day_gpx") or ""), r.get("camera_utc_offset_hours")
+    if bool(gpx) != (off is not None):
+        raise ValueError(
+            f"{where}: day_gpx and camera_utc_offset_hours must be set together"
+        )
+    if off is None:
+        return "", None
+    if isinstance(off, bool) or not isinstance(off, (int, float)):
+        raise ValueError(
+            f"{where}: camera_utc_offset_hours must be a number, got {off!r}"
+        )
+    if abs(off) > _MAX_UTC_OFFSET_H:
+        raise ValueError(
+            f"{where}: camera_utc_offset_hours must be between -14 and 14, got {off}"
+        )
+    return gpx, float(off)
 
 
 def next_row(
