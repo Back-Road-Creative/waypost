@@ -1228,8 +1228,8 @@ def build_daemon(
 
     A fresh YouTube sync needs two values: an OAuth token file, and a JSON
     ``video_id -> content_id`` mapping (the shape ``_load_video_mapping``
-    already reads, and the shape ``youtube_theme_sync`` already writes). Both
-    arrive as arguments -- there is no default path and no environment
+    reads; the caller supplies it). Both arrive as arguments -- there is no
+    default path and no environment
     fallback, because neither value is this code's to guess and a wrong guess
     would be a credential path that silently points at nothing.
 
