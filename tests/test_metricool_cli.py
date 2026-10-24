@@ -27,7 +27,9 @@ def test_usage_shows_required_flags_without_brackets(monkeypatch, capsys):
 
 def test_usage_shows_dump_text_as_an_alternative(monkeypatch, capsys):
     usage = " ".join(_usage(monkeypatch, capsys).split())
-    assert re.search(r"--dump-text\s*\|", usage) or re.search(r"\|\s*--dump-text", usage)
+    assert re.search(r"--dump-text\s*\|", usage) or re.search(
+        r"\|\s*--dump-text", usage
+    )
 
 
 def test_dump_text_needs_no_site_or_accounts(monkeypatch, capsys, tmp_path):
