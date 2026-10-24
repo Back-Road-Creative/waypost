@@ -15,7 +15,7 @@ import shutil
 import tempfile
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -414,7 +414,7 @@ def _make_event(content_id="video_0", site_id="examplebrand"):
         event_type=EventType.METADATA_GENERATED,
         site_id=site_id,
         content_id=content_id,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         data={"title": f"Test {content_id}"},
     )
 

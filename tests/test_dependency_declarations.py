@@ -15,9 +15,8 @@ have a package installed.
 
 import configparser
 import re
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,3 +97,25 @@ def test_google_api_distributions_are_declared():
         "google-auth-oauthlib",
     ):
         assert distribution in declared, f"{distribution} is not declared"
+
+
+def test_python_floor_is_3_12_everywhere_pyproject_states_it():
+    """CI tests Python 3.12 only, so no lower version may be claimed.
+
+    `>=3.8` was false (the code uses `tuple[...]` annotations and zoneinfo)
+    and CI never ran anything but 3.12. The floor, the classifiers and the
+    two tool targets are one decision and must move together.
+    """
+    cfg = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+    assert cfg["project"]["requires-python"] == ">=3.12"
+    versions = [
+        c
+        for c in cfg["project"]["classifiers"]
+        if c.startswith("Programming Language :: Python")
+    ]
+    assert versions == [
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.12",
+    ]
+    assert cfg["tool"]["mypy"]["python_version"] == "3.12"
+    assert cfg["tool"]["ruff"]["target-version"] == "py312"

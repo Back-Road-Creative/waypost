@@ -67,8 +67,9 @@ class TestGetIntelDb:
     def test_returns_none_when_spec_is_none(self, tmp_path):
         """_get_intel_db returns None when spec_from_file_location returns None."""
         scripts = _write_intel_module(tmp_path / "scripts")
-        with patch.object(manager, "_INTEL_SCRIPTS_DIR", str(scripts)), patch(
-            "importlib.util.spec_from_file_location", return_value=None
+        with (
+            patch.object(manager, "_INTEL_SCRIPTS_DIR", str(scripts)),
+            patch("importlib.util.spec_from_file_location", return_value=None),
         ):
             result = _get_intel_db("/data/seo/test.db")
         assert result is None
@@ -78,8 +79,9 @@ class TestGetIntelDb:
         scripts = _write_intel_module(tmp_path / "scripts")
         mock_spec = MagicMock()
         mock_spec.loader = None
-        with patch.object(manager, "_INTEL_SCRIPTS_DIR", str(scripts)), patch(
-            "importlib.util.spec_from_file_location", return_value=mock_spec
+        with (
+            patch.object(manager, "_INTEL_SCRIPTS_DIR", str(scripts)),
+            patch("importlib.util.spec_from_file_location", return_value=mock_spec),
         ):
             result = _get_intel_db("/data/seo/test.db")
         assert result is None
@@ -135,8 +137,9 @@ class TestGetIntelDb:
 
     def test_ignores_cached_intel_db_module(self, tmp_path):
         """An intel_db cached in sys.modules must not stand in for a missing file."""
-        with patch.dict(sys.modules, {"intel_db": _decoy_module()}), patch.object(
-            manager, "_INTEL_SCRIPTS_DIR", str(tmp_path / "missing")
+        with (
+            patch.dict(sys.modules, {"intel_db": _decoy_module()}),
+            patch.object(manager, "_INTEL_SCRIPTS_DIR", str(tmp_path / "missing")),
         ):
             result = _get_intel_db("/data/seo/test.db")
         assert result is None
@@ -156,8 +159,9 @@ class TestGetIntelDb:
     def test_loads_configured_file_over_cached_module(self, tmp_path):
         """The configured intel_db.py wins over an intel_db cached in sys.modules."""
         scripts = _write_intel_module(tmp_path / "scripts")
-        with patch.dict(sys.modules, {"intel_db": _decoy_module()}), patch.object(
-            manager, "_INTEL_SCRIPTS_DIR", str(scripts)
+        with (
+            patch.dict(sys.modules, {"intel_db": _decoy_module()}),
+            patch.object(manager, "_INTEL_SCRIPTS_DIR", str(scripts)),
         ):
             result = _get_intel_db(str(tmp_path / "test.db"))
         assert result is not None

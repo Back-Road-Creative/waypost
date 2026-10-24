@@ -7,7 +7,7 @@ one template tag; ``sent_text`` returns the description and tags an upload
 must send, composed from the review itself.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from seo_manager.analytics.final_text_review import (
     RECORD_VERSION,
@@ -103,13 +103,13 @@ def reviewed(
     return review, context
 
 
-def sent_text(review) -> Tuple[str, List[str]]:
+def sent_text(review) -> tuple[str, list[str]]:
     """The ``(description, tags)`` an upload must send to match ``review``."""
     surfaces = review["surfaces"] if isinstance(review, dict) else review.surfaces
     return compose_description(surfaces), compose_tags(surfaces)
 
 
-def sent_fields(title: str) -> Dict[str, Any]:
+def sent_fields(title: str) -> dict[str, Any]:
     """``description`` and ``tags`` overrides matching ``reviewed(title)``."""
     description, tags = sent_text(reviewed(title)[0])
     return {"description": description, "tags": tags}
