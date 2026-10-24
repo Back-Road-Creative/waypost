@@ -27,6 +27,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from seo_manager.fsio import atomic_write_json
+
 from . import evidence_age
 from .evidence_age import EvidenceState
 
@@ -841,8 +843,7 @@ class ThemeRotator:
             "exploration_rate": self.exploration_rate,
         }
 
-        with open(state_file, "w") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(state_file, data)
 
 
 # Convenience function for pipeline integration
