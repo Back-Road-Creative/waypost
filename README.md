@@ -385,6 +385,12 @@ git push origin v0.1.0
 Consumers pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.1.0`)
 rather than a commit SHA.
 
+Every release also updates [CHANGELOG.md](CHANGELOG.md). In the same pull request
+that bumps the version, rename the Unreleased heading to the new version and the
+date of the tag, add a fresh empty Unreleased section above it, and update the
+link references at the bottom of the file. Entries come from merged pull request
+titles (`gh pr list --state merged`), one line each with its number.
+
 ## License
 
 The package declares the MIT license in `pyproject.toml`.
