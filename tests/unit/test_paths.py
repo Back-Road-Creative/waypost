@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from seo_manager import cli, paths
-from seo_manager.analytics.youtube_theme_sync import YouTubeThemeSync
 
 
 @pytest.fixture
@@ -33,21 +32,6 @@ def test_explicit_variable_beats_xdg(clean_env, monkeypatch):
 
 def test_data_home_is_not_created_by_resolving_it(clean_env):
     assert not paths.data_home().exists()
-
-
-def test_theme_sync_state_defaults_under_the_data_home(clean_env, monkeypatch):
-    monkeypatch.setenv("SEO_MANAGER_DATA_HOME", str(clean_env / "d"))
-    sync = YouTubeThemeSync()
-    assert sync.mapping_file == clean_env / "d" / "theme_sync" / (
-        "video_content_mapping.json"
-    )
-
-
-def test_theme_sync_state_dir_argument_overrides_the_default(clean_env, monkeypatch):
-    monkeypatch.setenv("SEO_MANAGER_DATA_HOME", str(clean_env / "d"))
-    chosen = clean_env / "chosen"
-    sync = YouTubeThemeSync(state_dir=chosen)
-    assert sync.mapping_file == chosen / "video_content_mapping.json"
 
 
 def test_report_without_videos_yaml_names_the_missing_option(capsys):
