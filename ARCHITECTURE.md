@@ -11,7 +11,7 @@
 - Multi-platform SEO metadata generation (YouTube, Blog, Twitter)
 - NLP-powered keyword extraction and optimization
 - Performance analytics tracking with YouTube API integration
-- Master Thumbnail Design System with A/B testing
+- Thumbnail generation with three A/B style variations
 - Event sourcing with complete audit trails
 - Site isolation for multi-site management
 
@@ -34,8 +34,7 @@
 │  ┌────────────────┴─────────────────────────────────────┐  │
 │  │           BUSINESS LOGIC LAYER                       │  │
 │  │  - SEO Generation (NLP, keyword extraction)         │  │
-│  │  - Validation (platform rules, design system)       │  │
-│  │  - Auto-Fix (confidence-based optimization)         │  │
+│  │  - Validation (platform rules)                      │  │
 │  │  - Analytics (tracking, aggregation, reporting)     │  │
 │  │  - YouTube Features (chapters, citations, hooks)    │  │
 │  └────────────────┬─────────────────────────────────────┘  │
@@ -200,19 +199,7 @@ learned ranges applied to the titles it generates.
 
 ---
 
-### 7. AutoFix Module (`seo_manager/autofix/`)
-
-**AutoFixEngine** - Confidence-based optimization
-- Title truncation (0.95 confidence - auto-apply)
-- Description truncation (0.95 confidence - auto-apply)
-- Tag limiting (0.90 confidence - auto-apply)
-- Duplicate tag removal (1.0 confidence - auto-apply)
-- Confidence levels: High (≥0.9 auto), Medium (0.6-0.89 flag), Low (<0.6 log)
-- Fix tracking in metadata
-
----
-
-### 8. YouTube Module (`seo_manager/youtube/`) 🆕
+### 7. YouTube Module (`seo_manager/youtube/`) 🆕
 
 **YouTubeThumbnailGenerator** - Thumbnail creation
 - 1280x720 YouTube standard
@@ -221,25 +208,6 @@ learned ranges applied to the titles it generates.
 - Logo placement with shadows
 - Mobile readability validation
 - Gradient backgrounds
-
-**ThumbnailDesignSystem** - Master design rules
-- Mode A: Immersion (scenic/POV)
-- Mode B: Authority (tutorials/tech)
-- Global constraints (safety zones, typography, margins)
-- A/B testing protocol (3 distinct variations)
-
-**ThumbnailValidator** - Design rule enforcement
-- Bottom-right dead zone validation
-- Margin checks (40px minimum)
-- Word count limits (5 max, 4 preferred)
-- Typography standards (font size, color, outline)
-- Mode-specific rules (Immersion vs Authority)
-- Visual distinctness validation
-
-**Variation Schema (Immersion Mode):**
-- **Variation A:** Hyper-saturated (120%), hard outline, bright sky
-- **Variation B:** Golden hour tint, soft shadow, moody atmosphere
-- **Variation C:** Dual-text hierarchy, gold subtitle (MANDATORY)
 
 ---
 
@@ -261,11 +229,9 @@ learned ranges applied to the titles it generates.
    ↓
 6. Validation
    ↓
-7. Auto-Fix (if needed)
+7. Event Store Persistence
    ↓
-8. Event Store Persistence
-   ↓
-9. Analytics Tracking
+8. Analytics Tracking
 ```
 
 ### YouTube Analytics Sync Flow
@@ -289,19 +255,13 @@ learned ranges applied to the titles it generates.
 ```
 1. Load Background Photo
    ↓
-2. Create Design Spec (auto-select mode)
+2. Generate Variation: minimal (subtle text at bottom)
    ↓
-3. Validate Spec (design rules)
+3. Generate Variation: bold (high-contrast text with border)
    ↓
-4. Generate Variation A (hyper-saturated)
+4. Generate Variation: immersive (very subtle text)
    ↓
-5. Generate Variation B (golden hour/moody)
-   ↓
-6. Generate Variation C (dual-text)
-   ↓
-7. Validate Distinctness (80% similarity threshold)
-   ↓
-8. Output Exactly 3 Files
+5. Output Exactly 3 Files (+ a Test & Compare manifest, uploaded by hand)
 ```
 
 ---
@@ -342,11 +302,10 @@ Encapsulate platform-specific logic:
 - Testable (mock adapters)
 - Maintainable (one file per platform)
 
-### 4. Validation & Auto-Fix
-Safety through confidence scoring:
-- High confidence (≥0.9): Auto-apply
-- Medium (0.6-0.89): Flag for review
-- Low (<0.6): Log only
+### 4. Validation
+Safety through refusal, not silent correction:
+- `PlatformValidator` separates errors from warnings
+- `YouTubeUploader.upload_video` validates the exact snippet it will send and raises before any API call if it fails
 
 ### 5. Non-Interfering Design
 Library approach, not framework:
@@ -388,19 +347,6 @@ class BlogMetadataGenerator(BaseSEOGenerator):
 
 # 2. Register in manager._get_platform_generator()
 # 3. Auto-selected for blog platform
-```
-
-### Adding New Thumbnail Modes
-
-```python
-# 1. Add to ThumbnailMode enum
-class ThumbnailMode(Enum):
-    IMMERSION = "immersion"
-    AUTHORITY = "authority"
-    PRODUCT = "product"  # New mode
-
-# 2. Add validation rules in ThumbnailValidator
-# 3. Create spec in ThumbnailDesignSystem
 ```
 
 ---
@@ -529,8 +475,7 @@ seo_manager/
 ├── platforms/         # Adapters
 ├── analytics/         # Tracker + YouTube sync
 ├── validation/        # SEO rules
-├── autofix/           # Auto-optimization
-└── youtube/           # Thumbnails + design system
+└── youtube/           # Thumbnails, uploads, video SEO
 ```
 
 ---
