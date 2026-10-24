@@ -1,11 +1,11 @@
 """Guards against packaging-declaration drift.
 
-The package is installed from pyproject.toml (`pip install ".[dev]"`), never
-from requirements.txt, so anything declared only in requirements.txt is absent
-from every `pip install .` environment.
+The package is installed from pyproject.toml (`pip install ".[dev]"`), so a
+dependency declared anywhere else is absent from every `pip install .`
+environment.
 
 That is how google-auth-oauthlib went missing: youtube_sync.py imported it,
-requirements.txt declared it, pyproject.toml did not, and a try/except
+a requirements file declared it, pyproject.toml did not, and a try/except
 ImportError turned the resulting absence into a printed warning nobody reads.
 
 These checks read the declaration files as text and never import the
@@ -13,6 +13,7 @@ distributions, so they cannot pass by accident on a machine that happens to
 have a package installed.
 """
 
+import configparser
 import re
 from pathlib import Path
 
@@ -40,26 +41,45 @@ def _declared():
     return {_requirement_name(spec) for spec in specs}
 
 
-def _requirements_txt():
-    lines = (PROJECT_ROOT / "requirements.txt").read_text().splitlines()
-    return {
-        _requirement_name(line)
-        for line in lines
-        if line.strip() and not line.lstrip().startswith("#")
-    }
+def test_pyproject_is_the_only_dependency_declaration():
+    """A second requirements file is installed by nothing and drifts.
 
-
-def test_pyproject_declares_everything_requirements_txt_does():
-    """requirements.txt is never installed here, so pyproject must cover it.
-
-    Without this, a dependency can be "declared" in a file no installer reads
-    and still be missing everywhere it matters.
+    pyproject.toml (plus the requirements.lock constraints) is what every
+    install path reads, including pip installs of this repo by git sha, so no
+    top-level requirements.txt may exist to disagree with it.
     """
-    missing = sorted(_requirements_txt() - _declared())
-    assert not missing, (
-        "declared in requirements.txt but not in pyproject.toml, so no CI run "
-        f"and no `pip install .` ever installs them: {missing}"
+    assert not (PROJECT_ROOT / "requirements.txt").exists(), (
+        "requirements.txt duplicates pyproject.toml and is read by no installer"
     )
+
+
+def test_pytest_is_configured_in_pytest_ini_only():
+    """pytest.ini shadows [tool.pytest.ini_options], so that table is dead."""
+    cfg = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+    assert "pytest" not in cfg.get("tool", {}), (
+        "[tool.pytest.ini_options] in pyproject.toml is shadowed by pytest.ini"
+    )
+
+
+def test_pytest_ini_declares_no_unused_markers():
+    """Declared markers that no test uses only hide misspelled ones."""
+    parser = configparser.ConfigParser()
+    parser.read(PROJECT_ROOT / "pytest.ini")
+    markers = parser.get("pytest", "markers", fallback="")
+    used = set()
+    for path in (PROJECT_ROOT / "tests").rglob("*.py"):
+        used.update(re.findall(r"pytest\.mark\.(\w+)", path.read_text()))
+    declared = set(re.findall(r"^\s*(\w+):", markers, re.M))
+    builtin = {
+        "parametrize",
+        "xfail",
+        "skip",
+        "skipif",
+        "usefixtures",
+        "filterwarnings",
+    }
+    unused = sorted(declared - used - builtin)
+    assert not unused, f"markers declared in pytest.ini but used by no test: {unused}"
 
 
 def test_google_api_distributions_are_declared():

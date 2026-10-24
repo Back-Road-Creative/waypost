@@ -36,7 +36,7 @@ dependencies = [
     # one as a collection ImportError.
     "google-api-python-client>=2.0",
     # The rest of the Google stack. Installs come from THIS file, so a
-    # package named only in a requirements file is installed nowhere.
+    # package declared anywhere else is installed nowhere.
     # youtube_sync.py imports `google_auth_oauthlib.flow` unconditionally, so
     # it must be declared here or the sync is dead in every `pip install .`
     # environment.
@@ -46,8 +46,8 @@ dependencies = [
     # which google.auth.transport.requests needs — only as a google-api-core
     # one; the [requests] extra makes both explicit instead of incidental.
     # google-auth-httplib2 is the transport googleapiclient uses for
-    # authorized calls. It too is transitive, but its >=0.4.0 floor
-    # applies to nothing while it is declared only in requirements.txt.
+    # authorized calls. It too is transitive; declaring it here makes its
+    # >=0.4.0 floor apply to every install.
     "google-auth[requests]>=2.0",
     "google-auth-httplib2>=0.4.0",
     "google-auth-oauthlib>=1.4.0",
@@ -113,15 +113,3 @@ known-first-party = ["seo_manager"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["S101", "F401", "E402"]
 "tests/**/*.py" = ["S101", "F401", "E402"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--tb=short",
-]
-# Dead: pytest.ini is the live config (shadows this table) and already
-# carries --cov=seo_manager + the .coveragerc floor.

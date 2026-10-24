@@ -72,6 +72,8 @@ jobs:
           "$RUNNER_TEMP/ci-tools/bin/ruff" check . --output-format=github
           "$RUNNER_TEMP/ci-tools/bin/ruff" format . --check
 
+      # mypy runs only on the files pyproject.toml does not exclude: ci/,
+      # tools/ and their tests. tests/ and seo_manager/ are excluded there.
       - name: Type check
         env:
           UV_OFFLINE: "1"
