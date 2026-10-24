@@ -18,6 +18,8 @@ REMOVED_MODULES = (
     "seo_manager.production.error_recovery",
     "seo_manager.production.structured_logger",
     "seo_manager.production.rate_limiter",
+    "seo_manager.production.health_check",
+    "seo_manager.production.issue_tracker",
 )
 
 
