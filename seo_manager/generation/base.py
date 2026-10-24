@@ -10,8 +10,7 @@ Provides core functionality for:
 
 import re
 from collections import Counter
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime
 
 from seo_manager.generation.stopwords import ENGLISH_STOPWORDS
 
@@ -58,8 +57,8 @@ class BaseSEOGenerator:
         pass
 
     def _extract_keywords(
-        self, topic: str, body: Optional[str], transcript: Optional[List[Dict]]
-    ) -> List[str]:
+        self, topic: str, body: str | None, transcript: list[dict] | None
+    ) -> list[str]:
         """
         Extract keywords by term frequency.
 
@@ -129,7 +128,7 @@ class BaseSEOGenerator:
         self,
         title: str,
         limit: int = 70,
-        target_range: Optional[Tuple[int, int]] = None,
+        target_range: tuple[int, int] | None = None,
     ) -> str:
         """
         Optimize title for SEO.
@@ -227,7 +226,7 @@ class BaseSEOGenerator:
         # Fallback: hard truncation
         return description[: limit - 3] + "..."
 
-    def _optimize_tags(self, tags: List[str], limit: int = 10) -> List[str]:
+    def _optimize_tags(self, tags: list[str], limit: int = 10) -> list[str]:
         """
         Optimize tags for SEO.
 
@@ -255,7 +254,7 @@ class BaseSEOGenerator:
         return unique_tags[:limit]
 
     def _calculate_seo_structure_score(
-        self, title: str, description: str, tags: List[str]
+        self, title: str, description: str, tags: list[str]
     ) -> float:
         """
         Score the SEO *structure* of the metadata (0.0-1.0).
@@ -312,7 +311,7 @@ class BaseSEOGenerator:
     # kept so existing callers/`metadata.quality_score` continue to resolve.
     _calculate_quality_score = _calculate_seo_structure_score
 
-    def _calculate_keyword_density(self, text: str, keywords: List[str]) -> float:
+    def _calculate_keyword_density(self, text: str, keywords: list[str]) -> float:
         """
         Calculate keyword density (primary keyword / total words).
 
@@ -421,8 +420,7 @@ class BaseSEOGenerator:
         slug = slug[:50]  # Limit length
 
         # Add timestamp
-        from datetime import timezone
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         return f"{slug}_{timestamp}"

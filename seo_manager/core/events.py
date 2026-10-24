@@ -9,7 +9,6 @@ import json
 import zlib
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
 
 
 class EventType(Enum):
@@ -45,9 +44,9 @@ class SEOEvent:
     site_id: str  # Site partition key for isolation
     content_id: str  # Content reference
     timestamp: str  # ISO 8601 UTC timestamp
-    data: Dict  # Event payload (event-specific data)
-    metadata: Optional[Dict] = None  # System metadata (version, user, etc.)
-    checksum: Optional[int] = None  # CRC32 checksum (computed on serialization)
+    data: dict  # Event payload (event-specific data)
+    metadata: dict | None = None  # System metadata (version, user, etc.)
+    checksum: int | None = None  # CRC32 checksum (computed on serialization)
 
     def to_jsonl(self) -> str:
         """

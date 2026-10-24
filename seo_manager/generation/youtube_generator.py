@@ -9,7 +9,6 @@ Specialized features:
 """
 
 import re
-from typing import Dict, List, Optional
 
 from .base import BaseSEOGenerator
 
@@ -69,7 +68,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
             "education",
         ]
 
-    def _generate_title(self, topic: str, keywords: List[str], **kwargs) -> str:
+    def _generate_title(self, topic: str, keywords: list[str], **kwargs) -> str:
         """
         Generate YouTube title with episode branding.
 
@@ -136,9 +135,9 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
     def _generate_description(
         self,
         topic: str,
-        body: Optional[str],
-        transcript: Optional[List[Dict]],
-        keywords: List[str],
+        body: str | None,
+        transcript: list[dict] | None,
+        keywords: list[str],
         **kwargs,
     ) -> str:
         """
@@ -204,7 +203,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
 
         return "\n".join(description_parts)
 
-    def _generate_hook(self, topic: str, transcript: Optional[List[Dict]]) -> str:
+    def _generate_hook(self, topic: str, transcript: list[dict] | None) -> str:
         """
         Generate compelling hook for first 125 characters.
 
@@ -241,7 +240,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
 
         return hook
 
-    def _extract_chapters(self, transcript: List[Dict]) -> List[Dict]:
+    def _extract_chapters(self, transcript: list[dict]) -> list[dict]:
         """
         Extract chapter markers from transcript with timestamps.
 
@@ -337,7 +336,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
         # Capitalize
         return text.capitalize()
 
-    def _format_citations(self, citations: List[Dict]) -> str:
+    def _format_citations(self, citations: list[dict]) -> str:
         """
         Format citations with numbered references.
 
@@ -365,8 +364,8 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
         return "\n".join(formatted_citations)
 
     def _generate_tags(
-        self, keywords: List[str], existing_tags: Optional[List[str]], **kwargs
-    ) -> List[str]:
+        self, keywords: list[str], existing_tags: list[str] | None, **kwargs
+    ) -> list[str]:
         """
         Generate YouTube tags with multi-level strategy:
 
@@ -420,7 +419,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
 
         return unique_tags[:15]
 
-    def _extract_transcript_tags(self, transcript: List[Dict]) -> List[str]:
+    def _extract_transcript_tags(self, transcript: list[dict]) -> list[str]:
         """
         Extract specific terms mentioned in transcript.
 
@@ -448,7 +447,7 @@ class YouTubeMetadataGenerator(BaseSEOGenerator):
 
         return relevant[:5]
 
-    def _get_platform_metadata(self, **kwargs) -> Dict:
+    def _get_platform_metadata(self, **kwargs) -> dict:
         """
         Extract YouTube-specific metadata.
 

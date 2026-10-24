@@ -11,10 +11,9 @@ the same 10,000 unit daily quota. This manager ensures we never exceed it.
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from filelock import FileLock
 
@@ -62,8 +61,8 @@ class QuotaOperation:
     operation: str
     cost: int
     timestamp: str
-    brand_id: Optional[str] = None
-    metadata: Optional[Dict] = None
+    brand_id: str | None = None
+    metadata: dict | None = None
 
 
 class QuotaManager:
@@ -86,8 +85,8 @@ class QuotaManager:
     def __init__(
         self,
         project_id: str,
-        brand_id: Optional[str] = None,
-        storage_path: Optional[Path] = None,
+        brand_id: str | None = None,
+        storage_path: Path | None = None,
         daily_limit: int = 10000,
     ):
         """
@@ -132,7 +131,7 @@ class QuotaManager:
                 last_reset = datetime.fromisoformat(
                     data.get("last_reset", "2000-01-01T00:00:00+00:00")
                 )
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
 
                 if now.date() > last_reset.date():
                     # New day - reset quota
@@ -164,7 +163,7 @@ class QuotaManager:
         """Reset quota state (called from within lock)"""
         self.operations = []
         self.total_used = 0
-        self.last_reset = datetime.now(timezone.utc)
+        self.last_reset = datetime.now(UTC)
         self._save_state_inner()
 
     def _save_state(self):
@@ -188,7 +187,7 @@ class QuotaManager:
         self,
         operation: str,
         cost: int,
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
         enforce: bool = False,
     ):
         """
@@ -219,7 +218,7 @@ class QuotaManager:
             op = QuotaOperation(
                 operation=operation,
                 cost=cost,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 brand_id=self.brand_id,
                 metadata=metadata,
             )
@@ -276,7 +275,7 @@ class QuotaManager:
 
         return cost_map.get(operation_type, 0)
 
-    def get_usage(self) -> Dict:
+    def get_usage(self) -> dict:
         """
         Get current quota usage.
 
@@ -294,7 +293,7 @@ class QuotaManager:
             "last_reset": self.last_reset.isoformat(),
         }
 
-    def get_warnings(self) -> List[str]:
+    def get_warnings(self) -> list[str]:
         """
         Get quota warning messages.
 
@@ -319,7 +318,7 @@ class QuotaManager:
 
         return warnings
 
-    def get_history(self, limit: int = 100) -> List[Dict]:
+    def get_history(self, limit: int = 100) -> list[dict]:
         """
         Get operation history.
 
@@ -332,7 +331,7 @@ class QuotaManager:
         self._load_state()
         return [asdict(op) for op in self.operations[-limit:]]
 
-    def generate_report(self) -> Dict:
+    def generate_report(self) -> dict:
         """
         Generate detailed quota usage report.
 
@@ -371,7 +370,7 @@ class QuotaManager:
 
     @classmethod
     def get_project_usage(
-        cls, project_id: str, storage_path: Optional[Path] = None
+        cls, project_id: str, storage_path: Path | None = None
     ) -> int:
         """
         Get total quota usage for a project (across all brands).

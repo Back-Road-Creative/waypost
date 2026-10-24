@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +109,7 @@ class PerformanceValidator:
         self,
         min_sample_size: int = MIN_SAMPLE_SIZE,
         default_confidence: float = 0.95,
-        state_dir: Optional[Path] = None,
+        state_dir: Path | None = None,
     ):
         """
         Initialize the validator.
@@ -127,13 +126,13 @@ class PerformanceValidator:
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
         # Validation history
-        self.validation_history: List[Dict] = []
+        self.validation_history: list[dict] = []
         self._load_history()
 
     def compare_strategies(
         self,
-        strategy_a_results: List[Dict],
-        strategy_b_results: List[Dict],
+        strategy_a_results: list[dict],
+        strategy_b_results: list[dict],
         metric: str = "ctr",
         hypothesis: str = "Strategy B outperforms Strategy A",
     ) -> ValidationResult:
@@ -306,11 +305,11 @@ class PerformanceValidator:
 
     def validate_before_after(
         self,
-        before_metrics: Dict[str, float],
-        after_metrics: Dict[str, float],
+        before_metrics: dict[str, float],
+        after_metrics: dict[str, float],
         before_sample_size: int,
         after_sample_size: int,
-    ) -> Dict[str, ValidationResult]:
+    ) -> dict[str, ValidationResult]:
         """
         Validate improvements from before/after comparison.
 
@@ -343,7 +342,7 @@ class PerformanceValidator:
         return results
 
     def analyze_trend(
-        self, time_series: List[Tuple[datetime, float]], metric_name: str = "metric"
+        self, time_series: list[tuple[datetime, float]], metric_name: str = "metric"
     ) -> TrendAnalysis:
         """
         Analyze trend in time series data.
@@ -513,7 +512,7 @@ class PerformanceValidator:
 
         return "\n".join(lines)
 
-    def _calculate_std(self, values: List[float], mean: float) -> float:
+    def _calculate_std(self, values: list[float], mean: float) -> float:
         """Calculate standard deviation."""
         if len(values) < 2:
             return 0.0
@@ -529,7 +528,7 @@ class PerformanceValidator:
         std_b: float,
         n_a: int,
         n_b: int,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Perform two-sample t-test (Welch's)."""
         if std_a == 0 and std_b == 0:
             return 0.0, 1.0
@@ -569,7 +568,7 @@ class PerformanceValidator:
         std_b: float,
         n_a: int,
         n_b: int,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Calculate confidence interval for difference in means."""
         difference = mean_b - mean_a
 
@@ -580,7 +579,7 @@ class PerformanceValidator:
 
         return (difference - margin, difference + margin)
 
-    def _linear_regression(self, values: List[float]) -> Tuple[float, float]:
+    def _linear_regression(self, values: list[float]) -> tuple[float, float]:
         """Simple linear regression returning slope and R-squared."""
         n = len(values)
         if n < 2:

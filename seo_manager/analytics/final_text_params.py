@@ -17,8 +17,9 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable, Mapping, Optional, Tuple
+from typing import Any
 
 SLOT_TYPES = ("number", "unit", "duration", "enum", "place", "playlist_url")
 _PLAYLIST = re.compile(
@@ -36,8 +37,8 @@ class Slot:
     maximum: float = float("inf")
     decimals: int = 0
     group: bool = True
-    units: Tuple[str, ...] = ()
-    values: Tuple[str, ...] = ()
+    units: tuple[str, ...] = ()
+    values: tuple[str, ...] = ()
     hashtag: bool = False
 
     def __post_init__(self) -> None:
@@ -53,7 +54,7 @@ class Slot:
 class ParamTemplate:
     template_id: str
     skeleton: str
-    slots: Tuple[Slot, ...]
+    slots: tuple[Slot, ...]
 
     def __post_init__(self) -> None:
         names = [s.name for s in self.slots]
@@ -79,9 +80,7 @@ def format_duration(seconds: float) -> str:
     return f"{minutes}m {secs}s"
 
 
-def valid_value(
-    slot: Slot, value: Any, allowlist: Optional[Iterable[str]] = None
-) -> bool:
+def valid_value(slot: Slot, value: Any, allowlist: Iterable[str] | None = None) -> bool:
     """True when ``value`` is a legal, non-place value for ``slot``.
 
     A ``playlist_url`` must be a YouTube playlist URL; given ``allowlist`` (the

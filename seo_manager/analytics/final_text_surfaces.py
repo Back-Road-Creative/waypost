@@ -29,8 +29,9 @@ reviewed bytes; ``verify_review`` refuses any other text.
 """
 
 import hashlib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any
 
 from .drive_templates import DRIVE_TEXT, PARAMS
 from .final_text_params import render, render_value, valid_value
@@ -42,7 +43,7 @@ TAG = "tag"
 PARAM_TEMPLATE = "param_template"
 VISIBLE_KINDS = frozenset({PLACE_LINE, TEMPLATE, CHAPTER, TAG, PARAM_TEMPLATE})
 
-TEMPLATES: Dict[str, str] = {
+TEMPLATES: dict[str, str] = {
     "description.chapters_heading": "Chapters",
     "description.footer": "Subscribe for more drives.",
     "tag.scenic_drive": "scenic drive",
@@ -52,7 +53,7 @@ TEMPLATES: Dict[str, str] = {
 }
 
 
-def all_templates() -> Dict[str, str]:
+def all_templates() -> dict[str, str]:
     """Every fixed template and tag: the base set and the drive set."""
     return {**TEMPLATES, **DRIVE_TEXT}
 
@@ -62,7 +63,7 @@ def template_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def template_hashes() -> Tuple[Tuple[str, str], ...]:
+def template_hashes() -> tuple[tuple[str, str], ...]:
     """``(template_id, hash)`` for every registered template, sorted by id."""
     return tuple(sorted((tid, template_hash(t)) for tid, t in TEMPLATES.items()))
 
@@ -71,9 +72,9 @@ def template_hashes() -> Tuple[Tuple[str, str], ...]:
 class PlaceLine:
     surface: str
     text: str
-    evidence_ids: Tuple[str, ...]
+    evidence_ids: tuple[str, ...]
     scope: str = "whole"
-    segment_places: Tuple[str, ...] = ()
+    segment_places: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -89,8 +90,8 @@ class Chapter:
     surface: str
     start_s: int
     label: str
-    evidence_ids: Tuple[str, ...]
-    segment_places: Tuple[str, ...]
+    evidence_ids: tuple[str, ...]
+    segment_places: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -99,8 +100,8 @@ class Tag:
 
     surface: str
     text: str = ""
-    evidence_ids: Tuple[str, ...] = ()
-    template_id: Optional[str] = None
+    evidence_ids: tuple[str, ...] = ()
+    template_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -117,7 +118,7 @@ class ParamBlock:
     places: Mapping[str, str] = None  # type: ignore[assignment]
 
 
-Part = Union[PlaceLine, TemplateBlock, Chapter, Tag, ParamBlock]
+Part = PlaceLine | TemplateBlock | Chapter | Tag | ParamBlock
 
 
 def place_text(slot: Any, text: str) -> str:
@@ -125,12 +126,12 @@ def place_text(slot: Any, text: str) -> str:
     return "#" + "".join(text.split()) if slot.hashtag else text
 
 
-def _param_entry(part: ParamBlock) -> Dict[str, Any]:
+def _param_entry(part: ParamBlock) -> dict[str, Any]:
     template = PARAMS[part.template_id]
     if set(part.slots) != {s.name for s in template.slots}:
         raise ValueError(f"slots_differ:{part.surface}")
-    rendered: Dict[str, str] = {}
-    ids: List[str] = []
+    rendered: dict[str, str] = {}
+    ids: list[str] = []
     for slot in template.slots:
         value = part.slots[slot.name]
         if slot.type == "place":
@@ -162,11 +163,11 @@ def _timestamp(seconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def _entry(part: Part) -> Dict[str, Any]:
+def _entry(part: Part) -> dict[str, Any]:
     if isinstance(part, ParamBlock):
         return _param_entry(part)
     if isinstance(part, PlaceLine):
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "surface": part.surface,
             "kind": PLACE_LINE,
             "text": part.text,
@@ -209,7 +210,7 @@ def _entry(part: Part) -> Dict[str, Any]:
     }
 
 
-def build_visible(parts: Sequence[Part]) -> List[Dict[str, Any]]:
+def build_visible(parts: Sequence[Part]) -> list[dict[str, Any]]:
     """The record's ``visible`` entries for ``parts``, in order."""
     return [_entry(part) for part in parts]
 
@@ -256,6 +257,6 @@ def compose_description(entries: Sequence[Any]) -> str:
     )
 
 
-def compose_tags(entries: Sequence[Any]) -> List[str]:
+def compose_tags(entries: Sequence[Any]) -> list[str]:
     """The exact tags sent: the text of each tag surface, in record order."""
     return [str(_field(e, "text") or "") for e in entries if is_tag_surface(e)]

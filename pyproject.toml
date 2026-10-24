@@ -109,8 +109,3 @@ known-first-party = ["seo_manager"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["S101", "F401", "E402"]
 "tests/**/*.py" = ["S101", "F401", "E402"]
-# Raising target-version to py312 turns on these pyupgrade/bugbear rules for
-# the older annotation style in the package (about 1,400 changed lines). Lifting
-# them is a mechanical `ruff check --fix`, left to a follow-up PR so the
-# floor change stays reviewable; delete this entry then.
-"seo_manager/**/*.py" = ["UP006", "UP007", "UP017", "UP035", "UP045", "B905", "I001"]

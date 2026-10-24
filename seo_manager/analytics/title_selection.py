@@ -22,9 +22,10 @@ Pure module: no clock (``as_of`` comes from the snapshot), no randomness, no
 I/O, no LLM. Same inputs, in any observation order, give the same record.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 from . import metric_source
 from .evidence import parse_ts
@@ -38,7 +39,7 @@ REGION_BASELINE = "region_only_lf"
 
 # Templates after the baseline, in candidate order. Each names the facts it
 # claims; a template whose fact is absent is recorded, not generated.
-TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+TEMPLATES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "highlight_route",
         "{highlight}: {origin} to {destination}, {region}{suffix}",
@@ -54,11 +55,11 @@ TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
 _BASELINE_CLAIMS = ("origin", "destination", "region")
 
 # Templates for a single-place Short (``TitleFacts.place``), same shape as above.
-PLACE_TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+PLACE_TEMPLATES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("highlight_place", "{highlight}, {place}{suffix}", ("highlight", "place")),
 )
 _PLACE_BASELINE_CLAIMS = ("place",)
-REGION_TEMPLATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+REGION_TEMPLATES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("region_drive_lf", "{region} Drive{suffix}", ("region",)),
 )
 _REGION_BASELINE_CLAIMS = ("region",)
@@ -99,12 +100,12 @@ class TitleFacts:
 
     format: str
     baseline_title: str
-    origin: Optional[Place] = None
-    destination: Optional[Place] = None
-    region: Optional[Place] = None
-    highlight: Optional[Place] = None
+    origin: Place | None = None
+    destination: Place | None = None
+    region: Place | None = None
+    highlight: Place | None = None
     suffix: str = ""
-    place: Optional[Place] = None
+    place: Place | None = None
 
 
 @dataclass(frozen=True)
@@ -127,7 +128,7 @@ class TemplateObservation:
 @dataclass(frozen=True)
 class EvidenceSnapshot:
     as_of: str
-    observations: Tuple[TemplateObservation, ...] = ()
+    observations: tuple[TemplateObservation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -154,13 +155,13 @@ DEFAULT_POLICY = TitlePolicy()
 class Candidate:
     index: int
     template_id: str
-    title: Optional[str]
-    claim_evidence: Tuple[str, ...]
-    score: Optional[float] = None
-    n: Optional[int] = None
-    metric_source: Optional[str] = None
-    evidence_window: Optional[Tuple[str, str]] = None
-    excluded_reason: Optional[str] = None
+    title: str | None
+    claim_evidence: tuple[str, ...]
+    score: float | None = None
+    n: int | None = None
+    metric_source: str | None = None
+    evidence_window: tuple[str, str] | None = None
+    excluded_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -172,17 +173,17 @@ class TitleDecision:
     chosen_index: int
     chosen_title: str
     reason: str
-    candidates: Tuple[Candidate, ...]
+    candidates: tuple[Candidate, ...]
 
 
-def record_to_dict(decision: TitleDecision) -> Dict[str, Any]:
+def record_to_dict(decision: TitleDecision) -> dict[str, Any]:
     return asdict(decision)
 
 
-def _places(facts: TitleFacts) -> Dict[str, Place]:
+def _places(facts: TitleFacts) -> dict[str, Place]:
     route = {k: getattr(facts, k) for k in _ROUTE_KEYS}
     given = [k for k, p in route.items() if p is not None]
-    places: Dict[str, Place]
+    places: dict[str, Place]
     if facts.place is not None:
         if given:
             raise TitleSelectionRefused(
@@ -245,7 +246,7 @@ def _evidence_for(
     observations: Sequence[TemplateObservation],
     as_of: str,
     policy: TitlePolicy,
-) -> Tuple[Optional[TemplateObservation], Optional[str]]:
+) -> tuple[TemplateObservation | None, str | None]:
     mine = [o for o in observations if o.template_id == template_id]
     if not mine:
         return None, NO_EVIDENCE
@@ -266,10 +267,10 @@ def _evidence_for(
 def _candidate(
     index: int,
     template_id: str,
-    title: Optional[str],
-    claims: Tuple[str, ...],
-    obs: Optional[TemplateObservation],
-    excluded: Optional[str],
+    title: str | None,
+    claims: tuple[str, ...],
+    obs: TemplateObservation | None,
+    excluded: str | None,
 ) -> Candidate:
     return Candidate(
         index=index,
@@ -314,7 +315,7 @@ def select_title(
 
     obs, excluded = _evidence_for(baseline_id, observations, as_of, policy)
     claims = tuple(places[k].evidence_id for k in baseline_claims)
-    candidates: List[Candidate] = [
+    candidates: list[Candidate] = [
         _candidate(0, baseline_id, facts.baseline_title, claims, obs, excluded)
     ]
     for index, (template_id, template, needs) in enumerate(templates, start=1):

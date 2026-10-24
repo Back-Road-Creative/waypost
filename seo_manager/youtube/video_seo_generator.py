@@ -5,8 +5,6 @@ Generates optimized YouTube metadata for long-form videos and shorts
 using journey context (locations, distance, highlights).
 """
 
-from typing import Dict, Optional
-
 from ..core.metadata import ContentType, Platform, SEOMetadata
 from ..generation.base import BaseSEOGenerator
 from ..platforms.youtube import YouTubeAdapter
@@ -50,7 +48,7 @@ class VideoSEOGenerator:
         self.platform_adapter = YouTubeAdapter()
 
     @staticmethod
-    def _require_country(journey_data: Dict) -> str:
+    def _require_country(journey_data: dict) -> str:
         """Return the journey's country, or raise if it is absent.
 
         Refuses to silently default to a hardcoded location: a journey dict
@@ -68,7 +66,7 @@ class VideoSEOGenerator:
     def generate_from_journey(
         self,
         journey_id: str,
-        journey_data: Dict,
+        journey_data: dict,
         video_duration: int,
         content_type: ContentType = ContentType.VIDEO,
     ) -> SEOMetadata:
@@ -160,11 +158,11 @@ class VideoSEOGenerator:
 
     def generate_short_metadata(
         self,
-        journey_data: Dict,
+        journey_data: dict,
         short_index: int,
         total_shorts: int,
-        variation: Optional[str] = None,
-    ) -> Dict[str, any]:
+        variation: str | None = None,
+    ) -> dict[str, any]:
         """
         Generate metadata for a single short/reel.
 
@@ -272,7 +270,7 @@ class VideoSEOGenerator:
             return f"{miles}mi"
         return f"{distance_km}km"
 
-    def _build_longform_content(self, journey_data: Dict) -> tuple[str, str]:
+    def _build_longform_content(self, journey_data: dict) -> tuple[str, str]:
         """Build topic and body for long-form video."""
         start = journey_data.get("start_location", "")
         end = journey_data.get("end_location", "")
@@ -316,7 +314,7 @@ class VideoSEOGenerator:
 
         return topic, body
 
-    def _build_short_content(self, journey_data: Dict) -> tuple[str, str]:
+    def _build_short_content(self, journey_data: dict) -> tuple[str, str]:
         """Build topic and body for short/reel.
 
         Uses the journey's own title/route rather than labelling every short

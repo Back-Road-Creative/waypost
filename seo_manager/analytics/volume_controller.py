@@ -35,9 +35,10 @@ reason code. Every hold has a code; there is no default value.
 """
 
 import statistics
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 from seo_manager.scheduling import shorts_times as times
 
@@ -73,7 +74,7 @@ _DAY = timedelta(days=1)
 class ShortOutcome:
     video_id: str
     posted_at: datetime
-    region: Optional[str]
+    region: str | None
     weekday: int
     hour_local: int
     day7_views: float
@@ -85,7 +86,7 @@ class Evidence:
     shorts: Sequence[ShortOutcome]
     analytics_status: str
     as_of: datetime
-    ready_depth: Optional[int] = None
+    ready_depth: int | None = None
     # Per-region ready LF drives; an ``lf_days`` knob reads its own region's depth
     # and falls back to ``ready_depth`` for a region not listed.
     ready_depth_by_region: Mapping[str, int] = field(default_factory=dict)
@@ -97,23 +98,23 @@ class Evidence:
 @dataclass(frozen=True)
 class KnobState:
     knob: str
-    region: Optional[str]
+    region: str | None
     value: Any
-    last_change_at: Optional[datetime] = None
+    last_change_at: datetime | None = None
     last_validated: Any = None
-    probation_open_since: Optional[datetime] = None
+    probation_open_since: datetime | None = None
     rollback_count: int = 0
-    learned_ceiling: Optional[int] = None
-    learned_ceiling_until: Optional[datetime] = None
-    lockout_until: Optional[datetime] = None
-    cohort_cutoff: Optional[datetime] = None
-    pending_confirm: Optional[datetime] = None
+    learned_ceiling: int | None = None
+    learned_ceiling_until: datetime | None = None
+    lockout_until: datetime | None = None
+    cohort_cutoff: datetime | None = None
+    pending_confirm: datetime | None = None
 
 
 @dataclass(frozen=True)
 class Decision:
     knob: str
-    region: Optional[str]
+    region: str | None
     action: str
     prev: Any
     value: Any
@@ -121,12 +122,12 @@ class Decision:
     basis: str
     evidence_n: int
     need_n: int
-    floor: Optional[int]
-    ceiling: Optional[int]
-    evidence_window: Optional[Tuple[datetime, datetime]]
-    evidence_json: Dict[str, Any]
+    floor: int | None
+    ceiling: int | None
+    evidence_window: tuple[datetime, datetime] | None
+    evidence_json: dict[str, Any]
     next_eval: datetime
-    state_patch: Dict[str, Any] = field(default_factory=dict)
+    state_patch: dict[str, Any] = field(default_factory=dict)
 
 
 def apply_decision(state: KnobState, decision: Decision) -> KnobState:
@@ -134,7 +135,7 @@ def apply_decision(state: KnobState, decision: Decision) -> KnobState:
     return replace(state, **decision.state_patch)
 
 
-def _bounds(knob: str) -> Tuple[Optional[int], Optional[int]]:
+def _bounds(knob: str) -> tuple[int | None, int | None]:
     if knob == "shorts_per_lf":
         return policy.SHORTS_FLOOR, policy.SHORTS_CEILING
     if knob == "lf_days":
@@ -146,7 +147,7 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _readable(s: Any) -> Optional[str]:
+def _readable(s: Any) -> str | None:
     """None when the state is usable, else why it is not."""
     if not isinstance(s, KnobState):
         return "not a KnobState"
@@ -174,7 +175,7 @@ def _is_times(s: KnobState) -> bool:
     )
 
 
-def _times_unreadable(s: KnobState) -> Optional[str]:
+def _times_unreadable(s: KnobState) -> str | None:
     if not _is_times(s):
         return None
     try:
@@ -207,10 +208,10 @@ def _dec(
     basis: str,
     n: int = 0,
     need: int = 0,
-    window: Optional[Tuple[datetime, datetime]] = None,
-    ev: Optional[Dict[str, Any]] = None,
-    patch: Optional[Dict[str, Any]] = None,
-    nxt: Optional[datetime] = None,
+    window: tuple[datetime, datetime] | None = None,
+    ev: dict[str, Any] | None = None,
+    patch: dict[str, Any] | None = None,
+    nxt: datetime | None = None,
 ) -> Decision:
     lo, hi = _bounds(s.knob)
     head = (s.knob, s.region, action, s.value, value, code, basis, n, need, lo, hi)
@@ -228,14 +229,14 @@ def _move(
     code: str,
     basis: str,
     value: Any,
-    patch: Dict[str, Any],
+    patch: dict[str, Any],
     **kw: Any,
 ) -> Decision:
     full = {"value": value, "last_change_at": ctx.now, **patch}
     return _dec(s, ctx, action, value, code, basis, patch=full, **kw)
 
 
-def _raise_blocked(s: KnobState, new: int, ctx: _Ctx) -> Optional[Tuple[str, str]]:
+def _raise_blocked(s: KnobState, new: int, ctx: _Ctx) -> tuple[str, str] | None:
     """Why raising ``s`` to ``new`` is refused, or None."""
     _, ceiling = _bounds(s.knob)
     if ceiling is not None and new > ceiling:
@@ -254,7 +255,7 @@ def _raise_blocked(s: KnobState, new: int, ctx: _Ctx) -> Optional[Tuple[str, str
     return None
 
 
-def _settled(s: KnobState, ctx: _Ctx) -> List[ShortOutcome]:
+def _settled(s: KnobState, ctx: _Ctx) -> list[ShortOutcome]:
     cutoff = ctx.now - timedelta(days=policy.SETTLE_DAYS)
     return [
         x
@@ -267,7 +268,7 @@ def _step_toward(value: int, target: int) -> int:
     return value + (1 if target > value else -1)
 
 
-def _blind(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Optional[Decision]:
+def _blind(s: KnobState, settled: list[ShortOutcome], ctx: _Ctx) -> Decision | None:
     status = ctx.evidence.analytics_status
     code = None if status == "ok" else f"ANALYTICS_{status.upper()}"
     lv = s.last_validated
@@ -288,7 +289,7 @@ def _blind(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Optional[Dec
     return _move(s, ctx, BLIND_REVERT, code, basis, new, patch)
 
 
-def _probation(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision:
+def _probation(s: KnobState, settled: list[ShortOutcome], ctx: _Ctx) -> Decision:
     assert s.last_change_at is not None  # _readable guarantees it
     need = policy.PROBATION_MIN_N
     post = [x for x in settled if x.posted_at > s.last_change_at]
@@ -305,7 +306,7 @@ def _probation(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision
         kw = {"n": len(post), "need": need, "window": window}
         return _hold(s, ctx, dev.reason.upper(), dev.detail, **kw)
     tail = tail_rank_p(base_views, post_median, allocated_alpha=policy.DOWN_ALPHA)
-    ev: Dict[str, Any] = {
+    ev: dict[str, Any] = {
         "post_median": post_median,
         "baseline_median_log1p": dev.median,
         "scaled_mad_log1p": dev.scaled_mad,
@@ -335,7 +336,7 @@ def _probation(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision
         return _hold(s, ctx, blocked[0], f"rollback refused: {blocked[1]}", ev=ev)
     count = s.rollback_count + 1
     days = min(policy.COOLDOWN_DAYS[s.knob] * 2**count, policy.LOCKOUT_CAP_DAYS)
-    patch: Dict[str, Any] = {
+    patch: dict[str, Any] = {
         "probation_open_since": None,
         "pending_confirm": None,
         "rollback_count": count,
@@ -381,7 +382,7 @@ def _evaluate(s: KnobState, ctx: _Ctx) -> Decision:
     return _tail_rule(s, settled, ctx)
 
 
-def _times_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision:
+def _times_rule(s: KnobState, settled: list[ShortOutcome], ctx: _Ctx) -> Decision:
     """One swap: the weakest measured current hour for the best measured candidate."""
     need = policy.PROBATION_MIN_N
     windows = times.parse_windows(s.value)  # _readable guarantees it
@@ -390,7 +391,7 @@ def _times_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decisio
     cands = [h for h in times.candidate_hours(fenced) if h not in mine]
     ranked = times.rank_hours(settled, need)
     score = {r.hour: r for r in ranked}
-    ev: Dict[str, Any] = {"ranked": times.ranked_json(ranked), "candidates": cands}
+    ev: dict[str, Any] = {"ranked": times.ranked_json(ranked), "candidates": cands}
     weak = [score[h] for h in mine if h in score]
     best = [score[h] for h in cands if h in score]
     if not weak or not best:
@@ -405,7 +406,7 @@ def _times_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decisio
         min(x.posted_at for x in settled),
         max(x.posted_at for x in settled),
     )
-    kw: Dict[str, Any] = {"n": inn.n, "need": need, "window": window, "ev": ev}
+    kw: dict[str, Any] = {"n": inn.n, "need": need, "window": window, "ev": ev}
     ref = [x.day7_views for x in settled if x.hour_local == out.hour]
     dev = robust_deviation(ref, inn.median, transform=LOG1P)
     if isinstance(dev, Refusal):
@@ -432,7 +433,7 @@ def _times_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decisio
     return _move(s, ctx, STEP, HOUR_SWAP, basis, new, patch, **kw)
 
 
-def _tail_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision:
+def _tail_rule(s: KnobState, settled: list[ShortOutcome], ctx: _Ctx) -> Decision:
     floor, _ = _bounds(s.knob)
     assert floor is not None
     start = s.pending_confirm or s.cohort_cutoff
@@ -451,7 +452,7 @@ def _tail_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision
         )
     bottom = views[-policy.TAIL_K :]
     down_at, up_at = median * policy.DOWN_FRACTION, median * policy.UP_FRACTION
-    ev: Dict[str, Any] = {
+    ev: dict[str, Any] = {
         "median": median,
         "bottom": bottom,
         "down_below": down_at,
@@ -511,8 +512,8 @@ def _tail_rule(s: KnobState, settled: List[ShortOutcome], ctx: _Ctx) -> Decision
 
 
 def decide(
-    evidence: Evidence, states: Optional[Sequence[KnobState]], now: datetime
-) -> List[Decision]:
+    evidence: Evidence, states: Sequence[KnobState] | None, now: datetime
+) -> list[Decision]:
     """One decision per knob state; at most one of them a move, by one step."""
     ctx0 = _Ctx(now, evidence, policy.SHORTS_FLOOR, policy.LF_DAYS_CEILING_PER_WEEK)
     unreadable = "knob state could not be read"
@@ -522,8 +523,8 @@ def decide(
             for k in policy.KNOBS
         ]
     seen = set()
-    usable: List[KnobState] = []
-    out: Dict[int, Decision] = {}
+    usable: list[KnobState] = []
+    out: dict[int, Decision] = {}
     for i, s in enumerate(states):
         why = _readable(s)
         key = (getattr(s, "knob", None), getattr(s, "region", None))

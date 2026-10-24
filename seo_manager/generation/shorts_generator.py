@@ -14,8 +14,6 @@ YouTube Shorts requirements (2026):
 - Mobile-first optimization (most Shorts viewed on mobile)
 """
 
-from typing import Dict, List, Optional
-
 from .base import BaseSEOGenerator
 
 
@@ -51,7 +49,7 @@ class ShortsMetadataGenerator(BaseSEOGenerator):
             "watch",
         ]
 
-    def _generate_title(self, topic: str, keywords: List[str], **kwargs) -> str:
+    def _generate_title(self, topic: str, keywords: list[str], **kwargs) -> str:
         """
         Generate punchy Short title (40-50 chars).
 
@@ -98,9 +96,9 @@ class ShortsMetadataGenerator(BaseSEOGenerator):
     def _generate_description(
         self,
         topic: str,
-        body: Optional[str],
-        transcript: Optional[List[Dict]],
-        keywords: List[str],
+        body: str | None,
+        transcript: list[dict] | None,
+        keywords: list[str],
         **kwargs,
     ) -> str:
         """
@@ -162,7 +160,7 @@ class ShortsMetadataGenerator(BaseSEOGenerator):
 
         return description
 
-    def _generate_hashtags(self, keywords: List[str]) -> str:
+    def _generate_hashtags(self, keywords: list[str]) -> str:
         """
         Generate 3-5 inline hashtags for Shorts.
 
@@ -196,8 +194,8 @@ class ShortsMetadataGenerator(BaseSEOGenerator):
         return hashtags
 
     def _generate_tags(
-        self, keywords: List[str], existing_tags: Optional[List[str]], **kwargs
-    ) -> List[str]:
+        self, keywords: list[str], existing_tags: list[str] | None, **kwargs
+    ) -> list[str]:
         """
         Generate focused tags for Shorts (5-10 tags).
 
@@ -239,7 +237,7 @@ class ShortsMetadataGenerator(BaseSEOGenerator):
         # Ensure at least 5 tags, at most 10
         return unique_tags[:10]
 
-    def _get_platform_metadata(self, **kwargs) -> Dict:
+    def _get_platform_metadata(self, **kwargs) -> dict:
         """
         Extract YouTube Shorts-specific metadata.
 

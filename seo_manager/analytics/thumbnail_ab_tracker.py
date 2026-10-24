@@ -23,7 +23,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from seo_manager.fsio import atomic_write_json
 
@@ -58,7 +57,7 @@ class ThumbnailPerformance:
     # None means UNMEASURED. Defaulting to 0.0 fabricated a measurement that
     # read as "shown, never clicked". Records stored before provenance
     # existed load as UNKNOWN, which is never treated as thumbnail data.
-    ctr: Optional[float] = None
+    ctr: float | None = None
     ctr_source: str = metric_source.UNKNOWN
     avg_watch_time: float = 0.0
 
@@ -66,11 +65,11 @@ class ThumbnailPerformance:
     # so these are the operator's manual record of what was prepared and
     # which variant got uploaded -- never a measurement, never entering
     # the CTR analysis below.
-    prepared_variants: Optional[List[str]] = None
-    manifest_path: Optional[str] = None
+    prepared_variants: list[str] | None = None
+    manifest_path: str | None = None
 
     # Metadata
-    last_updated: Optional[str] = None
+    last_updated: str | None = None
 
 
 @dataclass
@@ -92,8 +91,8 @@ class StyleAnalysis:
     # Age of the evidence. `newest_sample_at` is the most recent
     # `last_updated` among the samples this analysis averaged -- when the
     # data was learned, never when a report was printed.
-    newest_sample_at: Optional[str] = None
-    evidence_age_days: Optional[float] = None
+    newest_sample_at: str | None = None
+    evidence_age_days: float | None = None
     evidence: EvidenceState = EvidenceState.UNDATED
 
 
@@ -113,13 +112,13 @@ class StyleRecommendation:
     answer, labelled, never dropped and never replaced by a fresh invention.
     """
 
-    style: Optional[ThumbnailStyle]
+    style: ThumbnailStyle | None
     confidence: float
     evidence: EvidenceState
     sample_size: int
-    evidence_newest_at: Optional[str]
-    evidence_age_days: Optional[float]
-    reason: Optional[str]
+    evidence_newest_at: str | None
+    evidence_age_days: float | None
+    reason: str | None
 
     @property
     def is_stale(self) -> bool:
@@ -165,7 +164,7 @@ class ThumbnailABTracker:
     MIN_IMPRESSIONS = 1000  # Minimum thumbnail impressions for a usable rate
 
     def __init__(
-        self, state_dir: Optional[Path] = None, min_sample_size: int = MIN_SAMPLE_SIZE
+        self, state_dir: Path | None = None, min_sample_size: int = MIN_SAMPLE_SIZE
     ):
         """
         Initialize the tracker.
@@ -181,7 +180,7 @@ class ThumbnailABTracker:
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
         # Load existing data
-        self.thumbnails: Dict[str, ThumbnailPerformance] = {}
+        self.thumbnails: dict[str, ThumbnailPerformance] = {}
         self._load_state()
 
     def record_thumbnail(
@@ -189,7 +188,7 @@ class ThumbnailABTracker:
         content_id: str,
         video_id: str,
         style: ThumbnailStyle,
-        thumbnail_path: Optional[str] = None,
+        thumbnail_path: str | None = None,
     ) -> ThumbnailPerformance:
         """
         Record that a thumbnail was generated with a specific style.
@@ -253,8 +252,8 @@ class ThumbnailABTracker:
         content_id: str,
         video_id: str,
         selected_style: ThumbnailStyle,
-        prepared_styles: Optional[List[ThumbnailStyle]] = None,
-        manifest_path: Optional[str] = None,
+        prepared_styles: list[ThumbnailStyle] | None = None,
+        manifest_path: str | None = None,
     ) -> ThumbnailPerformance:
         """
         Manually record which variant the operator uploaded into Studio's
@@ -296,9 +295,7 @@ class ThumbnailABTracker:
 
         return thumbnail
 
-    def get_test_compare_outcome(
-        self, content_id: str
-    ) -> Optional[ThumbnailPerformance]:
+    def get_test_compare_outcome(self, content_id: str) -> ThumbnailPerformance | None:
         """
         Read the recorded outcome for one Test & Compare experiment.
 
@@ -323,13 +320,13 @@ class ThumbnailABTracker:
     def update_performance(
         self,
         content_id: str,
-        impressions: Optional[int] = None,
-        clicks: Optional[int] = None,
-        views: Optional[int] = None,
-        ctr: Optional[float] = None,
-        ctr_source: Optional[str] = None,
-        avg_watch_time: Optional[float] = None,
-    ) -> Optional[ThumbnailPerformance]:
+        impressions: int | None = None,
+        clicks: int | None = None,
+        views: int | None = None,
+        ctr: float | None = None,
+        ctr_source: str | None = None,
+        avg_watch_time: float | None = None,
+    ) -> ThumbnailPerformance | None:
         """
         Update performance metrics for a thumbnail.
 
@@ -380,7 +377,7 @@ class ThumbnailABTracker:
 
         return thumbnail
 
-    def batch_update_from_analytics(self, analytics_data: Dict[str, Dict]) -> int:
+    def batch_update_from_analytics(self, analytics_data: dict[str, dict]) -> int:
         """
         Batch update performance from analytics data.
 
@@ -419,7 +416,7 @@ class ThumbnailABTracker:
             and thumbnail.impressions >= self.MIN_IMPRESSIONS
         )
 
-    def missing_data_reason(self) -> Optional[str]:
+    def missing_data_reason(self) -> str | None:
         """Why there is no thumbnail click-through data, or None if there is."""
         if any(self._usable(t) for t in self.thumbnails.values()):
             return None
@@ -435,7 +432,7 @@ class ThumbnailABTracker:
             " the Analytics API exposes no impressionClickThroughRate"
         )
 
-    def get_style_analysis(self) -> Dict[ThumbnailStyle, StyleAnalysis]:
+    def get_style_analysis(self) -> dict[ThumbnailStyle, StyleAnalysis]:
         """
         Analyze thumbnail CLICK-THROUGH performance by style. A rate that is
         missing, or not measured against thumbnail impressions, is excluded
@@ -445,7 +442,7 @@ class ThumbnailABTracker:
             Dict mapping style to StyleAnalysis (empty when none qualifies)
         """
         # Group by style
-        style_data: Dict[ThumbnailStyle, List[ThumbnailPerformance]] = defaultdict(list)
+        style_data: dict[ThumbnailStyle, list[ThumbnailPerformance]] = defaultdict(list)
 
         for thumbnail in self.thumbnails.values():
             if thumbnail.style != ThumbnailStyle.UNKNOWN and self._usable(thumbnail):
@@ -603,7 +600,7 @@ class ThumbnailABTracker:
 
         return recommendation
 
-    def get_style_performance_summary(self) -> Dict[str, Dict]:
+    def get_style_performance_summary(self) -> dict[str, dict]:
         """
         Style -> its rate AND the age of the samples behind it, for config
         files. A bare rate written into config outlives the data it came

@@ -5,9 +5,8 @@ Defines the SEOMetadata dataclass and related enums for platform and content typ
 """
 
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
 
 class Platform(Enum):
@@ -48,44 +47,42 @@ class SEOMetadata:
     # Core SEO Fields (REQUIRED)
     title: str  # Primary headline
     description: str  # Long-form description
-    tags: List[str]  # Keywords/hashtags
+    tags: list[str]  # Keywords/hashtags
 
     # Extended Metadata (OPTIONAL)
-    url: Optional[str] = None  # Canonical URL
-    canonical_url: Optional[str] = None  # SEO canonical if different
-    thumbnail_url: Optional[str] = None  # Visual preview
-    author: Optional[str] = None  # Content creator
-    published_date: Optional[str] = None  # ISO 8601 timestamp
+    url: str | None = None  # Canonical URL
+    canonical_url: str | None = None  # SEO canonical if different
+    thumbnail_url: str | None = None  # Visual preview
+    author: str | None = None  # Content creator
+    published_date: str | None = None  # ISO 8601 timestamp
 
     # Platform-Specific Data (OPTIONAL)
-    youtube_metadata: Dict = field(default_factory=dict)
+    youtube_metadata: dict = field(default_factory=dict)
     # Example: {"playlist": "Season 1", "category": "Science & Technology"}
 
-    blog_metadata: Dict = field(default_factory=dict)
+    blog_metadata: dict = field(default_factory=dict)
     # Example: {"categories": ["Tech"], "series": "Trail Reviews"}
 
-    social_metadata: Dict = field(default_factory=dict)
+    social_metadata: dict = field(default_factory=dict)
     # Example: {"cta": "Link in bio", "mention": "@examplehandle"}
 
     # SEO Quality Metrics (AUTO-GENERATED)
-    quality_score: Optional[float] = None  # 0.0-1.0
-    keyword_density: Optional[float] = None  # Primary keyword %
-    readability_score: Optional[float] = None  # Flesch reading ease
+    quality_score: float | None = None  # 0.0-1.0
+    keyword_density: float | None = None  # Primary keyword %
+    readability_score: float | None = None  # Flesch reading ease
 
     # System Metadata (AUTO-GENERATED)
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     generated_by: str = "seo_manager"
     version: int = 1  # Schema version
     validation_status: str = "pending"  # pending/valid/invalid
-    validation_errors: List[str] = field(default_factory=list)
+    validation_errors: list[str] = field(default_factory=list)
 
     # Auto-Fix Tracking (AUTO-GENERATED)
-    fixes_applied: List[str] = field(default_factory=list)
+    fixes_applied: list[str] = field(default_factory=list)
     # Example: ["title_truncated_to_100", "added_missing_hashtags"]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """
         Serialize to JSON-compatible dict.
 
@@ -98,7 +95,7 @@ class SEOMetadata:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "SEOMetadata":
+    def from_dict(cls, data: dict) -> "SEOMetadata":
         """
         Deserialize from dict.
 
@@ -113,7 +110,7 @@ class SEOMetadata:
 
         return cls(**data)
 
-    def with_fixes(self, fixes: List[str]) -> "SEOMetadata":
+    def with_fixes(self, fixes: list[str]) -> "SEOMetadata":
         """
         Create new instance with fixes applied (immutable pattern).
 

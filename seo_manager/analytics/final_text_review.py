@@ -44,9 +44,10 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, fields
 from datetime import date
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 from .drive_templates import (
     DRIVE_TEMPLATES_VERSION,
@@ -159,7 +160,7 @@ _PLACE_KINDS = frozenset({LOCATION, REGION, ROAD})
 # Waypost's title templates and the usual title suffixes. Anything else
 # that is left once the cited names are taken out counts as a name with
 # no claim behind it.
-DEFAULT_FILLER_WORDS: Tuple[str, ...] = (
+DEFAULT_FILLER_WORDS: tuple[str, ...] = (
     "to",
     "via",
     "and",
@@ -193,7 +194,7 @@ class FinalTextReviewRefused(ValueError):
     """
 
     def __init__(self, reasons: Sequence[str], detail: str = "") -> None:
-        self.reasons: Tuple[str, ...] = tuple(reasons)
+        self.reasons: tuple[str, ...] = tuple(reasons)
         self.code = self.reasons[0]
         message = "; ".join(self.reasons)
         super().__init__(f"{message}: {detail}" if detail else message)
@@ -206,15 +207,15 @@ class FinalTextPolicy:
     version: str = "final-text-policy-4"
     min_place_seconds: float = 60.0
     region_min_coverage: float = 1.0
-    filler_words: Tuple[str, ...] = DEFAULT_FILLER_WORDS
+    filler_words: tuple[str, ...] = DEFAULT_FILLER_WORDS
     # ``(template_id, sha256)`` of each template a surface may carry.
-    templates: Tuple[Tuple[str, str], ...] = template_hashes()
+    templates: tuple[tuple[str, str], ...] = template_hashes()
     # The drive set (fixed lines, tags, parameterized skeletons), versioned:
     # a record written under one version is refused under another.
-    drive_templates: Tuple[Tuple[str, str], ...] = drive_hashes()
+    drive_templates: tuple[tuple[str, str], ...] = drive_hashes()
     drive_version: str = DRIVE_TEMPLATES_VERSION
     # Playlist list ids a ``playlist_url`` slot may name; empty refuses all.
-    playlist_allowlist: Tuple[str, ...] = ()
+    playlist_allowlist: tuple[str, ...] = ()
 
 
 DEFAULT_TEXT_POLICY = FinalTextPolicy()
@@ -234,11 +235,11 @@ class SurfaceReview:
 
     surface: str
     text: str
-    evidence: Tuple[EvidenceItem, ...]
+    evidence: tuple[EvidenceItem, ...]
     scope: str = WHOLE
-    segment_places: Tuple[str, ...] = ()
+    segment_places: tuple[str, ...] = ()
     kind: str = PLACE_LINE
-    template_id: Optional[str] = None
+    template_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -253,33 +254,33 @@ class RegionClaim:
     """A region named in place of the route, and its retained GPS coverage."""
 
     evidence_id: str
-    contains: Tuple[str, ...]
+    contains: tuple[str, ...]
     coverage: float
-    gaps: Tuple[Tuple[float, float], ...]
+    gaps: tuple[tuple[float, float], ...]
     samples_outside: int
-    boundary_proof: Optional[Dict[str, Any]] = None
+    boundary_proof: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
 class FinalTextReview:
     review_version: str
     verdict: str
-    reasons: Tuple[str, ...]
-    record_version: Optional[str]
-    source_fingerprint: Optional[str]
-    plan_fingerprint: Optional[str]
-    text_policy: Dict[str, Any]
-    route_places: Tuple[RoutePlace, ...]
-    region_claims: Tuple[RegionClaim, ...]
-    approval_hash: Optional[str]
-    approved_title: Optional[str]
-    final_title: Optional[str]
-    recording_date: Optional[str]
-    surfaces: Tuple[SurfaceReview, ...]
-    decision_policy_version: Optional[str]
-    decision_reason: Optional[str]
-    decision_chosen_index: Optional[int]
-    description_layout: Optional[str]
+    reasons: tuple[str, ...]
+    record_version: str | None
+    source_fingerprint: str | None
+    plan_fingerprint: str | None
+    text_policy: dict[str, Any]
+    route_places: tuple[RoutePlace, ...]
+    region_claims: tuple[RegionClaim, ...]
+    approval_hash: str | None
+    approved_title: str | None
+    final_title: str | None
+    recording_date: str | None
+    surfaces: tuple[SurfaceReview, ...]
+    decision_policy_version: str | None
+    decision_reason: str | None
+    decision_chosen_index: int | None
+    description_layout: str | None
     human_gate_required: bool
     fingerprint: str
 
@@ -292,7 +293,7 @@ def _plain(value: Any) -> Any:
     return value
 
 
-def review_to_dict(review: FinalTextReview) -> Dict[str, Any]:
+def review_to_dict(review: FinalTextReview) -> dict[str, Any]:
     """JSON-safe form of ``review`` (tuples become lists)."""
     return _plain(asdict(review))
 
@@ -308,7 +309,7 @@ def _fingerprint(review: FinalTextReview) -> str:
     return _fingerprint_of(review_to_dict(review))
 
 
-def _text(value: Any) -> Optional[str]:
+def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
@@ -316,7 +317,7 @@ def _number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _ids(value: Any) -> Optional[Tuple[str, ...]]:
+def _ids(value: Any) -> tuple[str, ...] | None:
     if not isinstance(value, (list, tuple)) or not all(_text(v) for v in value):
         return None
     return tuple(value)
@@ -324,7 +325,7 @@ def _ids(value: Any) -> Optional[Tuple[str, ...]]:
 
 class _Reasons:
     def __init__(self) -> None:
-        self.items: List[str] = []
+        self.items: list[str] = []
         self.refused = False
 
     def refuse(self, reason: str) -> None:
@@ -335,8 +336,8 @@ class _Reasons:
 
 def _index_evidence(
     evidence: Sequence[Mapping[str, Any]], reasons: _Reasons
-) -> Tuple[Dict[str, EvidenceItem], set]:
-    by_id: Dict[str, EvidenceItem] = {}
+) -> tuple[dict[str, EvidenceItem], set]:
+    by_id: dict[str, EvidenceItem] = {}
     ambiguous: set = set()
     for position, raw in enumerate(evidence):
         try:
@@ -356,14 +357,14 @@ def _index_evidence(
 
 def _resolve(
     surface: str,
-    text: Optional[str],
+    text: str | None,
     ids: Sequence[str],
     kinds: frozenset,
     by_id: Mapping[str, EvidenceItem],
     ambiguous: set,
     reasons: _Reasons,
-) -> Tuple[EvidenceItem, ...]:
-    found: List[EvidenceItem] = []
+) -> tuple[EvidenceItem, ...]:
+    found: list[EvidenceItem] = []
     for evidence_id in ids:
         if evidence_id in ambiguous:
             reasons.refuse(f"evidence_ambiguous:{evidence_id}")
@@ -382,7 +383,7 @@ def _resolve(
 
 def _chosen(
     decision: Mapping[str, Any], reasons: _Reasons
-) -> Tuple[Optional[str], Tuple[str, ...]]:
+) -> tuple[str | None, tuple[str, ...]]:
     """The decision's final title and its claim evidence ids, or refusal."""
     title = _text(decision.get("chosen_title"))
     candidates = decision.get("candidates")
@@ -419,12 +420,12 @@ def _route(
     by_id: Mapping[str, EvidenceItem],
     ambiguous: set,
     reasons: _Reasons,
-) -> Tuple[RoutePlace, ...]:
+) -> tuple[RoutePlace, ...]:
     raw = approved.get("route_places")
     if not isinstance(raw, (list, tuple)) or not raw:
         reasons.refuse("missing_field:route_places")
         return ()
-    route: List[RoutePlace] = []
+    route: list[RoutePlace] = []
     for position, item in enumerate(raw):
         evidence_id = (
             _text(item.get("evidence_id")) if isinstance(item, Mapping) else None
@@ -453,7 +454,7 @@ def _route(
     return tuple(route)
 
 
-def _gaps(value: Any) -> Optional[Tuple[Tuple[float, float], ...]]:
+def _gaps(value: Any) -> tuple[tuple[float, float], ...] | None:
     if not isinstance(value, (list, tuple)):
         return None
     gaps = []
@@ -471,8 +472,8 @@ def _bounded_proof(
     raw: Any,
     *,
     region: str,
-    recording_date: Optional[str],
-    gaps: Tuple[Tuple[float, float], ...],
+    recording_date: str | None,
+    gaps: tuple[tuple[float, float], ...],
 ) -> bool:
     """Validate the GMS producer's pinned proof envelope, not its geometry.
 
@@ -535,17 +536,17 @@ def _bounded_proof(
 
 def _regions(
     approved: Mapping[str, Any],
-    recording_date: Optional[str],
+    recording_date: str | None,
     route_ids: Sequence[str],
     by_id: Mapping[str, EvidenceItem],
     ambiguous: set,
     reasons: _Reasons,
-) -> Tuple[RegionClaim, ...]:
+) -> tuple[RegionClaim, ...]:
     raw = approved.get("region_claims")
     if not isinstance(raw, (list, tuple)):
         reasons.refuse("missing_field:region_claims")
         return ()
-    claims: List[RegionClaim] = []
+    claims: list[RegionClaim] = []
     for position, item in enumerate(raw):
         evidence_id = (
             _text(item.get("evidence_id")) if isinstance(item, Mapping) else None
@@ -598,7 +599,7 @@ def _regions(
 
 def _region_faults(
     claim: RegionClaim, needed: Sequence[str], policy: FinalTextPolicy
-) -> List[str]:
+) -> list[str]:
     faults = []
     if not set(needed) <= set(claim.contains):
         faults.append("region_partial")
@@ -700,7 +701,7 @@ def _param(
     ambiguous: set,
     route_ids: Sequence[str],
     reasons: _Reasons,
-) -> Optional[Tuple[str, Tuple[EvidenceItem, ...]]]:
+) -> tuple[str, tuple[EvidenceItem, ...]] | None:
     """``(text, place evidence)`` of a parameterized template, or None if refused.
 
     The skeleton must hash to the registered hash, every slot value must be
@@ -724,8 +725,8 @@ def _param(
     if set(slots) != {s.name for s in template.slots}:
         reasons.refuse(f"param_slots:{surface}")
         return None
-    rendered: Dict[str, str] = {}
-    items: List[EvidenceItem] = []
+    rendered: dict[str, str] = {}
+    items: list[EvidenceItem] = []
     for slot in template.slots:
         value = slots[slot.name]
         if slot.type != "place":
@@ -757,7 +758,7 @@ def _param(
     return text, tuple(items)
 
 
-def _year_backed(entry: Mapping[str, Any], recording_date: Optional[str]) -> bool:
+def _year_backed(entry: Mapping[str, Any], recording_date: str | None) -> bool:
     """True when a year tag names the recording date's year."""
     slots = entry.get("slots")
     year = slots.get("year") if isinstance(slots, Mapping) else None
@@ -819,7 +820,7 @@ def _surface(
     position: int,
     policy: FinalTextPolicy,
     reasons: _Reasons,
-) -> Optional[Tuple[str, str, Sequence[str], str, Tuple[str, ...], Optional[str]]]:
+) -> tuple[str, str, Sequence[str], str, tuple[str, ...], str | None] | None:
     """``(kind, text, evidence_ids, scope, segment_places, template_id)`` or None.
 
     A template block, or a tag naming a ``template_id``, carries no evidence:
@@ -914,7 +915,7 @@ def review_final_text(
     required = [p.evidence_id for p in route if p.required]
     regions = _regions(approved, recording_date, route_ids, by_id, ambiguous, reasons)
 
-    surfaces: List[SurfaceReview] = []
+    surfaces: list[SurfaceReview] = []
     visible = approved.get("visible")
     if not isinstance(visible, (list, tuple)) or not visible:
         reasons.refuse("missing_field:visible")
@@ -953,7 +954,7 @@ def review_final_text(
         if parsed is None:
             continue
         kind, text, ids, scope, segment, template_id = parsed
-        items: Tuple[EvidenceItem, ...] = ()
+        items: tuple[EvidenceItem, ...] = ()
         if template_id is None:
             if not ids:
                 reasons.refuse(f"surface_without_evidence:{surface}")
@@ -967,7 +968,7 @@ def review_final_text(
             SurfaceReview(surface, text, items, scope, segment, kind, template_id)
         )
 
-    segment_needed: List[str] = []
+    segment_needed: list[str] = []
     for review_surface in surfaces:
         if review_surface.template_id is not None:
             continue
@@ -1038,7 +1039,7 @@ def review_final_text(
     surfaces.append(title_surface)
 
     date_id = _text(approved.get("date_evidence_id"))
-    date_items: Tuple[EvidenceItem, ...] = ()
+    date_items: tuple[EvidenceItem, ...] = ()
     if date_id is None:
         reasons.refuse("date_without_evidence")
     else:
@@ -1101,10 +1102,10 @@ def _stale(
     plan_fingerprint: str,
     policy_version: str,
     text_policy: FinalTextPolicy,
-    description: Optional[str] = None,
-    tags: Optional[Sequence[str]] = None,
-) -> List[str]:
-    found: List[str] = []
+    description: str | None = None,
+    tags: Sequence[str] | None = None,
+) -> list[str]:
+    found: list[str] = []
     if body["review_version"] != REVIEW_VERSION:
         return ["stale:review_version"]
     if body["verdict"] != AGREE:
@@ -1147,8 +1148,8 @@ def verify_review(
     plan_fingerprint: str,
     policy_version: str,
     text_policy: FinalTextPolicy = DEFAULT_TEXT_POLICY,
-    description: Optional[str] = None,
-    tags: Optional[Sequence[str]] = None,
+    description: str | None = None,
+    tags: Sequence[str] | None = None,
 ) -> None:
     """Refuse an upload unless ``review`` covers exactly what will be sent.
 
@@ -1165,7 +1166,7 @@ def verify_review(
     approval: the caller's human gate still applies.
     """
     if isinstance(review, FinalTextReview):
-        body: Dict[str, Any] = review_to_dict(review)
+        body: dict[str, Any] = review_to_dict(review)
     elif isinstance(review, Mapping):
         body = dict(review)
     elif review is None or isinstance(review, str):

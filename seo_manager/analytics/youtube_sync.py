@@ -12,7 +12,7 @@ install of this package brings them; there is no reduced mode without them.
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 # Imported unconditionally on purpose. These used to sit behind a
 # `try/except ImportError` that set GOOGLE_APIS_AVAILABLE = False and printed a
@@ -26,7 +26,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from zoneinfo import ZoneInfo
 
 from . import metric_source
 
@@ -70,7 +69,7 @@ _ANALYTICS_START_DATE = "2005-01-01"
 _ANALYTICS_ZONE = ZoneInfo("America/Los_Angeles")
 
 
-def analytics_report_window(now: Optional[datetime] = None) -> Tuple[str, str]:
+def analytics_report_window(now: datetime | None = None) -> tuple[str, str]:
     """Lifetime ``(startDate, endDate)`` for a per-video Analytics report."""
     now = now or datetime.now(_ANALYTICS_ZONE)
     return _ANALYTICS_START_DATE, now.astimezone(_ANALYTICS_ZONE).date().isoformat()
@@ -115,7 +114,7 @@ class YouTubeAnalyticsSync:
             "youtubeAnalytics", "v2", credentials=self.credentials
         )
 
-    def fetch_video_statistics(self, video_id: str) -> Optional[Dict]:
+    def fetch_video_statistics(self, video_id: str) -> dict | None:
         """
         Fetch statistics for a single video.
 
@@ -149,7 +148,7 @@ class YouTubeAnalyticsSync:
             print(f"Error fetching stats for video {video_id}: {e}")
             return None
 
-    def fetch_video_analytics(self, video_id: str) -> Optional[Dict]:
+    def fetch_video_analytics(self, video_id: str) -> dict | None:
         """
         Fetch click/engagement metrics from the YouTube *Analytics* API v2.
 
@@ -193,11 +192,11 @@ class YouTubeAnalyticsSync:
             return None
 
         headers = [h["name"] for h in response.get("columnHeaders", [])]
-        return dict(zip(headers, rows[0]))
+        return dict(zip(headers, rows[0], strict=False))
 
     def sync_video_analytics(
         self, manager, video_id: str, content_id: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Fetch analytics for one video and sync to SEO Manager.
 
@@ -263,7 +262,7 @@ class YouTubeAnalyticsSync:
 
         return event_id
 
-    def batch_sync(self, manager, video_mapping: Dict[str, str]) -> List[Dict]:
+    def batch_sync(self, manager, video_mapping: dict[str, str]) -> list[dict]:
         """
         Sync analytics for multiple videos in batch.
 
@@ -307,7 +306,7 @@ class YouTubeAnalyticsSync:
 
         return results
 
-    def _calculate_engagement_rate(self, stats: Dict) -> float:
+    def _calculate_engagement_rate(self, stats: dict) -> float:
         """
         Calculate engagement rate from video statistics.
 

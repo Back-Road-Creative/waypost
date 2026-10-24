@@ -13,7 +13,6 @@ import contextlib
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
 
 from filelock import FileLock
 
@@ -154,11 +153,11 @@ class SEOEventStore:
     def query_by_site(
         self,
         site_id: str,
-        event_type: Optional[EventType] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[SEOEvent]:
+        event_type: EventType | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        limit: int | None = None,
+    ) -> list[SEOEvent]:
         """
         Query events with filters.
 
@@ -211,7 +210,7 @@ class SEOEventStore:
 
         return events
 
-    def get_by_content_id(self, site_id: str, content_id: str) -> List[SEOEvent]:
+    def get_by_content_id(self, site_id: str, content_id: str) -> list[SEOEvent]:
         """
         Get all events for specific content.
 

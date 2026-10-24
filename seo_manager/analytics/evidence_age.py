@@ -26,9 +26,9 @@ One home for the threshold and the arithmetic: two modules each carrying
 their own copy are two code paths that disagree the moment one is edited.
 """
 
+from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum
-from typing import Iterable, Optional
 
 STALE_AFTER_DAYS = 30.0
 """Evidence newer than this is FRESH, older is STALE -- and still reported.
@@ -50,9 +50,7 @@ class EvidenceState(Enum):
     UNDATED = "undated"  # samples carry no timestamp; age unknown, not 0
 
 
-def age_days(
-    timestamp: Optional[str], now: Optional[datetime] = None
-) -> Optional[float]:
+def age_days(timestamp: str | None, now: datetime | None = None) -> float | None:
     """Days between an ISO-8601 timestamp and now, or None if unknowable."""
     if not timestamp:
         return None
@@ -63,7 +61,7 @@ def age_days(
     return ((now or datetime.now()) - then).total_seconds() / 86400.0
 
 
-def newest(timestamps: Iterable[Optional[str]]) -> Optional[str]:
+def newest(timestamps: Iterable[str | None]) -> str | None:
     """The latest parseable ISO-8601 stamp in the batch, or None."""
     dated = []
     for stamp in timestamps:
@@ -76,21 +74,21 @@ def newest(timestamps: Iterable[Optional[str]]) -> Optional[str]:
     return max(dated)[1] if dated else None
 
 
-def classify(age: Optional[float]) -> EvidenceState:
+def classify(age: float | None) -> EvidenceState:
     """FRESH / STALE / UNDATED for evidence that exists. Never invents an age."""
     if age is None:
         return EvidenceState.UNDATED
     return EvidenceState.STALE if age > STALE_AFTER_DAYS else EvidenceState.FRESH
 
 
-def describe(timestamp: Optional[str], age: Optional[float]) -> str:
+def describe(timestamp: str | None, age: float | None) -> str:
     """One human-readable phrase for an evidence age, for reports."""
     if timestamp is None or age is None:
         return "last updated: not recorded (age unknown)"
     return f"last updated: {timestamp} ({age:.1f} days old)"
 
 
-def stale_reason(age: Optional[float], sample_size: int) -> Optional[str]:
+def stale_reason(age: float | None, sample_size: int) -> str | None:
     """Why a recommendation is labelled, or None when it is fresh."""
     state = classify(age)
     if state is EvidenceState.STALE:

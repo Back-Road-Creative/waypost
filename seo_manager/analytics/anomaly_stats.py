@@ -17,9 +17,9 @@ replay against it to qualify the method before anything depends on it.
 
 import math
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import List, Optional, Sequence, Union
 
 # Refusal vocabulary. A refusal is an answer — "this method cannot speak to
 # that question" — and never a degraded number.
@@ -47,8 +47,8 @@ class Refusal:
     detail: str
     # Present on the two alpha-driven refusals so a caller can print WHY
     # without re-deriving the policy arithmetic.
-    allocated_alpha: Optional[float] = None
-    required_references: Optional[int] = None
+    allocated_alpha: float | None = None
+    required_references: int | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ class RobustDeviation:
     median: float
     scaled_mad: float
     deviation: float
-    relative_effect: Optional[float]
+    relative_effect: float | None
     n: int
     transform: str
 
@@ -92,7 +92,7 @@ def _finite(value: float, label: str) -> float:
     return number
 
 
-def _sorted_reference(values: Sequence[float]) -> List[float]:
+def _sorted_reference(values: Sequence[float]) -> list[float]:
     numbers = [_finite(v, "every reference value") for v in values]
     if not numbers:
         raise ValueError("The reference is empty; there is nothing to compare against.")
@@ -139,7 +139,7 @@ def robust_deviation(
     target: float,
     *,
     transform: str = IDENTITY,
-) -> Union[RobustDeviation, Refusal]:
+) -> RobustDeviation | Refusal:
     """How far ``target`` sits from the reference, in the reference's own units.
 
     Returns ``NO_BASELINE_VARIATION`` when the scaled MAD is 0. No epsilon is
@@ -194,7 +194,7 @@ def tail_rank_p(
     target: float,
     *,
     allocated_alpha: float,
-) -> Union[TailRank, Refusal]:
+) -> TailRank | Refusal:
     """An empirical two-sided tail rank of ``target`` against ``reference``.
 
     Ties count conservatively — toward both tails — which the ``>=`` / ``<=``
@@ -235,7 +235,7 @@ def feasibility(
     total_alpha: float,
     registered_tests: int,
     reference_cap: int,
-) -> Union[Feasible, Refusal]:
+) -> Feasible | Refusal:
     """Can this policy ever produce a confirmable result?
 
     Asked before outcomes are inspected. A policy whose own cap forbids the

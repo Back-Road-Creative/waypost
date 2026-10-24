@@ -9,7 +9,6 @@ them to new content generation.
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 from ..core.metadata import ContentType, SEOMetadata
 from . import metric_source
@@ -74,7 +73,7 @@ def _sole_source(sources) -> str:
 _DECAY_HALF_LIFE_DAYS = 180.0
 
 
-def _age_decay_weight(last_updated: Optional[str]) -> float:
+def _age_decay_weight(last_updated: str | None) -> float:
     """Exponential recency weight in (0, 1]; 1.0 when timestamp is unknown."""
     if not last_updated:
         return 1.0
@@ -86,7 +85,7 @@ def _age_decay_weight(last_updated: Optional[str]) -> float:
     return 0.5 ** (age_days / _DECAY_HALF_LIFE_DAYS)
 
 
-def _evidence_age_days(last_updated: Optional[str]) -> Optional[float]:
+def _evidence_age_days(last_updated: str | None) -> float | None:
     """How old this sample's evidence is, or None when nothing says.
 
     Deliberately the same two guards as `_age_decay_weight` and deliberately
@@ -161,7 +160,7 @@ class PerformancePattern:
     #: data, no youtube_sync run yet)", so substituting 0 for absence -- which
     #: this did -- understated the normal case, exactly the way _perf_score
     #: refuses to. A measured 0.0 is evidence and still averages in.
-    avg_ctr: Optional[float]
+    avg_ctr: float | None
     sample_size: int
     #: How many of those `sample_size` samples actually carried a rate: the
     #: denominator behind `avg_ctr`, so a reader can tell "0.0 across three
@@ -180,7 +179,7 @@ class PerformancePattern:
     #: discounted to a quarter and is indistinguishable, in a sorted list,
     #: from a fresh pattern whose blend is genuinely that weak. This says
     #: which one it is.
-    evidence_age_days: Optional[float] = None
+    evidence_age_days: float | None = None
     #: How many of those `sample_size` samples carried a timestamp: the
     #: denominator behind `evidence_age_days`, so "360 days" is legible as
     #: "across all four videos" or "across the one of four anybody dated".
@@ -224,7 +223,7 @@ class SEOOptimizer:
 
     def analyze_patterns(
         self, min_views: int = 100
-    ) -> Dict[str, List[PerformancePattern]]:
+    ) -> dict[str, list[PerformancePattern]]:
         """
         Analyze historical data to identify successful patterns.
 
@@ -417,7 +416,7 @@ class SEOOptimizer:
         self._analyzed = True
         return patterns
 
-    def get_top_performing_tags(self, limit: int = 10) -> List[str]:
+    def get_top_performing_tags(self, limit: int = 10) -> list[str]:
         """
         Get tags that correlate with high performance.
 
@@ -435,7 +434,7 @@ class SEOOptimizer:
 
         return [p.value for p in self.patterns["tags"][:limit]]
 
-    def get_optimal_title_length(self) -> Tuple[int, int]:
+    def get_optimal_title_length(self) -> tuple[int, int]:
         """
         Get optimal title length range based on top performers.
 
@@ -468,7 +467,7 @@ class SEOOptimizer:
         # Return range around average
         return (int(avg_length - 10), int(avg_length + 10))
 
-    def generate_recommendations(self, content_id: str) -> List[SEORecommendation]:
+    def generate_recommendations(self, content_id: str) -> list[SEORecommendation]:
         """
         Generate specific recommendations for improving content SEO.
 
@@ -597,7 +596,7 @@ class SEOOptimizer:
 
         return metadata
 
-    def predict_performance(self, metadata: SEOMetadata) -> Dict[str, float]:
+    def predict_performance(self, metadata: SEOMetadata) -> dict[str, float]:
         """
         Predict performance metrics for given metadata.
 
@@ -695,7 +694,7 @@ class SEOOptimizer:
 
     def compare_metadata(
         self, metadata_a: SEOMetadata, metadata_b: SEOMetadata
-    ) -> Dict:
+    ) -> dict:
         """
         Compare two metadata variants and predict which will perform better.
 

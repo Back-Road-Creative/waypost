@@ -25,7 +25,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from seo_manager.fsio import atomic_write_json
 
@@ -73,15 +72,15 @@ class ThemeTemplate:
     theme: ContentTheme
     title_template: str  # Use {location}, {date}, {weather} placeholders
     caption_template: str
-    hashtags: List[str]
-    emojis: List[str]
+    hashtags: list[str]
+    emojis: list[str]
     cta: str  # Call to action
     thumbnail_text: str
     description: str
 
 
 # Default theme templates
-THEME_TEMPLATES: Dict[ContentTheme, ThemeTemplate] = {
+THEME_TEMPLATES: dict[ContentTheme, ThemeTemplate] = {
     ContentTheme.GUESS_LOCATION: ThemeTemplate(
         theme=ContentTheme.GUESS_LOCATION,
         title_template="Guess the Location 📍",
@@ -280,7 +279,7 @@ class ThemePerformance:
     views: int = 0
     # None = never measured. A rate whose denominator was never observed is
     # unknown, not a measurement of zero.
-    ctr: Optional[float] = None
+    ctr: float | None = None
     likes: int = 0
     comments: int = 0
     shares: int = 0
@@ -288,7 +287,7 @@ class ThemePerformance:
 
     # Metadata
     location: str = ""
-    last_updated: Optional[str] = None
+    last_updated: str | None = None
 
 
 @dataclass
@@ -299,7 +298,7 @@ class ThemeAnalysis:
     sample_size: int
     total_views: int
     avg_views: float
-    avg_ctr: Optional[float]  # None when no usage in the sample was measured
+    avg_ctr: float | None  # None when no usage in the sample was measured
     avg_engagement: float  # (likes + comments + shares) / views
     confidence_level: float
     vs_average: float  # Percentage better/worse than average
@@ -308,8 +307,8 @@ class ThemeAnalysis:
     # Age of the evidence: the most recent `last_updated` among the usages
     # this analysis averaged -- when the data was learned, never when a
     # report was printed.
-    newest_sample_at: Optional[str] = None
-    evidence_age_days: Optional[float] = None
+    newest_sample_at: str | None = None
+    evidence_age_days: float | None = None
     evidence: EvidenceState = EvidenceState.UNDATED
 
 
@@ -331,8 +330,8 @@ class ThemeSelection:
     basis: str
     evidence: EvidenceState
     sample_size: int
-    evidence_newest_at: Optional[str]
-    evidence_age_days: Optional[float]
+    evidence_newest_at: str | None
+    evidence_age_days: float | None
 
     @property
     def is_stale(self) -> bool:
@@ -379,7 +378,7 @@ class ThemeRotator:
 
     def __init__(
         self,
-        state_dir: Optional[Path] = None,
+        state_dir: Path | None = None,
         strategy: str = "balanced",  # explore, exploit, balanced
         exploration_rate: float = 0.3,  # For balanced strategy
     ):
@@ -398,8 +397,8 @@ class ThemeRotator:
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
         # Theme usage tracking
-        self.usage: Dict[str, ThemePerformance] = {}
-        self.theme_counts: Dict[ContentTheme, int] = defaultdict(int)
+        self.usage: dict[str, ThemePerformance] = {}
+        self.theme_counts: dict[ContentTheme, int] = defaultdict(int)
 
         self._load_state()
 
@@ -471,7 +470,7 @@ class ThemeRotator:
             else:
                 return self._select_best_performer(available_themes, analyses)
 
-    def _select_least_used(self, available: List[ContentTheme]) -> ThemeSelection:
+    def _select_least_used(self, available: list[ContentTheme]) -> ThemeSelection:
         """Select the least-used theme -- exploration, which measures nothing.
 
         This is not a "best": it claims no evidence, so it carries
@@ -487,7 +486,7 @@ class ThemeRotator:
         )
 
     def _select_best_performer(
-        self, available: List[ContentTheme], analyses: Dict[ContentTheme, ThemeAnalysis]
+        self, available: list[ContentTheme], analyses: dict[ContentTheme, ThemeAnalysis]
     ) -> ThemeSelection:
         """Select the best-performing theme, with the age of its evidence.
 
@@ -515,7 +514,7 @@ class ThemeRotator:
             evidence_age_days=analysis.evidence_age_days,
         )
 
-    def _get_recent_themes(self, n: int, category: str = "video") -> List[ContentTheme]:
+    def _get_recent_themes(self, n: int, category: str = "video") -> list[ContentTheme]:
         """Get the N most recently used themes, filtered by category."""
         filtered = [
             u
@@ -532,7 +531,7 @@ class ThemeRotator:
 
     def format_content(
         self, theme: ContentTheme, location: str, date: str = "", weather: str = ""
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Format content using the theme template.
 
@@ -591,14 +590,14 @@ class ThemeRotator:
     def update_performance(
         self,
         content_id: str,
-        views: Optional[int] = None,
-        impressions: Optional[int] = None,
-        ctr: Optional[float] = None,
-        likes: Optional[int] = None,
-        comments: Optional[int] = None,
-        shares: Optional[int] = None,
-        avg_view_duration: Optional[float] = None,
-    ) -> Optional[ThemePerformance]:
+        views: int | None = None,
+        impressions: int | None = None,
+        ctr: float | None = None,
+        likes: int | None = None,
+        comments: int | None = None,
+        shares: int | None = None,
+        avg_view_duration: float | None = None,
+    ) -> ThemePerformance | None:
         """Update performance metrics for a video."""
         if content_id not in self.usage:
             logger.warning(f"No usage record for: {content_id}")
@@ -628,10 +627,10 @@ class ThemeRotator:
 
     def get_theme_analysis(
         self, category: str = "video"
-    ) -> Dict[ContentTheme, ThemeAnalysis]:
+    ) -> dict[ContentTheme, ThemeAnalysis]:
         """Analyze performance by theme, filtered by category."""
         # Group by theme, filtered by category
-        theme_data: Dict[ContentTheme, List[ThemePerformance]] = defaultdict(list)
+        theme_data: dict[ContentTheme, list[ThemePerformance]] = defaultdict(list)
 
         for usage in self.usage.values():
             if usage.views >= self.MIN_VIEWS:
@@ -701,7 +700,7 @@ class ThemeRotator:
 
         return analyses
 
-    def get_top_themes(self, n: int = 3) -> List[Tuple[ContentTheme, ThemeAnalysis]]:
+    def get_top_themes(self, n: int = 3) -> list[tuple[ContentTheme, ThemeAnalysis]]:
         """Get top N performing themes, each with the age of its evidence.
 
         Empty when nothing has been measured. It used to return three
@@ -717,7 +716,7 @@ class ThemeRotator:
 
         return sorted_themes[:n]
 
-    def get_underperforming_themes(self) -> List[ContentTheme]:
+    def get_underperforming_themes(self) -> list[ContentTheme]:
         """Get themes performing below average (candidates for retirement)."""
         analyses = self.get_theme_analysis()
 
@@ -848,8 +847,8 @@ class ThemeRotator:
 
 # Convenience function for pipeline integration
 def get_rotated_theme(
-    location: str, state_dir: Optional[Path] = None
-) -> Tuple[ContentTheme, Dict[str, str]]:
+    location: str, state_dir: Path | None = None
+) -> tuple[ContentTheme, dict[str, str]]:
     """
     Get the next theme and formatted content for a video.
 

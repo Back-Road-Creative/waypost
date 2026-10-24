@@ -13,8 +13,6 @@ Sample sizes are not typed in here. ``PROBATION_MIN_N``, ``DOWN_MIN_N`` and
 below, so the arithmetic (9 at 0.20, 39 at 0.05) stays in one place.
 """
 
-from typing import Dict
-
 from .anomaly_stats import min_references_for
 
 POLICY_REV = 1
@@ -43,7 +41,7 @@ TAIL_K = 2
 DOWN_FRACTION = 0.25
 UP_FRACTION = 0.75
 
-COOLDOWN_DAYS: Dict[str, int] = {"shorts_per_lf": 14, "lf_days": 28, "shorts_times": 14}
+COOLDOWN_DAYS: dict[str, int] = {"shorts_per_lf": 14, "lf_days": 28, "shorts_times": 14}
 
 # Evidence sufficiency, derived (never typed).
 DOWN_ALPHA = 0.20

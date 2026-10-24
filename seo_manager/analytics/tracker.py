@@ -10,7 +10,6 @@ Tracks:
 
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from ..core.events import EventType, SEOEvent
 from ..core.metadata import SEOMetadata
@@ -33,7 +32,7 @@ CTR_BASIS_REPORTED = "reported_rate"
 TOP_PERFORMERS_CAP = 10
 
 
-def _round_or_none(value: Optional[float], digits: int) -> Optional[float]:
+def _round_or_none(value: float | None, digits: int) -> float | None:
     """Round a possibly-unknown average. None survives as None: an average
     nobody measured must not come out of the rounding as 0.0."""
     return None if value is None else round(value, digits)
@@ -94,10 +93,10 @@ class AnalyticsTracker:
     def track_performance(
         self,
         content_id: str,
-        views: Optional[int] = None,
-        clicks: Optional[int] = None,
-        impressions: Optional[int] = None,
-        engagement_rate: Optional[float] = None,
+        views: int | None = None,
+        clicks: int | None = None,
+        impressions: int | None = None,
+        engagement_rate: float | None = None,
         **kwargs,
     ) -> str:
         """
@@ -140,8 +139,8 @@ class AnalyticsTracker:
         return self.store.append_event(event)
 
     def get_summary(
-        self, start_date: Optional[str] = None, end_date: Optional[str] = None
-    ) -> Dict:
+        self, start_date: str | None = None, end_date: str | None = None
+    ) -> dict:
         """
         Get analytics summary for date range.
 
@@ -220,7 +219,7 @@ class AnalyticsTracker:
             "top_performers": self._get_top_performers(performance_events),
         }
 
-    def get_content_performance(self, content_id: str) -> Dict:
+    def get_content_performance(self, content_id: str) -> dict:
         """Performance for one piece of content, on the same rate contract as
         ``get_summary``'s top-performers list.
 
@@ -271,7 +270,7 @@ class AnalyticsTracker:
         return read
 
     @staticmethod
-    def _mean_of_reported(events: List[SEOEvent], key: str) -> Optional[float]:
+    def _mean_of_reported(events: list[SEOEvent], key: str) -> float | None:
         """Mean of ``key`` over the events that reported it, else None.
 
         None is "nobody told us", which is not the measurement 0 -- the same
@@ -282,7 +281,7 @@ class AnalyticsTracker:
         return sum(reported) / len(reported)
 
     @staticmethod
-    def _blank_aggregate(content_id: str) -> Dict:
+    def _blank_aggregate(content_id: str) -> dict:
         """A content with nothing measured yet. Every reader starts here, so
         "no events at all" and "events carrying no rate" come out the same
         shape -- the caller never has to tell them apart by a missing key."""
@@ -320,13 +319,13 @@ class AnalyticsTracker:
         }
 
     @classmethod
-    def _aggregate(cls, performance_events: List[SEOEvent]) -> Dict[str, Dict]:
+    def _aggregate(cls, performance_events: list[SEOEvent]) -> dict[str, dict]:
         """Roll the events up per content_id, rate unresolved.
 
         Shared by both readers of these events rather than written twice
         -- when the two copies disagreed, the same video reported a different
         click rate depending on which screen asked."""
-        by_content: Dict[str, Dict] = {}
+        by_content: dict[str, dict] = {}
 
         for event in performance_events:
             cp = by_content.setdefault(
@@ -350,7 +349,7 @@ class AnalyticsTracker:
         return by_content
 
     @staticmethod
-    def _resolve_rate(aggregate: Dict) -> Dict:
+    def _resolve_rate(aggregate: dict) -> dict:
         """Settle one aggregate's ``ctr``, and say what it is a ratio OF.
 
         Prefer the aggregated clicks/impressions ratio; else the last
@@ -376,7 +375,7 @@ class AnalyticsTracker:
         aggregate.pop("_explicit_ctr", None)
         return aggregate
 
-    def _get_top_performers(self, performance_events: List[SEOEvent]) -> List[Dict]:
+    def _get_top_performers(self, performance_events: list[SEOEvent]) -> list[dict]:
         """
         Get top ``TOP_PERFORMERS_CAP`` content by views.
 

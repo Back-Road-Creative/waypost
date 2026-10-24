@@ -7,9 +7,9 @@ the date) and region-aware; an anonymous booking or ``region=None`` caller sees 
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
-from typing import Iterable, Mapping, Sequence
 
 from seo_manager.core.profile import DAY_ABBR, Cadence, parse_weekday
 from seo_manager.scheduling.store import (

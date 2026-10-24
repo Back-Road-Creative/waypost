@@ -10,9 +10,8 @@ Supports FB, IG, TikTok analytics (YouTube handled separately via API).
 import csv
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from ..core.events import EventType, SEOEvent
 from ..storage.event_store import SEOEventStore
@@ -36,7 +35,7 @@ OPTIONAL_METRIC_COLUMNS = {
 class MetricoolAnalyticsImporter:
     """Imports Metricool analytics CSV exports into the SEO event store."""
 
-    def __init__(self, event_store: Optional[SEOEventStore] = None):
+    def __init__(self, event_store: SEOEventStore | None = None):
         self.event_store = event_store
 
     def import_csv(self, csv_path: str, site_id: str) -> int:
@@ -84,9 +83,7 @@ class MetricoolAnalyticsImporter:
         )
         return count
 
-    def _row_to_event(
-        self, row: dict, site_id: str, row_num: int
-    ) -> Optional[SEOEvent]:
+    def _row_to_event(self, row: dict, site_id: str, row_num: int) -> SEOEvent | None:
         """Convert a CSV row to a PERFORMANCE_UPDATED event."""
         date_str = row.get("Date", "").strip()
         if not date_str:
@@ -124,7 +121,7 @@ class MetricoolAnalyticsImporter:
             event_type=EventType.PERFORMANCE_UPDATED,
             site_id=site_id,
             content_id=content_id,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             data=data,
         )
 

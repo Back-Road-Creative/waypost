@@ -14,11 +14,12 @@ Daily quota: 10,000 units
 """
 
 import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional
+from typing import Any
 
 # Imported unconditionally: google-api-python-client and google-auth are both
 # declared dependencies, and youtube/__init__.py imports this module eagerly,
@@ -75,9 +76,9 @@ class UploadConfig:
     privacy: str = "draft"
     notify_subscribers: bool = False
     made_for_kids: bool = False
-    category_id: Optional[int] = None
-    playlist_id: Optional[str] = None
-    publish_at: Optional[datetime] = None
+    category_id: int | None = None
+    playlist_id: str | None = None
+    publish_at: datetime | None = None
 
 
 @dataclass
@@ -85,10 +86,10 @@ class UploadResult:
     """Result of video upload"""
 
     success: bool
-    video_id: Optional[str] = None
-    video_url: Optional[str] = None
+    video_id: str | None = None
+    video_url: str | None = None
     quota_used: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class YouTubeUploader:
@@ -161,15 +162,15 @@ class YouTubeUploader:
         self,
         video_path: str,
         metadata: "SEOMetadata",  # noqa: F821
-        thumbnail_path: Optional[str] = None,
+        thumbnail_path: str | None = None,
         privacy: str = "private",
-        publish_at: Optional[datetime] = None,
-        progress_callback: Optional[Callable] = None,
+        publish_at: datetime | None = None,
+        progress_callback: Callable | None = None,
         dry_run: bool = False,
         *,
         final_text_review: Any,
         final_text_context: Mapping[str, Any],
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Upload video to YouTube with SEO metadata.
 
@@ -244,10 +245,10 @@ class YouTubeUploader:
         # privacy != "private") and normalize naive datetimes to UTC "Z".
         if publish_at is not None:
             if publish_at.tzinfo is None:
-                publish_at = publish_at.replace(tzinfo=timezone.utc)
+                publish_at = publish_at.replace(tzinfo=UTC)
             body["status"]["privacyStatus"] = "private"
             body["status"]["publishAt"] = (
-                publish_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                publish_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
             )
 
         # Gate the final payload: validate the snippet exactly as it will be

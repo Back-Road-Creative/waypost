@@ -10,9 +10,10 @@ bundle round-trips byte-for-byte through ``bundle_to_dict``); ``parse_ts`` gives
 the naive-UTC ``datetime`` the controller compares.
 """
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Mapping, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 SCHEMA_VERSION = 1
 ANALYTICS_STATUSES = ("ok", "scope_missing", "no_token", "error")
@@ -29,14 +30,14 @@ class Health:
     n_registered: int
     n_with_series: int
     excluded: Any = field(default_factory=list)
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
 class ShortRecord:
     video_id: str
     project: str
-    region: Optional[str]
+    region: str | None
     platform: str
     posted_at: str
     weekday: int
@@ -49,7 +50,7 @@ class ShortRecord:
 class LongformRecord:
     video_id: str
     project: str
-    region: Optional[str]
+    region: str | None
     posted_at: str
     duration_sec: float
     day7_views: float
@@ -61,15 +62,15 @@ class EvidenceBundle:
     schema_version: int
     as_of: str
     health: Health
-    shorts: List[ShortRecord]
-    longforms: List[LongformRecord]
+    shorts: list[ShortRecord]
+    longforms: list[LongformRecord]
 
 
 def parse_ts(value: str) -> datetime:
     """An ISO timestamp as a naive UTC ``datetime`` (aware values are converted)."""
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
     return dt
 
 
@@ -86,7 +87,7 @@ def _text(obj: Mapping[str, Any], key: str, where: str) -> str:
     return v
 
 
-def _opt_text(obj: Mapping[str, Any], key: str, where: str) -> Optional[str]:
+def _opt_text(obj: Mapping[str, Any], key: str, where: str) -> str | None:
     v = _need(obj, key, where)
     if v is not None and not isinstance(v, str):
         raise EvidenceRefused(f"{where}: {key} must be a string or null")
@@ -116,7 +117,7 @@ def _ts(obj: Mapping[str, Any], key: str, where: str) -> str:
     return v
 
 
-def _rows(raw: Mapping[str, Any], key: str) -> List[Any]:
+def _rows(raw: Mapping[str, Any], key: str) -> list[Any]:
     rows = _need(raw, key, "bundle")
     if not isinstance(rows, list):
         raise EvidenceRefused(f"bundle: {key} must be a list")
@@ -188,5 +189,5 @@ def parse_bundle(raw: Any) -> EvidenceBundle:
     return EvidenceBundle(version, as_of, health, shorts, longforms)
 
 
-def bundle_to_dict(bundle: EvidenceBundle) -> Dict[str, Any]:
+def bundle_to_dict(bundle: EvidenceBundle) -> dict[str, Any]:
     return asdict(bundle)

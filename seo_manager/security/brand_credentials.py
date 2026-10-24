@@ -17,7 +17,6 @@ Example:
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from cryptography.fernet import Fernet
 
@@ -33,7 +32,7 @@ class BrandCredentials:
     - Restrictive file permissions (600)
     """
 
-    def __init__(self, brand_id: str, credentials_dir: Optional[Path] = None):
+    def __init__(self, brand_id: str, credentials_dir: Path | None = None):
         """
         Initialize brand credentials manager.
 
@@ -49,7 +48,7 @@ class BrandCredentials:
         self.key = self._load_or_create_key()
         self.fernet = Fernet(self.key)
 
-    def save_youtube_credentials(self, credentials: Dict) -> None:
+    def save_youtube_credentials(self, credentials: dict) -> None:
         """
         Save YouTube OAuth credentials (encrypted).
 
@@ -72,7 +71,7 @@ class BrandCredentials:
         # Set restrictive permissions
         cred_file.chmod(0o600)
 
-    def load_youtube_credentials(self) -> Dict:
+    def load_youtube_credentials(self) -> dict:
         """
         Load YouTube OAuth credentials (decrypt).
 
@@ -95,7 +94,7 @@ class BrandCredentials:
         encrypted = cred_file.read_bytes()
         return self._decrypt(encrypted)
 
-    def save_client_secret(self, client_secret: Dict) -> None:
+    def save_client_secret(self, client_secret: dict) -> None:
         """
         Save OAuth client secret configuration (encrypted).
 
@@ -118,7 +117,7 @@ class BrandCredentials:
         # Set restrictive permissions
         secret_file.chmod(0o600)
 
-    def load_client_secret(self) -> Dict:
+    def load_client_secret(self) -> dict:
         """
         Load OAuth client secret configuration (decrypt).
 
@@ -190,7 +189,7 @@ class BrandCredentials:
         self.save_youtube_credentials(legacy_creds)
 
     @staticmethod
-    def list_brands(credentials_dir: Optional[Path] = None) -> List[str]:
+    def list_brands(credentials_dir: Path | None = None) -> list[str]:
         """
         List all configured brands.
 
@@ -214,7 +213,7 @@ class BrandCredentials:
 
         return sorted(brands)
 
-    def _encrypt(self, data: Dict) -> bytes:
+    def _encrypt(self, data: dict) -> bytes:
         """
         Encrypt data with Fernet.
 
@@ -227,7 +226,7 @@ class BrandCredentials:
         json_data = json.dumps(data, indent=2)
         return self.fernet.encrypt(json_data.encode("utf-8"))
 
-    def _decrypt(self, data: bytes) -> Dict:
+    def _decrypt(self, data: bytes) -> dict:
         """
         Decrypt data with Fernet.
 
@@ -271,7 +270,7 @@ class BrandCredentials:
 
             return key
 
-    def _load_legacy_credentials(self) -> Dict:
+    def _load_legacy_credentials(self) -> dict:
         """
         Load credentials from legacy location (backward compatibility).
 
