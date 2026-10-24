@@ -14,7 +14,11 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 PACKAGE_DIR = REPO / "seo_manager"
 
-REMOVED_MODULES = ("seo_manager.production.error_recovery",)
+REMOVED_MODULES = (
+    "seo_manager.production.error_recovery",
+    "seo_manager.production.structured_logger",
+    "seo_manager.production.rate_limiter",
+)
 
 
 @pytest.mark.parametrize("name", REMOVED_MODULES)
