@@ -9,6 +9,7 @@ the same 10,000 unit daily quota. This manager ensures we never exceed it.
 """
 
 import json
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -16,6 +17,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from filelock import FileLock
+
+from seo_manager.fsio import atomic_write_json
+
+logger = logging.getLogger(__name__)
 
 # Lock file mode: 0o664 (group-writable). See
 # ``seo_manager.storage.event_store._LOCK_MODE`` for the rationale.
@@ -119,25 +124,38 @@ class QuotaManager:
     def _load_state_inner(self):
         """Load quota state (must be called with lock held)"""
         if self.quota_file.exists():
-            with open(self.quota_file) as f:
-                data = json.load(f)
+            try:
+                with open(self.quota_file) as f:
+                    data = json.load(f)
 
-            # Check if we need to reset (new day)
-            last_reset = datetime.fromisoformat(
-                data.get("last_reset", "2000-01-01T00:00:00+00:00")
-            )
-            now = datetime.now(timezone.utc)
+                # Check if we need to reset (new day)
+                last_reset = datetime.fromisoformat(
+                    data.get("last_reset", "2000-01-01T00:00:00+00:00")
+                )
+                now = datetime.now(timezone.utc)
 
-            if now.date() > last_reset.date():
-                # New day - reset quota
+                if now.date() > last_reset.date():
+                    # New day - reset quota
+                    self._reset_state()
+                else:
+                    # Load existing state
+                    operations = [
+                        QuotaOperation(**op) for op in data.get("operations", [])
+                    ]
+                    total_used = data.get("total_used", 0)
+                    self.operations = operations
+                    self.total_used = total_used
+                    self.last_reset = last_reset
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                # A quota file that cannot be read is not a reason to refuse to
+                # run: start from an empty day and say so.
+                logger.warning(
+                    "Quota file %s is unreadable (%s); starting with a fresh "
+                    "quota state",
+                    self.quota_file,
+                    e,
+                )
                 self._reset_state()
-            else:
-                # Load existing state
-                self.operations = [
-                    QuotaOperation(**op) for op in data.get("operations", [])
-                ]
-                self.total_used = data.get("total_used", 0)
-                self.last_reset = last_reset
         else:
             # Initialize new state
             self._reset_state()
@@ -164,8 +182,7 @@ class QuotaManager:
             "operations": [asdict(op) for op in self.operations],
         }
 
-        with open(self.quota_file, "w") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(self.quota_file, data)
 
     def track_operation(
         self,

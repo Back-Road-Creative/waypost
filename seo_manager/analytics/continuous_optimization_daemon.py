@@ -44,6 +44,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from seo_manager.fsio import atomic_write_json
+
 from .evidence_age import age_days as _age_days
 
 logger = logging.getLogger(__name__)
@@ -537,8 +539,7 @@ class ContinuousOptimizationDaemon:
         path = self.state_dir / RUN_RECORD_FILENAME
         try:
             self.state_dir.mkdir(parents=True, exist_ok=True)
-            with open(path, "w") as f:
-                json.dump(asdict(record), f, indent=2)
+            atomic_write_json(path, asdict(record))
         except OSError as e:
             logger.error(f"could not write the run record to {path}: {e}")
 
@@ -867,8 +868,7 @@ class ContinuousOptimizationDaemon:
                 self._read_learned_config(config_path), template_config
             )
 
-            with open(config_path, "w") as f:
-                json.dump(template_config, f, indent=2)
+            atomic_write_json(config_path, template_config)
 
             # The write is an I/O event, so it is recorded as one, in metrics.
             metrics["config_path"] = str(config_path)
@@ -1155,8 +1155,7 @@ class ContinuousOptimizationDaemon:
 
         state_file = self.state_dir / "daemon_state.json"
 
-        with open(state_file, "w") as f:
-            json.dump(asdict(self.state), f, indent=2)
+        atomic_write_json(state_file, asdict(self.state))
 
     def _log_cycle_summary(self, results: List[OptimizationResult]):
         """Log a summary of the optimization cycle."""

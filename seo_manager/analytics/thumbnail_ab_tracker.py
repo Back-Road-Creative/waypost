@@ -25,6 +25,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from seo_manager.fsio import atomic_write_json
+
 from . import evidence_age, metric_source
 from .evidence_age import EvidenceState
 
@@ -734,5 +736,4 @@ class ThumbnailABTracker:
             "last_updated": datetime.now().isoformat(),
         }
 
-        with open(state_file, "w") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(state_file, data)
