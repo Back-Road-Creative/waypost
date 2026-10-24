@@ -14,7 +14,7 @@ class BasePlatformAdapter(ABC):
     """
     Abstract base class for platform-specific adapters.
 
-    Each platform (YouTube, Blog, Twitter, etc.) implements this interface
+    Each platform (YouTube, etc.) implements this interface
     to provide platform-specific constraints, formatting, and validation.
     """
 
@@ -50,7 +50,6 @@ class BasePlatformAdapter(ABC):
         Examples:
         - YouTube: "ai, machine learning, podcast" (comma-separated)
         - Instagram: "#ai #machinelearning #podcast" (hashtags)
-        - Blog: ['ai', 'machine-learning', 'podcast'] (slugified list)
         """
         pass
 

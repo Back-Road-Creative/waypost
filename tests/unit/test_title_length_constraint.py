@@ -19,8 +19,6 @@ from seo_manager.analytics.seo_optimizer import SEOOptimizer
 from seo_manager.core.manager import SEOManager
 from seo_manager.core.metadata import ContentType
 from seo_manager.generation.base import BaseSEOGenerator
-from seo_manager.platforms.blog import BlogAdapter
-from seo_manager.platforms.twitter import TwitterAdapter
 from seo_manager.platforms.youtube import YouTubeAdapter
 
 YT_KWARGS = dict(
@@ -44,14 +42,6 @@ GOLDEN_CASES = [
         YouTubeAdapter,
         dict(content_type=ContentType.VIDEO, topic="Sunset Run"),
         "Sunset Run: Overview",
-    ),
-    (
-        TwitterAdapter,
-        dict(
-            content_type=ContentType.BLOG_POST,
-            topic="Why local inference beats the cloud for small models",
-        ),
-        "Why Local Inference Beats The Cloud For Small...",
     ),
 ]
 
@@ -101,12 +91,12 @@ class TestConstraintIsHonoured:
 
 class TestPlatformCapWins:
     def test_range_wider_than_cap_is_clamped(self, storage):
-        metadata = _manager(storage, BlogAdapter).generate(
-            content_type=ContentType.BLOG_POST,
-            topic="A Deliberately Overlong Blog Headline About Trail Conditions In The Cascades",
+        metadata = _manager(storage, YouTubeAdapter).generate(
+            content_type=ContentType.VIDEO,
+            topic="A Deliberately Overlong Video Headline About Trail Conditions In The Cascades",
             title_length_range=(100, 140),
         )
-        assert len(metadata.title) <= BlogAdapter().get_title_limit()
+        assert len(metadata.title) <= YouTubeAdapter().get_title_limit()
 
     def test_optimize_title_clamps_range_to_limit(self, generator):
         title = "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda"

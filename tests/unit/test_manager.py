@@ -18,7 +18,6 @@ import pytest
 
 from seo_manager.core.manager import SEOManager
 from seo_manager.core.metadata import ContentType, Platform
-from seo_manager.platforms.blog import BlogAdapter
 from seo_manager.platforms.youtube import YouTubeAdapter
 
 
@@ -39,13 +38,6 @@ class TestSEOManager:
             site_id="test_youtube_site",
             platform=YouTubeAdapter(),
             storage_path=temp_storage,
-        )
-
-    @pytest.fixture
-    def blog_manager(self, temp_storage):
-        """Create Blog SEO manager"""
-        return SEOManager(
-            site_id="test_blog_site", platform=BlogAdapter(), storage_path=temp_storage
         )
 
     def test_manager_initialization(self, youtube_manager):
@@ -74,21 +66,6 @@ class TestSEOManager:
         # Quality score should be calculated
         assert metadata.quality_score is not None
         assert 0.0 <= metadata.quality_score <= 1.0
-
-    def test_generate_blog_metadata(self, blog_manager):
-        """Test generating blog metadata end-to-end"""
-        metadata = blog_manager.generate(
-            content_type=ContentType.BLOG_POST,
-            topic="Python Best Practices",
-            body="A comprehensive guide to Python programming best practices...",
-            existing_tags=["python", "programming"],
-        )
-
-        assert metadata.site_id == "test_blog_site"
-        assert metadata.platform == Platform.BLOG
-        assert metadata.content_type == ContentType.BLOG_POST
-        assert len(metadata.title) <= 60  # Blog SERP limit
-        assert len(metadata.description) <= 160  # Meta description limit
 
     def test_save_metadata(self, youtube_manager):
         """Test saving metadata to event store"""
@@ -122,8 +99,8 @@ class TestSEOManager:
             site_id="site_youtube", platform=YouTubeAdapter(), storage_path=temp_storage
         )
 
-        blog_mgr = SEOManager(
-            site_id="site_blog", platform=BlogAdapter(), storage_path=temp_storage
+        other_mgr = SEOManager(
+            site_id="site_other", platform=YouTubeAdapter(), storage_path=temp_storage
         )
 
         # Generate metadata for each
@@ -132,25 +109,25 @@ class TestSEOManager:
         )
         youtube_mgr.save(youtube_meta)
 
-        blog_meta = blog_mgr.generate(
-            content_type=ContentType.BLOG_POST, topic="Blog Post", body="Blog content"
+        other_meta = other_mgr.generate(
+            content_type=ContentType.VIDEO, topic="Other Video", body="Other content"
         )
-        blog_mgr.save(blog_meta)
+        other_mgr.save(other_meta)
 
         # Each manager should only see its own data
         youtube_retrieved = youtube_mgr.get_metadata(youtube_meta.content_id)
-        blog_retrieved = blog_mgr.get_metadata(blog_meta.content_id)
+        other_retrieved = other_mgr.get_metadata(other_meta.content_id)
 
         assert youtube_retrieved is not None
-        assert blog_retrieved is not None
+        assert other_retrieved is not None
         assert youtube_retrieved.site_id == "site_youtube"
-        assert blog_retrieved.site_id == "site_blog"
+        assert other_retrieved.site_id == "site_other"
 
         # Cross-site queries should return None
-        assert youtube_mgr.get_metadata(blog_meta.content_id) is None
-        assert blog_mgr.get_metadata(youtube_meta.content_id) is None
+        assert youtube_mgr.get_metadata(other_meta.content_id) is None
+        assert other_mgr.get_metadata(youtube_meta.content_id) is None
 
-    def test_platform_specific_limits_enforced(self, youtube_manager, blog_manager):
+    def test_platform_specific_limits_enforced(self, youtube_manager):
         """Test that platform limits are enforced"""
         long_topic = "A" * 100
 
@@ -159,12 +136,6 @@ class TestSEOManager:
             content_type=ContentType.VIDEO, topic=long_topic, body="Test"
         )
         assert len(youtube_meta.title) <= 70
-
-        # Blog (60 char limit)
-        blog_meta = blog_manager.generate(
-            content_type=ContentType.BLOG_POST, topic=long_topic, body="Test"
-        )
-        assert len(blog_meta.title) <= 60
 
     def test_get_metadata_nonexistent(self, youtube_manager):
         """Test retrieving non-existent metadata returns None"""

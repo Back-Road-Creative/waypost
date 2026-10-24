@@ -281,7 +281,7 @@ class TestAnalyticsTracker:
             metadata = SEOMetadata(
                 site_id="test_site",
                 content_id=f"content_{i}",
-                platform=Platform.BLOG,
+                platform=Platform.LINKEDIN,
                 content_type=ContentType.BLOG_POST,
                 title="Title",
                 description="Desc",
