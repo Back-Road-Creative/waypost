@@ -177,6 +177,9 @@ summary = manager.analytics.get_summary(
 
 ## CLI
 
+Use `seo-manager --version` to identify the installed package without loading
+configuration or opening a database. See [version reporting](docs/cli-version.md).
+
 Installing Waypost provides `seo-manager`. The equivalent
 `python -m seo_manager.cli` invocation remains supported:
 
