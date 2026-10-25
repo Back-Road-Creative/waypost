@@ -10,6 +10,23 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-25
+
+### Added
+
+- Installed and module CLI version reporting without configuration (#53)
+
+### Fixed
+
+- OAuth setup saves credentials privately and atomically, preserves existing
+  content on failure, and replaces destination symlinks without following them
+  (#52). Existing credential files change only when setup is rerun.
+
+### Changed
+
+- Architecture guide reflects alpha status, the complete module inventory, and
+  separate release and consumer-deployment acceptance (#54)
+
 ## [0.2.0] - 2026-10-25
 
 ### Added
@@ -108,6 +125,7 @@ These modules have no compatibility shim in 0.2:
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...main
+[0.2.1]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Back-Road-Creative/waypost/releases/tag/v0.1.0
