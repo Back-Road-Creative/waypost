@@ -88,6 +88,16 @@ print(f"✅ Credentials saved to: {credentials_path}")
 
 **Security:** Keep `youtube_credentials.json` secret (add to .gitignore)
 
+The setup helper saves credentials using an owner-only temporary file (mode
+`0600` on POSIX) and replaces the destination only after the complete contents
+have been flushed. Re-running setup also replaces an older, more permissive
+file with an owner-only file. A serialization or save failure leaves the old
+credentials intact and cleans up the temporary file when the process can
+handle the failure. An existing destination symlink is replaced, not followed;
+its target remains unchanged. Use a trusted output directory that already
+exists. This does not change permissions on files until setup is rerun, and
+it does not protect against another process modifying that directory.
+
 ---
 
 ## Step 6: Use YouTube Analytics Sync
