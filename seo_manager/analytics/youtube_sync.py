@@ -11,7 +11,9 @@ install of this package brings them; there is no reduced mode without them.
 
 import json
 import os
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 # Imported unconditionally on purpose. These used to sit behind a
@@ -351,8 +353,27 @@ class YouTubeAnalyticsSync:
 
         credentials = flow.run_local_server(port=0)
 
-        # Save credentials
-        with open(output_path, "w") as f:
-            f.write(credentials.to_json())
+        # Serialize before touching the existing file. A same-directory temporary
+        # file is owner-only from creation, including while credentials are written.
+        payload = credentials.to_json()
+        path = Path(output_path)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                temporary = Path(f.name)
+                f.write(payload)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
         return output_path
