@@ -10,23 +10,25 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
 ### Added
 
-- Installed `seo-manager` command, equivalent to `python -m seo_manager.cli`.
+- Installed `seo-manager` command, equivalent to `python -m seo_manager.cli` (#48).
 - Scheduling claim misses report a reason and, outside the lead window, the
   next slot; `claim_or_reason` exposes the same information to Python callers
-  while `claim` keeps its existing `Claim | None` contract.
+  while `claim` keeps its existing `Claim | None` contract (#48).
 - Shared scheduling settings work before or after the action, preserving
-  explicit settings over environment defaults.
+  explicit settings over environment defaults (#48).
 - A drive backlog row may name a whole-day GPX track (`day_gpx`) and the camera clock's
   offset from UTC (`camera_utc_offset_hours`), for footage with no GPS of its own; the two
-  are required together, and `backlog-next` prints both
+  are required together, and `backlog-next` prints both (#46)
 
 ### Changed
 
 - Supported Python is 3.12 and later: `requires-python`, the classifiers, the mypy
   `python_version` and the ruff `target-version` now say what CI tests (it ran 3.12
-  only; the old `>=3.8` was false)
+  only; the old `>=3.8` was false) (#45)
 - README is titled Waypost and the final-text review description moved to its own
   document, `docs/final-text-review.md` (#27)
 - README links the four docs that were missing from its Documentation index (#24)
@@ -35,6 +37,10 @@ tagged is listed under Unreleased.
 
 ### Fixed
 
+- Credential brand identifiers reject path escapes and existing symlinks before key access (#49)
+- Batch uploads without a video ID count as failures and honor continue-or-stop policy (#50)
+- State files are written atomically; quota recovery tolerates a corrupt file (#40)
+- Report commands return exit 2 for bad inputs and explain empty joins (#42)
 - Quota manager keeps other managers' usage and reports both warning tiers (#31)
 - Title casing keeps acronyms and apostrophes (#30)
 - Metricool import usage shows the required flags without brackets (#29)
@@ -42,7 +48,7 @@ tagged is listed under Unreleased.
 
 ### Removed
 
-- The no-op `sync` placeholder; it now exits 2 as an unknown command.
+- The no-op `sync` placeholder; it now exits 2 as an unknown command (#48).
 - Unused autofix package (#32)
 - Unused YouTube theme sync (#33)
 - Unused thumbnail design system module (#34)
@@ -51,8 +57,21 @@ tagged is listed under Unreleased.
   quality tracker (#38)
 - Documentation mentions of the removed autofix, theme sync and thumbnail design
   system modules (#39)
-- Unused blog metadata generator and its tests
-- Unused blog and Twitter platform adapters and their `Platform` enum members
+- Unused blog metadata generator and its tests (#43)
+- Unused blog and Twitter platform adapters and their `Platform` enum members (#44)
+
+### Removed API inventory
+
+These modules have no compatibility shim in 0.2:
+
+| Removed path under `seo_manager` | Consumer action |
+| --- | --- |
+| `autofix` | Remove imports and calls to the retired autofix engine. |
+| `analytics.youtube_theme_sync` | Remove calls to the retired theme synchronization module. |
+| `youtube.thumbnail_design_system` | Remove imports of this module; the separate thumbnail generator remains. |
+| `production` | Remove dependencies on error recovery, structured logging, rate limiting, health checks, issue tracking, and podcast quality tracking from this retired package. |
+| `generation.blog_generator` | Remove use of the retired blog generator and its package export. |
+| `platforms.blog`, `platforms.twitter` | Remove use of the retired adapters and their package exports. |
 
 ## [0.1.0] - 2026-10-21
 
@@ -89,5 +108,6 @@ tagged is listed under Unreleased.
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.1.0...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...main
+[0.2.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Back-Road-Creative/waypost/releases/tag/v0.1.0
