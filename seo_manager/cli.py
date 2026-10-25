@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 
+from seo_manager import __version__
 from seo_manager.analytics.perf_report import ReportError, analyze
 
 
@@ -350,6 +351,7 @@ def _add_schedule_parser(sub) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="seo-manager")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("report", help="LF views by publish month and title class")
     r.add_argument(
