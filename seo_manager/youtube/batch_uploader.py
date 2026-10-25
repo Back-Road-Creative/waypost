@@ -378,6 +378,9 @@ class BatchUploader:
                     final_text_context=video.final_text_context,
                 )
 
+                if not isinstance(video_id, str) or not video_id.strip():
+                    raise RuntimeError("Upload returned no video ID")
+
                 # Calculate quota used
                 quota_used = self.UPLOAD_QUOTA_COST
                 if video.thumbnail_path:
