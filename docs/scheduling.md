@@ -83,13 +83,25 @@ Every slot decision lives here; callers only ask and execute.
   no directory or lock; on an existing one it never alters the schema.
 - `complete(claim_id)` keeps the bookings; `fail(claim_id)` frees those without a video id.
   Repeating the same outcome is a no-op; the opposite one raises.
+- `claim_or_reason(...)` uses the same arguments and locked decision as `claim`.
+  It returns a `Claim` on success or a `ClaimMiss` with reason `no_ready_drive`,
+  `outside_lead_window` (and `next_slot`), or `missing_database` for a dry run
+  against an absent database. Existing Python callers of `claim(...)` still
+  receive `None` for these cases. Errors such as stale SHA or lock failure
+  remain errors, never successful no-work decisions.
 - CLI: `python -m seo_manager.cli schedule [--brand-yaml Y] [--db D]
   [--decisions-db C] {claim --region R
   [--lead-hours H] [--expect-sha S] [--dry-run] | complete C | fail C | ready-depth --region R |
   register --project P --region R --lf-count N --mirror-sha S [--lf-mode M] [--ingest-mode I] [--status auditing|ready] |
   set-status --project P --status S}`.
   JSON on stdout; exit 2 on any refusal, including a locked database or a malformed
-  brand.yaml. `--db` (or `SEO_SCHEDULE_DB`) is required, with no code-relative default, and must name an
+  brand.yaml. No-work claims exit 0 with `{"claim": null, "reason": "no_ready_drive"}`
+  or `reason: "outside_lead_window"` plus an ISO `next_slot`. A successful claim's
+  JSON is unchanged. `--brand-yaml`, `--db`, `--decisions-db` and `--init` work
+  on either side of the action; action-level explicit settings win without
+  erasing other prefix settings. `seo-manager` is the installed equivalent of
+  `python -m seo_manager.cli`.
+  `--db` (or `SEO_SCHEDULE_DB`) is required, with no code-relative default, and must name an
   existing file: every command except `register` and `import-ledger` exits 2 on a missing one (a typo must not
   read as "nothing ready") unless `--init` is given, which creates it: keep
   the file wherever the deployment keeps its per-tenant data, and pass the same `--db` / `SEO_SCHEDULE_DB` to every scheduled job and hand run so they share one database.

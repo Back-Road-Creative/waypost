@@ -50,22 +50,6 @@ def _cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_sync(args: argparse.Namespace) -> int:
-    print("seo-manager sync: not implemented yet.")
-    print("A real sync would call, for every video in videos.yaml:")
-    print("  - Data API      youtube.videos().list(part=statistics,snippet)")
-    print("  - Analytics API youtubeAnalytics.reports().query(")
-    print(
-        "        metrics=views,impressions,estimatedMinutesWatched,averageViewDuration)"
-    )
-    target = args.ledger or "the event ledger given with --ledger"
-    print(f"and append performance_updated events to {target}.")
-    if not args.dry_run:
-        print("Only --dry-run is supported right now.", file=sys.stderr)
-        return 2
-    return 0
-
-
 _CREATES_DB = frozenset(
     {"register", "import-ledger"}
 )  # may start a new database; the rest need --init
@@ -196,7 +180,7 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
             )
             out = {"region": args.region, "slot": slot.isoformat()}
         elif act == "claim":
-            c = claims.claim(
+            c = claims.claim_or_reason(
                 store,
                 cadence,
                 args.region,
@@ -205,7 +189,12 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
                 expect_sha=args.expect_sha,
                 dry_run=args.dry_run,
             )
-            out = _claim_json(c) if c else {"claim": None}
+            if isinstance(c, claims.ClaimMiss):
+                out = {"claim": None, "reason": c.reason}
+                if c.next_slot is not None:
+                    out["next_slot"] = c.next_slot.isoformat()
+            else:
+                out = _claim_json(c)
         elif act in ("complete", "fail"):
             status = store.finish_claim(args.claim_id, ok=act == "complete")
             out = {"claim_id": args.claim_id, "status": status}
@@ -269,21 +258,22 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_schedule_parser(sub) -> None:
-    sp = sub.add_parser("schedule", help="long-form slots: report | next | claim | ...")
+def _schedule_options(sp, *, defaults: bool) -> None:
+    # Action-level omissions must not overwrite settings supplied before the
+    # action. Explicit action-level values take precedence over prefix values.
     sp.add_argument(
         "--brand-yaml",
-        default=os.environ.get("SEO_BRAND_YAML"),
+        default=os.environ.get("SEO_BRAND_YAML") if defaults else argparse.SUPPRESS,
         help="tenant brand.yaml with seo.cadence (env SEO_BRAND_YAML, else brand.yaml in SEO_INPUTS_DIR)",
     )
     sp.add_argument(
         "--db",
-        default=os.environ.get("SEO_SCHEDULE_DB"),
+        default=os.environ.get("SEO_SCHEDULE_DB") if defaults else argparse.SUPPRESS,
         help="schedule.sqlite3 path (env SEO_SCHEDULE_DB); required, no default",
     )
     sp.add_argument(
         "--decisions-db",
-        default=os.environ.get("SEO_DECISIONS_DB"),
+        default=os.environ.get("SEO_DECISIONS_DB") if defaults else argparse.SUPPRESS,
         help="cadence_decisions.sqlite3 (env SEO_DECISIONS_DB); when set, its decided "
         "long-form weekdays replace the brand.yaml dow, which is then only the seed. "
         "No code-relative default, same reason as --db",
@@ -291,13 +281,20 @@ def _add_schedule_parser(sub) -> None:
     sp.add_argument(
         "--init",
         action="store_true",
+        default=False if defaults else argparse.SUPPRESS,
         help="create --db if it does not exist (register does so on its own)",
     )
+
+
+def _add_schedule_parser(sub) -> None:
+    sp = sub.add_parser("schedule", help="long-form slots: report | next | claim | ...")
+    _schedule_options(sp, defaults=True)
     sp.set_defaults(func=_cmd_schedule)
     act = sp.add_subparsers(dest="action", required=True)
 
     def add(name, help_, *flags):
         p = act.add_parser(name, help=help_)
+        _schedule_options(p, defaults=False)
         for f, opts in flags:
             p.add_argument(f, **opts)
 
@@ -366,13 +363,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     r.add_argument("--out", help="write markdown here instead of stdout")
     r.set_defaults(func=_cmd_report)
-    s = sub.add_parser("sync", help="stats sync (placeholder)")
-    s.add_argument(
-        "--ledger",
-        help="event ledger the sync would append to; there is no default location",
-    )
-    s.add_argument("--dry-run", action="store_true")
-    s.set_defaults(func=_cmd_sync)
     _add_schedule_parser(sub)
     return p
 

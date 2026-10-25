@@ -70,7 +70,10 @@ def test_dry_run_writes_nothing(run, tmp_path):
 
 
 def test_claim_nothing_ready_prints_null_claim(run):
-    assert run("claim", "--region", "north", "--now", NOW) == {"claim": None}
+    assert run("claim", "--region", "north", "--now", NOW) == {
+        "claim": None,
+        "reason": "no_ready_drive",
+    }
 
 
 def test_claim_stale_sha_exits_2(run, capsys):
@@ -331,7 +334,10 @@ def test_init_creates_a_missing_database_for_any_command(brand_yaml, tmp_path, c
     db = tmp_path / "new.sqlite3"
     rc = main(["schedule", "--brand-yaml", str(brand_yaml), "--db", str(db), "--init",
                "claim", "--region", "north"])  # fmt: skip
-    assert rc == 0 and json.loads(capsys.readouterr().out) == {"claim": None}
+    assert rc == 0 and json.loads(capsys.readouterr().out) == {
+        "claim": None,
+        "reason": "no_ready_drive",
+    }
     assert db.exists()
 
 
@@ -345,7 +351,10 @@ def test_register_status_auditing_is_not_claimable(run):
     out = run(*REG, "--status", "auditing")
     assert out == {"project": "p", "status": "auditing"}
     assert run("ready-depth", "--region", "north")["depth"] == 0
-    assert run("claim", "--region", "north", "--now", NOW) == {"claim": None}
+    assert run("claim", "--region", "north", "--now", NOW) == {
+        "claim": None,
+        "reason": "no_ready_drive",
+    }
     run("set-status", "--project", "p", "--status", "ready")
     assert run("ready-depth", "--region", "north")["depth"] == 1
 

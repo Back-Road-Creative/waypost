@@ -86,15 +86,13 @@ def test_classify_title(title, expected):
     assert classify_title(title) == expected
 
 
-def test_cli_report_and_sync_dry_run(fixture_paths, capsys):
+def test_cli_report(fixture_paths, capsys):
     ledger, videos = fixture_paths
     assert (
         cli.main(["report", "--ledger", str(ledger), "--videos-yaml", str(videos)]) == 0
     )
     out = capsys.readouterr().out
     assert "| publish month | n | median lifetime views | median views/day |" in out
-    assert cli.main(["sync", "--dry-run"]) == 0
-    assert "not implemented" in capsys.readouterr().out
 
 
 def _unmeasured_paths(fixture_paths):

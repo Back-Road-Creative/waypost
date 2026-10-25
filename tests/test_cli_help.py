@@ -1,6 +1,6 @@
 """Every CLI subcommand at least builds and answers ``--help``.
 
-``seo-manager``'s parser is flat (``report``, ``sync``) except ``schedule``, whose
+``seo-manager``'s parser is flat (``report``) except ``schedule``, whose
 own actions are discovered too, so a bad ``type=``/default/import is caught the
 same way as in the other services. Discovery walks ``parser._actions`` for ``argparse._SubParsersAction`` and
 reads ``.choices``, the same mechanism the video pipeline's CLI test uses.
@@ -39,7 +39,7 @@ SCHEDULE_ACTIONS = _discover_schedule_actions()
 
 
 def test_discovery_found_subcommands():
-    assert SUBCOMMAND_NAMES == ["report", "sync", "schedule"]
+    assert SUBCOMMAND_NAMES == ["report", "schedule"]
     assert SCHEDULE_ACTIONS == [
         "report",
         "next",

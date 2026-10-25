@@ -12,6 +12,12 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- Installed `seo-manager` command, equivalent to `python -m seo_manager.cli`.
+- Scheduling claim misses report a reason and, outside the lead window, the
+  next slot; `claim_or_reason` exposes the same information to Python callers
+  while `claim` keeps its existing `Claim | None` contract.
+- Shared scheduling settings work before or after the action, preserving
+  explicit settings over environment defaults.
 - A drive backlog row may name a whole-day GPX track (`day_gpx`) and the camera clock's
   offset from UTC (`camera_utc_offset_hours`), for footage with no GPS of its own; the two
   are required together, and `backlog-next` prints both
@@ -36,6 +42,7 @@ tagged is listed under Unreleased.
 
 ### Removed
 
+- The no-op `sync` placeholder; it now exits 2 as an unknown command.
 - Unused autofix package (#32)
 - Unused YouTube theme sync (#33)
 - Unused thumbnail design system module (#34)
