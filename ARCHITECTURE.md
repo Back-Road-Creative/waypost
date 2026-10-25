@@ -1,15 +1,15 @@
-# SEO Manager - System Architecture
+# Waypost - System Architecture
 
-**Version:** 1.0.0
-**Status:** Production Ready
+**Package version:** see `pyproject.toml` and [CHANGELOG.md](CHANGELOG.md).
+**Status:** Alpha library. Production acceptance belongs to each consumer deployment.
 
 ---
 
 ## System Overview
 
-**SEO Manager** is a complete social media SEO management library providing:
+**Waypost** (`seo_manager`) is a metadata, review, scheduling and analytics library providing:
 - Multi-platform SEO metadata generation (YouTube)
-- NLP-powered keyword extraction and optimization
+- Deterministic offline keyword extraction and optimization
 - Performance analytics tracking with YouTube API integration
 - Thumbnail generation with three A/B style variations
 - Event sourcing with complete audit trails
@@ -60,7 +60,7 @@ External Integrations:
 ### 1. Core Module (`seo_manager/core/`)
 
 **SEOMetadata** - Immutable dataclass
-- 4 platforms (YouTube, Instagram, TikTok, LinkedIn)
+- 4 platform enum values (YouTube, Instagram, TikTok, LinkedIn); only YouTube has a shipped adapter
 - 6 content types (Video, Short, Blog Post, Social Post, Podcast, Trail Guide)
 - Quality metrics (quality_score, keyword_density, readability_score)
 - Platform-specific metadata dicts
@@ -82,7 +82,7 @@ External Integrations:
 
 ### 2. Generation Module (`seo_manager/generation/`)
 
-**BaseSEOGenerator** - Core NLP engine
+**BaseSEOGenerator** - Offline generation engine
 - Offline keyword extraction with a vendored stopword list (`stopwords.py`)
 - TF-based ranking
 - Title/description/tag optimization
@@ -189,7 +189,7 @@ learned ranges applied to the titles it generates.
 
 ---
 
-### 7. YouTube Module (`seo_manager/youtube/`) 🆕
+### 7. YouTube Module (`seo_manager/youtube/`)
 
 **YouTubeThumbnailGenerator** - Thumbnail creation
 - 1280x720 YouTube standard
@@ -198,6 +198,31 @@ learned ranges applied to the titles it generates.
 - Logo placement with shadows
 - Mobile readability validation
 - Gradient backgrounds
+
+---
+
+### 8. Scheduling and Quota (`seo_manager/scheduling/`, `seo_manager/quota/`)
+
+Scheduling uses a SQLite store for drive registration, slot bookings and claim
+state, with brand configuration and a separate decisions database supplied by
+callers. `claim()` retains its `Claim | None` contract; `claim_or_reason()` can
+explain why no work was selected. See [scheduling](docs/scheduling.md).
+
+Quota accounting tracks operation costs and warnings with locked updates.
+Local accounting is distinct from the remote service's enforcement and does
+not prove that a remote operation succeeded.
+
+### 9. Credentials and Local Files (`seo_manager/security/`)
+
+Brand credentials use encrypted files under a caller-selected credential
+root. Brand identifiers are directory names, not arbitrary paths; see
+[credential directory boundaries](docs/credential-brand-paths.md). Keep that
+root under trusted control. Site IDs and filesystem partitioning are library
+organization mechanisms, not a substitute for operating-system access control.
+
+`paths.py` resolves configured data locations; `inputs.py` resolves private
+input files. `fsio.py` provides atomic JSON replacement for state writers.
+Consumers own credentials, private configuration, process isolation and backup.
 
 ---
 
@@ -284,7 +309,7 @@ All state changes recorded as immutable events:
 Complete data segregation per site_id:
 - Filesystem-level partitioning
 - Query scoping enforcement
-- Zero cross-site leakage
+- Callers remain responsible for access control around the storage root
 
 ### 3. Platform Adapters
 Encapsulate platform-specific logic:
@@ -301,7 +326,7 @@ Safety through refusal, not silent correction:
 Library approach, not framework:
 - Import and use, don't modify existing code
 - Optional adoption for existing projects
-- Zero dependencies on external services (except the YouTube API)
+- Local metadata and scheduling operations can run offline; API synchronization and publication require their configured external services
 
 ### 6. Test-Driven Development
 Thorough test coverage:
@@ -363,27 +388,17 @@ class InstagramMetadataGenerator(BaseSEOGenerator):
 
 ---
 
-## Performance Characteristics
+## Performance and Capacity
 
-### Metadata Generation
-- **Speed:** <50ms (no corpus download on any path)
-- **Memory:** <10MB
-- **Disk:** ~1KB per event
+Measure latency, memory and storage growth with the consumer's own inputs and
+hardware. This document does not provide a reproducible benchmark supporting
+fixed latency or capacity guarantees. Event-store query costs depend on the
+query path, index state and event count; thumbnail costs depend on input size
+and rendering options.
 
-### Thumbnail Generation
-- **Speed:** 1-3 seconds per variation (3-9 seconds for set of 3)
-- **Memory:** ~50MB (Pillow image processing)
-- **Disk:** 1.5-2MB per thumbnail PNG
-
-### Analytics Queries
-- **Speed:** <100ms for typical queries
-- **Scalability:** Linear with event count
-- **Index Performance:** O(1) lookups by site/date/type
-
-### YouTube API
-- **Rate Limit:** 10,000 units/day (free tier)
-- **Upload Cost:** 1,600 units per video
-- **Analytics Cost:** 1-10 units per query
+API quota and operation costs are separate from local performance. Review the
+configured quota manager and the provider's current limits when integrating;
+local counters do not replace provider-side quota checks.
 
 ---
 
@@ -440,13 +455,12 @@ summary = manager.analytics.get_summary()
 ## Future Architecture Considerations
 
 ### Scalability
-- **Current:** Single-machine, file-based (sufficient for 100K+ events)
+- **Current:** Single-machine, file-based events and SQLite scheduling
 - **Future:** Distributed event store (Kafka) if multi-machine needed
 
 ### Additional Platforms
-- Instagram Reels (15-30 min to add)
-- TikTok (15-30 min to add)
-- LinkedIn (15-30 min to add)
+- Instagram, TikTok and LinkedIn adapters are not shipped. Each needs an
+  explicit implementation and validation plan; enum membership is not support.
 
 ### External Integrations
 - Google Analytics API
@@ -458,13 +472,20 @@ summary = manager.analytics.get_summary()
 
 ```
 seo_manager/
-├── core/              # Metadata, events, manager
-├── generation/        # Base + YouTube generator
+├── core/              # Metadata, events, manager, locality and profiles
+├── generation/        # YouTube, Shorts, drive text and offline keyword ranking
 ├── storage/           # Event store
-├── platforms/         # Adapters
-├── analytics/         # Tracker + YouTube sync
-├── validation/        # SEO rules
-└── youtube/           # Thumbnails, uploads, video SEO
+├── platforms/         # Base adapter and YouTube implementation
+├── analytics/         # Metrics, evidence, text reviews and volume decisions
+├── scheduling/        # Backlog, cadence, slots, claims and SQLite store
+├── quota/             # Local operation accounting and warnings
+├── security/          # Encrypted brand credentials
+├── validation/        # SEO and platform rules
+├── youtube/           # Thumbnails, reviewed uploads and video SEO
+├── cli.py             # Report and scheduling command interface
+├── fsio.py            # Atomic JSON state writes
+├── inputs.py          # Private input resolution
+└── paths.py           # Data-location resolution
 ```
 
 ---
@@ -522,4 +543,14 @@ seo_manager.analytics.track_performance(...)
 
 ---
 
-**System is production-ready and fully documented.**
+## Release and Consumer Acceptance
+
+Waypost releases are git tags on reviewed, tested commits; see
+[Releasing](README.md#releasing). A tag does not update an installed consumer,
+change its dependency pin, or deploy its runtime. The migration guide describes
+[changes from 0.1 to 0.2](docs/migrating-0.2.md).
+
+Before deploying, verify the installed package and consumer configuration,
+exercise the consumer's relevant workflow, and retain a matching code and
+environment rollback path. Passing library tests or importing the package is
+not evidence that a live render, schedule or upload completed successfully.
