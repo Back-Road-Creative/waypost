@@ -16,7 +16,7 @@ Example:
 """
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from cryptography.fernet import Fernet
 
@@ -37,12 +37,27 @@ class BrandCredentials:
         Initialize brand credentials manager.
 
         Args:
-            brand_id: Unique identifier for the brand (e.g., 'mybrand')
+            brand_id: One directory component (e.g., 'mybrand'), not a path
             credentials_dir: Optional custom credentials directory path
+
+        Raises:
+            ValueError: brand_id is a path, contains control characters, or
+                selects an existing symlink. Validation precedes key creation.
         """
+        if (
+            not isinstance(brand_id, str)
+            or not brand_id
+            or brand_id in {".", ".."}
+            or any(c in brand_id for c in ("/", "\\"))
+            or any(ord(c) < 32 or ord(c) == 127 for c in brand_id)
+            or PureWindowsPath(brand_id).drive
+        ):
+            raise ValueError("brand_id must be a single directory name, not a path")
         self.brand_id = brand_id
         self.credentials_dir = credentials_dir or Path("./credentials")
         self.brand_dir = self.credentials_dir / brand_id
+        if self.brand_dir.is_symlink():
+            raise ValueError("brand_id must not select a symbolic link")
 
         # Load or create encryption key
         self.key = self._load_or_create_key()
