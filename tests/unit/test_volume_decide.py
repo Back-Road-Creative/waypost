@@ -123,6 +123,62 @@ def test_evidence_from_stdin(capsys, tmp_path, monkeypatch):
     assert code == 0 and capsys.readouterr().out.count("VOLUME_DECISION") == 3
 
 
+def test_decisions_db_environment_persists_rows(tmp_path, monkeypatch):
+    db = tmp_path / "from-env.sqlite3"
+    monkeypatch.setenv("SEO_DECISIONS_DB", str(db))
+    evidence = bundle(tmp_path)
+
+    assert vd.main(["--evidence", str(evidence), "--today", TODAY]) == 0
+    assert len(cd.history(db)) == 3
+
+
+def test_explicit_decisions_db_overrides_environment(tmp_path, monkeypatch):
+    env_db = tmp_path / "from-env.sqlite3"
+    explicit_db = tmp_path / "explicit.sqlite3"
+    monkeypatch.setenv("SEO_DECISIONS_DB", str(env_db))
+
+    assert (
+        vd.main(
+            [
+                "--evidence",
+                str(bundle(tmp_path)),
+                "--db",
+                str(explicit_db),
+                "--today",
+                TODAY,
+            ]
+        )
+        == 0
+    )
+    assert len(cd.history(explicit_db)) == 3
+    assert not env_db.exists()
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_missing_decisions_db_is_an_argument_error(
+    tmp_path, monkeypatch, capsys, value
+):
+    monkeypatch.chdir(tmp_path)
+    if value is None:
+        monkeypatch.delenv("SEO_DECISIONS_DB", raising=False)
+    else:
+        monkeypatch.setenv("SEO_DECISIONS_DB", value)
+
+    with pytest.raises(SystemExit) as exc:
+        vd.main(["--evidence", "unread-evidence.json"])
+    assert exc.value.code == 2
+    assert "SEO_DECISIONS_DB" in capsys.readouterr().err
+    assert not list(tmp_path.iterdir())
+
+
+def test_help_names_decisions_db_environment(monkeypatch, capsys):
+    monkeypatch.delenv("SEO_DECISIONS_DB", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        vd.main(["--help"])
+    assert exc.value.code == 0
+    assert "SEO_DECISIONS_DB" in capsys.readouterr().out
+
+
 # --- the decider chooses and persists the LF weekdays ----------------------
 
 BRAND = """\

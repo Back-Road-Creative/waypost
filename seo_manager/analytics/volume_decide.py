@@ -492,7 +492,12 @@ def run(
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="volume_decide", description=__doc__)
     p.add_argument("--evidence", required=True, help="EvidenceBundle JSON file, or -")
-    p.add_argument("--db", required=True, type=Path, help="cadence_decisions.sqlite3")
+    p.add_argument(
+        "--db",
+        type=Path,
+        default=os.environ.get("SEO_DECISIONS_DB") or None,
+        help="cadence_decisions.sqlite3 (env SEO_DECISIONS_DB); explicit flag wins",
+    )
     p.add_argument("--today", type=date.fromisoformat, default=None, help="YYYY-MM-DD")
     p.add_argument(
         "--brand-yaml",
@@ -506,6 +511,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="schedule.sqlite3 (env SEO_SCHEDULE_DB): ready-drive depth per region",
     )
     args = p.parse_args(argv)
+    if args.db is None:
+        p.error("--db or SEO_DECISIONS_DB is required")
     return run(
         args.evidence,
         args.db,
