@@ -221,6 +221,14 @@ explicit flags override environment defaults. A claim with no work keeps
 | `SEO_SCHEDULE_DB` | `--db` | the tenant's `schedule.sqlite3`; required, never defaulted |
 | `SEO_DECISIONS_DB` | `--decisions-db` | the tenant's `cadence_decisions.sqlite3`; when set, its decided LF weekdays replace the yaml `dow` (the seed) |
 
+### Volume and cadence decisions
+
+`python -m seo_manager.analytics.volume_decide --evidence evidence.json`
+reads its decisions database path from `SEO_DECISIONS_DB`. An explicit
+`--db cadence_decisions.sqlite3` overrides that environment variable. If neither
+is provided (including an empty environment value), it exits 2 with an argument
+error before reading evidence or writing state. `--help` describes these options.
+
 ### Metricool PDF importer
 
 ```bash
@@ -282,7 +290,7 @@ configured" and the code says which variable or option to set:
 | `videos.yaml` for `report` | `--videos-yaml` | exits 2 naming `--videos-yaml` |
 | tenant `brand.yaml` | `SEO_BRAND_YAML` / `--brand-yaml` (or `brand.yaml` in `SEO_INPUTS_DIR`) | `schedule` fails naming it; `volume_decide` then decides only the volume knobs |
 | `schedule.sqlite3` | `SEO_SCHEDULE_DB` / `--db` (`--schedule-db` for `volume_decide`) | `schedule` fails naming it; `volume_decide` counts ready depth as 0 and says why |
-| `cadence_decisions.sqlite3` | `SEO_DECISIONS_DB` / `--decisions-db` (`schedule`); `--db` (`volume_decide`) | `schedule`: the yaml `dow` seed is used; `volume_decide`: `--db` is required and argparse exits 2 without it |
+| `cadence_decisions.sqlite3` | `SEO_DECISIONS_DB` / `--decisions-db` (`schedule`); `SEO_DECISIONS_DB` / `--db` (`volume_decide`) | `schedule`: the yaml `dow` seed is used; `volume_decide`: exits 2 when no flag is provided and the environment value is absent or empty |
 | directory holding `intel_db.py` | `INTEL_SCRIPTS_DIR` | the IntelDB integration is off |
 | IntelDB database file | `INTEL_DB_PATH` | saved metadata is not logged to IntelDB |
 | YouTube OAuth token and video map | `--youtube-credentials`, `--video-mapping` | the daemon's sync reports itself unconfigured |
