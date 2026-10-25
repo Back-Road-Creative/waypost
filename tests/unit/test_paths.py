@@ -63,19 +63,3 @@ def test_report_with_a_missing_ledger_names_the_path(clean_env, capsys):
     err = capsys.readouterr().err
     assert "--ledger" in err
     assert str(missing) in err
-
-
-def test_sync_dry_run_without_a_ledger_does_not_invent_a_location(
-    clean_env, monkeypatch, capsys
-):
-    monkeypatch.setenv("SEO_MANAGER_DATA_HOME", str(clean_env / "d"))
-    assert cli.main(["sync", "--dry-run"]) == 0
-    out = capsys.readouterr().out
-    assert "--ledger" in out
-    assert str(clean_env / "d") not in out
-
-
-def test_sync_ledger_option_is_named_in_the_output(clean_env, capsys):
-    other = clean_env / "other.jsonl"
-    assert cli.main(["sync", "--dry-run", "--ledger", str(other)]) == 0
-    assert str(other) in capsys.readouterr().out

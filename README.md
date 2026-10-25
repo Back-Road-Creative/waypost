@@ -172,13 +172,16 @@ summary = manager.analytics.get_summary(
 
 ## CLI
 
-Run the CLI as a module (no console script is declared):
+Installing Waypost provides `seo-manager`. The equivalent
+`python -m seo_manager.cli` invocation remains supported:
 
 ```bash
-python -m seo_manager.cli report --ledger path/to/events.jsonl \
+seo-manager report --ledger path/to/events.jsonl \
     --videos-yaml path/to/videos.yaml --out report.md   # LF views by publish month + title class (markdown)
-python -m seo_manager.cli sync --dry-run              # prints the API calls a stats sync would make; not implemented yet
 ```
+
+The former `sync` placeholder has been removed: it performed no synchronization.
+Calling it now exits 2 instead of reporting a successful dry run.
 
 `report` has no default for `--ledger` or `--videos-yaml`: both name files that
 belong to a particular deployment, so an unset one exits 2 with a message naming
@@ -197,6 +200,12 @@ in common, or no views measurement) in the report and on stderr.
 `python -m seo_manager.cli schedule …` books long-form slots (see
 [docs/scheduling.md](docs/scheduling.md)). Its settings, each a flag or an
 environment variable:
+
+Scheduling settings can appear before or after the action, for example
+`seo-manager schedule report --brand-yaml brand.yaml --db schedule.sqlite3`.
+An explicit value after the action wins over the same setting before it;
+explicit flags override environment defaults. A claim with no work keeps
+`"claim": null` and adds a `reason`; see the [claim protocol](docs/scheduling.md#claim-protocol).
 
 | Variable | Flag | Meaning |
 |---|---|---|

@@ -44,6 +44,14 @@ class Claim:
     confirmed_lfs: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class ClaimMiss:
+    """A decision that reserves nothing; errors still raise as before."""
+
+    reason: str
+    next_slot: datetime | None = None
+
+
 def _confirmed_lfs(store: ScheduleStore, project: str) -> tuple[int, ...]:
     return tuple(
         sorted(
@@ -164,12 +172,35 @@ def claim(
     from ``now`` (nothing is booked). ``expect_sha`` refuses (``StaleDrive``) a drive whose
     registered mirror sha differs. ``dry_run`` decides and answers, writes nothing.
     """
+    result = claim_or_reason(
+        store,
+        cadence,
+        region,
+        now=now,
+        lead_hours=lead_hours,
+        expect_sha=expect_sha,
+        dry_run=dry_run,
+    )
+    return result if isinstance(result, Claim) else None
+
+
+def claim_or_reason(
+    store: ScheduleStore,
+    cadence: Cadence,
+    region: str,
+    *,
+    now: datetime | None = None,
+    lead_hours: int | None = None,
+    expect_sha: str | None = None,
+    dry_run: bool = False,
+) -> Claim | ClaimMiss:
+    """Like ``claim``, with a reason for each no-work outcome under the same lock."""
     now = _aware(cadence, now)
     horizon = timedelta(hours=cadence.lead_hours if lead_hours is None else lead_hours)
     cadence.region(region)  # unknown region raises
     region = canon_region(region)
     if dry_run and not store.path.exists():
-        return None  # nothing to decide from; take no lock, create no directory
+        return ClaimMiss("missing_database")  # take no lock, create no directory
     with store.exclusive():
         if open_claims := store.drives(region, "claimed"):
             d = open_claims[0]
@@ -192,7 +223,7 @@ def claim(
             )
         ready = store.drives(region, "ready")
         if not ready:
-            return None
+            return ClaimMiss("no_ready_drive")
         # A drive registered at another revision is skipped so it cannot block the
         # region. Each skip raises a once-a-day alert.
         fresh_drives = [
@@ -212,7 +243,7 @@ def claim(
         chosen = _plan_series(store, cadence, region, drive, now)
         fresh = [s for i, s in enumerate(chosen, 1) if i not in confirmed]
         if fresh and fresh[0] - now > horizon:
-            return None
+            return ClaimMiss("outside_lead_window", next_slot=fresh[0])
         if dry_run:
             return _claim_of(drive, chosen, confirmed=tuple(sorted(confirmed)))
         claim_id = uuid.uuid4().hex
