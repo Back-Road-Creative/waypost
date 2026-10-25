@@ -17,6 +17,11 @@ A Python library for generating, validating, tracking, and auto-optimizing SEO m
 
 ## Installation
 
+Python 3.12 or later is required. When upgrading from 0.1.0, review the
+[0.2 migration guide](docs/migrating-0.2.md) for removed APIs and changed CLI
+outcomes. The distribution remains `seo-manager`; Python imports remain
+`seo_manager`.
+
 ### Development Mode (Editable Install)
 
 ```bash
@@ -282,6 +287,10 @@ configured" and the code says which variable or option to set:
 
 ## Documentation
 
+- **Upgrading from 0.1.0**: [docs/migrating-0.2.md](docs/migrating-0.2.md)
+- **Credential directory names**: [docs/credential-brand-paths.md](docs/credential-brand-paths.md)
+- **Batch upload results**: [docs/batch-upload-results.md](docs/batch-upload-results.md)
+
 - **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
 - **Scheduling and slot booking**: [docs/scheduling.md](docs/scheduling.md)
 - **Cadence and volume decisions**: [docs/cadence-decisions.md](docs/cadence-decisions.md)
@@ -353,12 +362,13 @@ A release is a git tag on `main`; there is no publish workflow. The tag is
 request first, then tag the merge commit once `ci.yml` has passed on it:
 
 ```bash
-git fetch origin && git tag -a v0.1.0 origin/main -m "seo-manager 0.1.0"
-git push origin v0.1.0
+git fetch origin && git tag -a v0.2.0 origin/main -m "seo-manager 0.2.0"
+git push origin v0.2.0
 ```
 
-Consumers pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.1.0`)
-rather than a commit SHA.
+Once the tag exists, consumers can pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.2.0`)
+or use an exact reviewed commit SHA. Updating a consumer pin and deploying it
+are separate changes; a Waypost tag does not update running consumers.
 
 Every release also updates [CHANGELOG.md](CHANGELOG.md). In the same pull request
 that bumps the version, rename the Unreleased heading to the new version and the
@@ -378,5 +388,5 @@ account data and credentials outside the repository.
 
 ---
 
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Status**: Alpha - Implementation in progress
