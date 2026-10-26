@@ -177,3 +177,20 @@ def test_the_views_estimate_divides_by_the_patterns_it_has():
     predictions = optimizer.predict_performance(_FakeMetadata("A" * 30, ["t"]))
 
     assert predictions["estimated_views"] == 1000 * predictions["confidence"]
+
+
+def test_a_performer_with_unreported_views_is_left_out_not_scored_as_zero():
+    top = [
+        {"content_id": "a", "views": None, "last_updated": _now_iso()},
+        {"content_id": "b", "views": 5000, "last_updated": _now_iso()},
+    ]
+    meta = {
+        "a": _FakeMetadata("Title A", ["shared"]),
+        "b": _FakeMetadata("Title B", ["shared"]),
+    }
+
+    patterns = _optimizer(top, meta).analyze_patterns(min_views=100)
+
+    pattern = _tag(patterns, "shared")
+    assert pattern.sample_size == 1
+    assert pattern.avg_views == 5000

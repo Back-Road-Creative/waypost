@@ -10,6 +10,10 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Fixed
+
+- Analytics keep unreported metrics unknown instead of zero: summaries, the optimizer, the theme rotator and the Metricool import no longer turn a missing count into 0, and repeated lifetime snapshots of one post are no longer summed
+
 ## [0.2.1] - 2026-10-25
 
 ### Added

@@ -72,9 +72,10 @@ def test_a_recomputed_rate_says_it_was_recomputed(tracker):
 
     performance = tracker.get_content_performance("video_1")
 
-    # 4 dp, the precision `_get_top_performers` has always used: the two
-    # readers have to agree to the digit, not merely approximately.
-    assert performance["ctr"] == round(13 / 1100, 4)
+    # The latest snapshot (8 over 600), not the sum of both: the counts are
+    # lifetime. 4 dp, the precision `_get_top_performers` has always used: the
+    # two readers have to agree to the digit, not merely approximately.
+    assert performance["ctr"] == round(8 / 600, 4)
     assert performance["ctr_basis"] == "clicks_over_impressions"
 
 

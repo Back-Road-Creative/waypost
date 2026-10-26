@@ -274,15 +274,16 @@ class ThemePerformance:
     theme: ContentTheme
     created_at: str
 
-    # Performance metrics
-    impressions: int = 0
-    views: int = 0
+    # Performance metrics. None = the platform never reported it: unknown,
+    # not a measurement of zero (a reported 0 is still a 0).
+    impressions: int | None = None
+    views: int | None = None
     # None = never measured. A rate whose denominator was never observed is
     # unknown, not a measurement of zero.
     ctr: float | None = None
-    likes: int = 0
-    comments: int = 0
-    shares: int = 0
+    likes: int | None = None
+    comments: int | None = None
+    shares: int | None = None
     avg_view_duration: float = 0.0
 
     # Metadata
@@ -299,7 +300,9 @@ class ThemeAnalysis:
     total_views: int
     avg_views: float
     avg_ctr: float | None  # None when no usage in the sample was measured
-    avg_engagement: float  # (likes + comments + shares) / views
+    # (likes + comments + shares) / views; None when no usage in the sample
+    # reported any of the three
+    avg_engagement: float | None
     confidence_level: float
     vs_average: float  # Percentage better/worse than average
     is_top_performer: bool
@@ -633,7 +636,7 @@ class ThemeRotator:
         theme_data: dict[ContentTheme, list[ThemePerformance]] = defaultdict(list)
 
         for usage in self.usage.values():
-            if usage.views >= self.MIN_VIEWS:
+            if usage.views is not None and usage.views >= self.MIN_VIEWS:
                 is_photo = usage.theme.value.startswith("voice_")
                 if (category == "photo" and is_photo) or (
                     category == "video" and not is_photo
@@ -641,7 +644,11 @@ class ThemeRotator:
                     theme_data[usage.theme].append(usage)
 
         # Calculate overall averages
-        all_views = [u.views for u in self.usage.values() if u.views >= self.MIN_VIEWS]
+        all_views = [
+            u.views
+            for u in self.usage.values()
+            if u.views is not None and u.views >= self.MIN_VIEWS
+        ]
         overall_avg_views = sum(all_views) / len(all_views) if all_views else 0
 
         analyses = {}
@@ -660,9 +667,17 @@ class ThemeRotator:
             avg_ctr = sum(ctrs) / len(ctrs) if ctrs else None
 
             # Engagement rate. Every usage here passed ``views >= MIN_VIEWS``
-            # above, so the denominator is never 0 and the list is never empty.
-            engagements = [(u.likes + u.comments + u.shares) / u.views for u in usages]
-            avg_engagement = sum(engagements) / len(engagements)
+            # above, so the denominator is never 0. A usage that reported none
+            # of likes/comments/shares is left out, not counted as no
+            # engagement; the ones that did report sum what they reported.
+            engagements = []
+            for u in usages:
+                counts = [c for c in (u.likes, u.comments, u.shares) if c is not None]
+                if counts:
+                    engagements.append(sum(counts) / u.views)
+            avg_engagement = (
+                sum(engagements) / len(engagements) if engagements else None
+            )
 
             # Confidence
             confidence = min(1.0, len(usages) / (self.MIN_SAMPLE_SIZE * 3))

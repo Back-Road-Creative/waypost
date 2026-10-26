@@ -87,7 +87,7 @@ class TestAnalyticsTracker:
 
         assert summary is not None
         assert summary["content_metrics"]["total_content_generated"] == 0
-        assert summary["performance_metrics"]["total_views"] == 0
+        assert summary["performance_metrics"]["total_views"] is None
 
     def test_get_summary_with_data(self, tracker):
         """Test summary aggregation with data"""
@@ -134,16 +134,17 @@ class TestAnalyticsTracker:
 
     def test_get_content_performance(self, tracker):
         """Test getting performance for specific content"""
-        # Track performance for same content multiple times
+        # Two snapshots of the same content: the counts are lifetime, so the
+        # latest snapshot represents the post and they are not summed.
         tracker.track_performance("video_123", views=100, clicks=5, impressions=500)
         tracker.track_performance("video_123", views=150, clicks=8, impressions=600)
 
         performance = tracker.get_content_performance("video_123")
 
         assert performance["content_id"] == "video_123"
-        assert performance["total_views"] == 250  # 100 + 150
-        assert performance["total_clicks"] == 13  # 5 + 8
-        assert performance["total_impressions"] == 1100  # 500 + 600
+        assert performance["total_views"] == 150
+        assert performance["total_clicks"] == 8
+        assert performance["total_impressions"] == 600
         assert "ctr" in performance
 
     def test_top_performers_carry_the_click_rate_provenance(self, tracker):
@@ -296,3 +297,87 @@ class TestAnalyticsTracker:
         assert summary["content_metrics"]["avg_quality_score"] == pytest.approx(
             0.82, abs=0.01
         )
+
+
+class TestUnreportedMetricsStayUnknown:
+    """A metric the platform did not report is unknown, not 0 views.
+
+    Platform counts are lifetime, so repeated snapshots of one post are not
+    additive: the latest snapshot represents the post.
+    """
+
+    @pytest.fixture
+    def tracker(self):
+        temp_dir = tempfile.mkdtemp()
+        yield AnalyticsTracker(
+            store=SEOEventStore(storage_path=Path(temp_dir)), site_id="s"
+        )
+        shutil.rmtree(temp_dir)
+
+    @staticmethod
+    def _snapshot(tracker, content_id, ts, **data):
+        tracker.store.append_event(
+            SEOEvent(
+                event_id=f"{content_id}-{ts}",
+                event_type=EventType.PERFORMANCE_UPDATED,
+                site_id="s",
+                content_id=content_id,
+                timestamp=ts,
+                data=data,
+            )
+        )
+
+    def test_post_with_no_reported_views_is_unknown(self, tracker):
+        tracker.track_performance("a")
+
+        read = tracker.get_content_performance("a")
+
+        assert read["total_views"] is None
+        assert read["total_clicks"] is None
+        assert read["total_impressions"] is None
+
+    def test_reported_zero_is_a_measurement(self, tracker):
+        tracker.track_performance("a", views=0)
+
+        assert tracker.get_content_performance("a")["total_views"] == 0
+
+    def test_latest_snapshot_represents_the_post(self, tracker):
+        self._snapshot(tracker, "a", "2026-10-02T00:00:00", views=300)
+        self._snapshot(tracker, "a", "2026-10-01T00:00:00", views=100)
+        self._snapshot(tracker, "a", "2026-10-03T00:00:00", views=None)
+
+        assert tracker.get_content_performance("a")["total_views"] == 300
+
+    def test_summary_totals_use_latest_per_post_and_skip_unknown(self, tracker):
+        self._snapshot(tracker, "a", "2026-10-01T00:00:00", views=100)
+        self._snapshot(tracker, "a", "2026-10-02T00:00:00", views=150)
+        self._snapshot(tracker, "b", "2026-10-02T00:00:00", views=40)
+        self._snapshot(tracker, "c", "2026-10-02T00:00:00", views=None)
+
+        performance = tracker.get_summary()["performance_metrics"]
+
+        assert performance["total_views"] == 190
+        assert performance["total_content_with_performance"] == 3
+
+    def test_summary_totals_are_unknown_when_nothing_reported(self, tracker):
+        tracker.track_performance("a")
+
+        performance = tracker.get_summary()["performance_metrics"]
+
+        assert performance["total_views"] is None
+        assert performance["total_clicks"] is None
+        assert performance["total_impressions"] is None
+        assert performance["avg_ctr"] is None
+
+    def test_unreported_clicks_do_not_make_a_zero_rate(self, tracker):
+        self._snapshot(tracker, "a", "2026-10-01T00:00:00", impressions=1000)
+
+        assert tracker.get_content_performance("a")["ctr"] is None
+
+    def test_unknown_views_rank_below_a_measured_zero(self, tracker):
+        tracker.track_performance("unknown")
+        tracker.track_performance("zero", views=0)
+
+        ranked = [p["content_id"] for p in tracker.get_summary()["top_performers"]]
+
+        assert ranked == ["zero", "unknown"]

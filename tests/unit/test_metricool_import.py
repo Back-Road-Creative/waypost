@@ -117,6 +117,31 @@ class TestMetricoolImporter:
         count = importer.import_csv(str(csv_path), "test")
         assert count == 1  # Only non-zero row imported
 
+    def test_blank_metric_cells_import_as_unknown(self, tmp_path, mock_event_store):
+        csv_path = tmp_path / "blank.csv"
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["Date", "Impressions", "Reach", "Clicks", "Likes"]
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "Date": "2026-02-10",
+                    "Impressions": "100",
+                    "Reach": "50",
+                    "Clicks": "",
+                    "Likes": "0",
+                }
+            )
+
+        importer = MetricoolAnalyticsImporter(event_store=mock_event_store)
+        importer.import_csv(str(csv_path), "test")
+
+        data = mock_event_store.append_event.call_args_list[0][0][0].data
+        assert data["clicks"] is None
+        assert data["likes"] == 0
+        assert data["saves"] is None
+
     def test_raises_without_event_store(self, sample_csv):
         importer = MetricoolAnalyticsImporter()
         with pytest.raises(ValueError, match="Event store not configured"):
@@ -130,11 +155,15 @@ class TestSafeInt:
     def test_commas(self):
         assert _safe_int("1,234") == 1234
 
-    def test_empty(self):
-        assert _safe_int("") == 0
+    def test_empty_is_unreported_not_zero(self):
+        assert _safe_int("") is None
+        assert _safe_int("  ") is None
 
-    def test_invalid(self):
-        assert _safe_int("abc") == 0
+    def test_invalid_is_unreported_not_zero(self):
+        assert _safe_int("abc") is None
+
+    def test_reported_zero_is_zero(self):
+        assert _safe_int("0") == 0
 
 
 class TestSafeFloat:
@@ -144,8 +173,11 @@ class TestSafeFloat:
     def test_percentage(self):
         assert _safe_float("4.5%") == pytest.approx(4.5)
 
-    def test_empty(self):
-        assert _safe_float("") == 0.0
+    def test_empty_is_unreported_not_zero(self):
+        assert _safe_float("") is None
 
-    def test_invalid(self):
-        assert _safe_float("abc") == 0.0
+    def test_invalid_is_unreported_not_zero(self):
+        assert _safe_float("abc") is None
+
+    def test_reported_zero_is_zero(self):
+        assert _safe_float("0%") == 0.0

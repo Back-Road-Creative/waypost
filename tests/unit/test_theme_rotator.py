@@ -182,3 +182,56 @@ class TestUnmeasuredCtrIsNotZero:
 
         reloaded = ThemeRotator(state_dir=tmp_path, strategy="explore")
         assert reloaded.usage["new"].ctr is None
+
+
+class TestUnreportedViewsAndEngagementAreNotZero:
+    """Views, likes, comments and shares the platform never reported are
+    unknown; a reported 0 still counts."""
+
+    @staticmethod
+    def _rotator(tmp_path, reports):
+        rotator = ThemeRotator(state_dir=tmp_path, strategy="explore")
+        for i, report in enumerate(reports):
+            rotator.record_usage(f"v{i}", f"vid{i}", ContentTheme.POV_DRIVE)
+            rotator.update_performance(f"v{i}", **report)
+        return rotator
+
+    def test_unreported_views_are_unknown_not_zero(self, tmp_path):
+        rotator = self._rotator(tmp_path, [{}])
+
+        assert rotator.usage["v0"].views is None
+
+    def test_unreported_engagement_is_left_out_of_the_average(self, tmp_path):
+        rotator = self._rotator(
+            tmp_path,
+            [
+                {"views": 1000, "likes": 100},
+                {"views": 1000, "likes": 100},
+                {"views": 1000},
+            ],
+        )
+
+        analysis = rotator.get_theme_analysis()[ContentTheme.POV_DRIVE]
+
+        assert analysis.avg_engagement == pytest.approx(0.1)
+
+    def test_reported_zero_engagement_still_counts(self, tmp_path):
+        rotator = self._rotator(
+            tmp_path,
+            [
+                {"views": 1000, "likes": 0},
+                {"views": 1000, "likes": 200},
+                {"views": 1000},
+            ],
+        )
+
+        analysis = rotator.get_theme_analysis()[ContentTheme.POV_DRIVE]
+
+        assert analysis.avg_engagement == pytest.approx(0.1)
+
+    def test_engagement_is_unknown_when_nothing_reported(self, tmp_path):
+        rotator = self._rotator(tmp_path, [{"views": 1000}] * 3)
+
+        analysis = rotator.get_theme_analysis()[ContentTheme.POV_DRIVE]
+
+        assert analysis.avg_engagement is None
