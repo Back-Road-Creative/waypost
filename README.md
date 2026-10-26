@@ -314,6 +314,7 @@ configured" and the code says which variable or option to set:
 - **Titles for a verified single region**: [docs/region-only-title-decisions.md](docs/region-only-title-decisions.md)
 - **Thumbnail Test & Compare companion**: [docs/thumbnail-test-and-compare.md](docs/thumbnail-test-and-compare.md)
 - **YouTube Analytics setup**: [docs/YOUTUBE_ANALYTICS_SETUP.md](docs/YOUTUBE_ANALYTICS_SETUP.md)
+- **Meta earnings probe**: [docs/meta-earnings-probe.md](docs/meta-earnings-probe.md)
 
 ## Testing
 
