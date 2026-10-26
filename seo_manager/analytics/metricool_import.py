@@ -92,10 +92,6 @@ class MetricoolAnalyticsImporter:
         impressions = _safe_int(row.get("Impressions", ""))
         reach = _safe_int(row.get("Reach", ""))
 
-        # Skip rows with no meaningful data (nothing reported, or reported 0)
-        if not impressions and not reach:
-            return None
-
         data = {
             "impressions": impressions,
             "reach": reach,
@@ -110,6 +106,12 @@ class MetricoolAnalyticsImporter:
             "source": "metricool_csv",
             "source_date": date_str,
         }
+
+        # Keep a row when ANY metric was reported (an explicit 0 is a
+        # measurement); skip it only when every metric cell was blank.
+        metric_keys = [k for k in data if k not in ("source", "source_date")]
+        if all(data[k] is None for k in metric_keys):
+            return None
 
         # Use date + row number as content_id if no post ID available
         content_id = (

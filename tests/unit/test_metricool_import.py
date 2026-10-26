@@ -111,11 +111,80 @@ class TestMetricoolImporter:
             writer = csv.DictWriter(f, fieldnames=["Date", "Impressions", "Reach"])
             writer.writeheader()
             writer.writerow({"Date": "2026-02-10", "Impressions": "0", "Reach": "0"})
-            writer.writerow({"Date": "2026-02-11", "Impressions": "100", "Reach": "50"})
+            writer.writerow({"Date": "2026-02-11", "Impressions": "", "Reach": ""})
+            writer.writerow({"Date": "2026-02-12", "Impressions": "100", "Reach": "50"})
 
         importer = MetricoolAnalyticsImporter(event_store=mock_event_store)
         count = importer.import_csv(str(csv_path), "test")
-        assert count == 1  # Only non-zero row imported
+        # Reported 0/0 is a measurement and is kept; the all-blank row is not.
+        assert count == 2
+        events = [c[0][0] for c in mock_event_store.append_event.call_args_list]
+        assert [e.data["source_date"] for e in events] == ["2026-02-10", "2026-02-12"]
+
+    def test_reported_zero_row_is_kept_as_zero(self, tmp_path, mock_event_store):
+        csv_path = tmp_path / "zero.csv"
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["Date", "Impressions", "Reach"])
+            writer.writeheader()
+            writer.writerow({"Date": "2026-02-10", "Impressions": "0", "Reach": "0"})
+
+        importer = MetricoolAnalyticsImporter(event_store=mock_event_store)
+        assert importer.import_csv(str(csv_path), "test") == 1
+        data = mock_event_store.append_event.call_args_list[0][0][0].data
+        assert data["impressions"] == 0
+        assert data["reach"] == 0
+
+    def test_all_blank_row_is_skipped(self, tmp_path, mock_event_store):
+        csv_path = tmp_path / "blank_row.csv"
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["Date", "Impressions", "Reach", "Video Views"]
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "Date": "2026-02-10",
+                    "Impressions": "",
+                    "Reach": "",
+                    "Video Views": "",
+                }
+            )
+
+        importer = MetricoolAnalyticsImporter(event_store=mock_event_store)
+        assert importer.import_csv(str(csv_path), "test") == 0
+        mock_event_store.append_event.assert_not_called()
+
+    def test_row_with_only_other_metrics_is_kept(self, tmp_path, mock_event_store):
+        csv_path = tmp_path / "video_only.csv"
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "Date",
+                    "Impressions",
+                    "Reach",
+                    "Video Views",
+                    "Engagements",
+                ],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "Date": "2026-02-10",
+                    "Impressions": "",
+                    "Reach": "",
+                    "Video Views": "321",
+                    "Engagements": "0",
+                }
+            )
+
+        importer = MetricoolAnalyticsImporter(event_store=mock_event_store)
+        assert importer.import_csv(str(csv_path), "test") == 1
+        data = mock_event_store.append_event.call_args_list[0][0][0].data
+        assert data["impressions"] is None
+        assert data["reach"] is None
+        assert data["video_views"] == 321
+        assert data["engagements"] == 0
 
     def test_blank_metric_cells_import_as_unknown(self, tmp_path, mock_event_store):
         csv_path = tmp_path / "blank.csv"
