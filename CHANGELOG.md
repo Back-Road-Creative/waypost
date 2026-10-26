@@ -10,6 +10,13 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- EvidenceBundle v2 carries per-platform day-7 counters (YouTube views, Facebook
+  reel plays); Waypost picks the reach counter per platform, v1 is still accepted,
+  and only YouTube rows feed the cadence decisions. The run also prints a
+  per-platform reach summary when a bundle has non-YouTube rows
+
 ### Fixed
 
 - Analytics keep unreported metrics unknown instead of zero: summaries, the optimizer, the theme rotator and the Metricool import no longer turn a missing count into 0, and repeated lifetime snapshots of one post are no longer summed

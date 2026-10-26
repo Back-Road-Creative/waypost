@@ -36,7 +36,13 @@ from seo_manager.scheduling.store import ScheduleStore
 
 from . import cadence_decisions as store
 from . import volume_policy as policy
-from .evidence import EvidenceBundle, EvidenceRefused, parse_bundle, parse_ts
+from .evidence import (
+    EvidenceBundle,
+    EvidenceRefused,
+    parse_bundle,
+    parse_ts,
+    platform_reach_summary,
+)
 from .volume_controller import (
     BLIND_REVERT,
     HOLD,
@@ -99,7 +105,11 @@ def _knob_keys(
     bundle: EvidenceBundle, db: Path, cadence: Cadence | None = None
 ) -> list[tuple[str, str | None]]:
     regions: list[str | None] = sorted(
-        {s.region for s in bundle.shorts if s.region}
+        {
+            s.region
+            for s in bundle.shorts
+            if s.region and s.platform == DECISION_PLATFORM
+        }
     ) or [None]
     if cadence is not None:  # the yaml's regions, whether or not they posted shorts
         regions = sorted(cadence.regions)
@@ -112,6 +122,12 @@ def _knob_keys(
     wanted |= set(store.keys(db))
     order = {k: i for i, k in enumerate(policy.KNOBS)}
     return sorted(wanted, key=lambda k: (order.get(k[0], 99), k[1] or ""))
+
+
+# YouTube views and Facebook plays are different counters, so the YouTube cadence
+# knobs read only YouTube rows. Other platforms are reported (PLATFORM_REACH), never
+# pooled into a decision.
+DECISION_PLATFORM = "youtube"
 
 
 def _evidence(
@@ -127,6 +143,7 @@ def _evidence(
             s.weekday, s.hour_local, s.day7_views, s.source,
         )
         for s in bundle.shorts
+        if s.platform == DECISION_PLATFORM
     ]  # fmt: skip
     return Evidence(
         shorts,
@@ -486,6 +503,16 @@ def run(
         return EXIT_UNREADABLE
     for d, dow in zip(decisions, dows, strict=False):
         print(_line(d, status, dow))
+    if any(s.platform != DECISION_PLATFORM for s in bundle.shorts) or bundle.unmeasured:
+        print(
+            "PLATFORM_REACH "
+            + json.dumps(platform_reach_summary(bundle), separators=(",", ":"))
+        )
+        for u in bundle.unmeasured:
+            print(
+                f"UNMEASURED video_id={u['video_id']} platform={u['platform']} "
+                f"reason={u['reason']}"
+            )
     return 0
 
 

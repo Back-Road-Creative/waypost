@@ -149,7 +149,7 @@ def test_golden_bundle_roundtrip():
 
 def test_bundle_with_unknown_schema_version_refused_with_reason():
     raw = json.loads(FIXTURE.read_text())
-    raw["schema_version"] = 2
+    raw["schema_version"] = 3
     with pytest.raises(EvidenceRefused, match="schema_version"):
         parse_bundle(raw)
 
