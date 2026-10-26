@@ -119,3 +119,14 @@ def test_python_floor_is_3_12_everywhere_pyproject_states_it():
     ]
     assert cfg["tool"]["mypy"]["python_version"] == "3.12"
     assert cfg["tool"]["ruff"]["target-version"] == "py312"
+
+
+def test_tzdata_is_declared_for_windows():
+    """Windows ships no IANA time-zone database, so ``zoneinfo.ZoneInfo`` raises
+    ``ZoneInfoNotFoundError`` there unless the ``tzdata`` package is installed.
+    The scheduler builds its zones at import time, so without it the package
+    cannot even be imported on Windows.
+    """
+    cfg = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+    specs = [s.replace(" ", "") for s in cfg["project"]["dependencies"]]
+    assert any(s.startswith("tzdata") and 'sys_platform=="win32"' in s for s in specs), specs
