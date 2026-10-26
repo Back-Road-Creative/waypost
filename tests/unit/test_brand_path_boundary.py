@@ -1,5 +1,7 @@
 """Brand identifiers cannot select credential paths outside their directory."""
 
+import os
+
 import pytest
 
 from seo_manager.security.brand_credentials import BrandCredentials
@@ -46,4 +48,7 @@ def test_normal_brand_round_trips_in_its_own_directory(tmp_path):
     brand.save_youtube_credentials({"example": "synthetic"})
     assert brand.load_youtube_credentials() == {"example": "synthetic"}
     assert brand.brand_dir == root / "Brand_1.v2-test"
-    assert (brand.brand_dir / "youtube_oauth.json.enc").stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":  # Windows has no POSIX permission bits
+        assert (
+            brand.brand_dir / "youtube_oauth.json.enc"
+        ).stat().st_mode & 0o777 == 0o600

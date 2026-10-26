@@ -148,7 +148,7 @@ class BrandCredentials:
             # Try legacy location
             legacy_file = self.credentials_dir / "client_secret.json"
             if legacy_file.exists():
-                with open(legacy_file) as f:
+                with open(legacy_file, encoding="utf-8") as f:
                     return json.load(f)
             raise FileNotFoundError(
                 f"No client secret found for brand: {self.brand_id}"
@@ -190,7 +190,7 @@ class BrandCredentials:
         legacy_creds = None
         for legacy_file in legacy_locations:
             if legacy_file.exists():
-                with open(legacy_file) as f:
+                with open(legacy_file, encoding="utf-8") as f:
                     legacy_creds = json.load(f)
                 break
 
@@ -302,7 +302,7 @@ class BrandCredentials:
         # Try credentials directory first
         legacy_file = self.credentials_dir / "youtube_credentials.json"
         if legacy_file.exists():
-            with open(legacy_file) as f:
+            with open(legacy_file, encoding="utf-8") as f:
                 return json.load(f)
 
         # Try root directory only if using default credentials directory
@@ -310,7 +310,7 @@ class BrandCredentials:
         if self.credentials_dir == Path("./credentials"):
             root_legacy = Path("youtube_credentials.json")
             if root_legacy.exists():
-                with open(root_legacy) as f:
+                with open(root_legacy, encoding="utf-8") as f:
                     return json.load(f)
 
         # No credentials found

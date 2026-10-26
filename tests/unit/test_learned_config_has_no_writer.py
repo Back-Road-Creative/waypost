@@ -70,7 +70,9 @@ class TestTheWriterIsGone:
     def test_no_module_names_a_retired_key(self):
         offenders = {}
         for path in _package_sources():
-            hits = sorted(k for k in RETIRED_CONFIG_KEYS if k in path.read_text())
+            hits = sorted(
+                k for k in RETIRED_CONFIG_KEYS if k in path.read_text(encoding="utf-8")
+            )
             if hits:
                 offenders[str(path.relative_to(_PACKAGE_ROOT))] = hits
 
@@ -89,7 +91,7 @@ class TestTheWriterIsGone:
             str(path.relative_to(_PACKAGE_ROOT))
             for path in _package_sources()
             if path.name != "continuous_optimization_daemon.py"
-            and "learned_config" in path.read_text()
+            and "learned_config" in path.read_text(encoding="utf-8")
         ]
 
         assert offenders == [], f"learned_config.json gained a reader: {offenders}"

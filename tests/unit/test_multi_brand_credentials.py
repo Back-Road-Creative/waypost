@@ -244,6 +244,7 @@ class TestMultiBrandCredentials:
         loaded_secret = brand.load_client_secret()
         assert loaded_secret == sample_client_secret
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
     def test_file_permissions_600(self, temp_creds_dir, sample_youtube_creds):
         """Test encrypted files have restrictive permissions (0o600)."""
         brand = BrandCredentials(
@@ -261,6 +262,7 @@ class TestMultiBrandCredentials:
         # Should be 600 (owner read/write only)
         assert permissions == "600", f"Expected 600 permissions, got {permissions}"
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
     def test_key_file_permissions_600(self, temp_creds_dir):
         """Test encryption key file has restrictive permissions (0o600)."""
         BrandCredentials(brand_id="examplebrand", credentials_dir=temp_creds_dir)

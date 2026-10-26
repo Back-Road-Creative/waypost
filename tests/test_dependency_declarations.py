@@ -67,7 +67,9 @@ def test_pytest_ini_declares_no_unused_markers():
     markers = parser.get("pytest", "markers", fallback="")
     used = set()
     for path in (PROJECT_ROOT / "tests").rglob("*.py"):
-        used.update(re.findall(r"pytest\.mark\.(\w+)", path.read_text()))
+        used.update(
+            re.findall(r"pytest\.mark\.(\w+)", path.read_text(encoding="utf-8"))
+        )
     declared = set(re.findall(r"^\s*(\w+):", markers, re.M))
     builtin = {
         "parametrize",

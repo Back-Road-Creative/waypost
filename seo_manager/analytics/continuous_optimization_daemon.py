@@ -341,7 +341,7 @@ def read_last_run(state_dir) -> CycleRunRecord | None:
     if not path.exists():
         return None
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError("run record is not a JSON object")
@@ -1072,7 +1072,7 @@ class ContinuousOptimizationDaemon:
         if not path.exists():
             return None
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 loaded = json.load(f)
         except (OSError, ValueError) as e:
             logger.warning(f"could not read {path} to compare against: {e}")
@@ -1098,7 +1098,7 @@ class ContinuousOptimizationDaemon:
     def _load_video_mapping(self) -> dict[str, str]:
         """Load video_id -> content_id mapping."""
         if self.video_mapping_file and self.video_mapping_file.exists():
-            with open(self.video_mapping_file) as f:
+            with open(self.video_mapping_file, encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
@@ -1126,7 +1126,7 @@ class ContinuousOptimizationDaemon:
 
         if state_file.exists():
             try:
-                with open(state_file) as f:
+                with open(state_file, encoding="utf-8") as f:
                     data = json.load(f)
             except json.JSONDecodeError as e:
                 logger.warning(f"Could not load state: {e}")

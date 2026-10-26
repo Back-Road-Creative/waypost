@@ -11,7 +11,10 @@ lands at 0o664 regardless of process umask.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+import pytest
 
 from seo_manager.quota.manager import _LOCK_MODE as quota_lock_mode
 from seo_manager.quota.manager import QuotaManager
@@ -35,6 +38,7 @@ class TestLockModeConstants:
         assert quota_lock_mode == 0o664
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 class TestGroupWritableFilelockHelper:
     def test_event_helper_acquires_with_group_writable_mode(
         self, tmp_path: Path
@@ -67,6 +71,7 @@ class TestGroupWritableFilelockHelper:
             assert _mode(lock_path) == 0o664
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 class TestEventStoreInitFileModes:
     def test_events_file_is_group_writable_after_init(self, tmp_path: Path) -> None:
         SEOEventStore(storage_path=tmp_path)

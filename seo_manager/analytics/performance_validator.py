@@ -672,7 +672,7 @@ class PerformanceValidator:
 
         if history_file.exists():
             try:
-                with open(history_file) as f:
+                with open(history_file, encoding="utf-8") as f:
                     self.validation_history = json.load(f)
             except (OSError, json.JSONDecodeError):
                 self.validation_history = []
@@ -685,5 +685,5 @@ class PerformanceValidator:
         if len(self.validation_history) > 100:
             self.validation_history = self.validation_history[-100:]
 
-        with open(history_file, "w") as f:
+        with open(history_file, "w", encoding="utf-8") as f:
             json.dump(self.validation_history, f, indent=2)

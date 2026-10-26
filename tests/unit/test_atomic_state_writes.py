@@ -75,6 +75,7 @@ class TestAtomicWriteJson:
         assert json.loads(path.read_text()) == OLD
         assert _no_tmp_left(tmp_path)
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
     def test_keeps_the_mode_of_the_file_it_replaces(self, tmp_path):
         path = tmp_path / "state.json"
         path.write_text(json.dumps(OLD))

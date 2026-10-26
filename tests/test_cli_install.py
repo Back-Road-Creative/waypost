@@ -1,5 +1,6 @@
 """The installed command and the module expose the same public CLI."""
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -10,8 +11,9 @@ from seo_manager.cli import main
 
 
 def test_installed_command_matches_module_help_outside_checkout(tmp_path):
-    command = Path(sys.executable).with_name("seo-manager")
-    assert command.is_file(), "the package must install seo-manager"
+    found = shutil.which("seo-manager", path=str(Path(sys.executable).parent))
+    assert found, "the package must install seo-manager"
+    command = Path(found)
     for args in (["--help"], ["schedule", "claim", "--help"]):
         installed = subprocess.run(
             [str(command), *args],

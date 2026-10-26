@@ -1,5 +1,6 @@
 """Version introspection works without configuration or command execution."""
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +27,9 @@ def test_version_reports_package_version_without_configuration(
 
 
 def test_installed_and_module_versions_match_outside_checkout(tmp_path):
-    command = Path(sys.executable).with_name("seo-manager")
+    found = shutil.which("seo-manager", path=str(Path(sys.executable).parent))
+    assert found, "the package must install seo-manager"
+    command = Path(found)
     for invocation in ([str(command)], [sys.executable, "-I", "-m", "seo_manager.cli"]):
         result = subprocess.run(
             [*invocation, "--version"],

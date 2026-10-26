@@ -52,9 +52,9 @@ class TestYouTubeThumbnailGenerator:
             assert os.path.exists(output_path)
 
             # Verify image properties
-            img = Image.open(output_path)
-            assert img.size == (1280, 720)
-            assert img.mode == "RGB"
+            with Image.open(output_path) as img:
+                assert img.size == (1280, 720)
+                assert img.mode == "RGB"
 
         finally:
             if os.path.exists(output_path):
@@ -89,8 +89,8 @@ class TestYouTubeThumbnailGenerator:
             assert os.path.exists(output_path)
 
             # Badge should be rendered (verified visually or via pixel analysis)
-            img = Image.open(output_path)
-            assert img.size == (1280, 720)
+            with Image.open(output_path) as img:
+                assert img.size == (1280, 720)
 
         finally:
             if os.path.exists(output_path):
