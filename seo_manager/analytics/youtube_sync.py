@@ -102,7 +102,7 @@ class YouTubeAnalyticsSync:
 
         # Load credentials — use scopes from the token file itself to avoid
         # mismatch when the token was authorized with a superset of scopes
-        with open(credentials_path) as f:
+        with open(credentials_path, encoding="utf-8") as f:
             token_data = json.load(f)
         token_scopes = token_data.get("scopes", _DEFAULT_FLOW_SCOPES)
 

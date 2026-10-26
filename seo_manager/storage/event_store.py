@@ -93,7 +93,7 @@ class SEOEventStore:
         """
         with _group_writable_filelock(self.lock_file):
             # Append to JSONL file
-            with open(self.events_file, "a") as f:
+            with open(self.events_file, "a", encoding="utf-8") as f:
                 f.write(event.to_jsonl() + "\n")
 
             # Update indexes
@@ -119,7 +119,7 @@ class SEOEventStore:
             lines = []
             replaced = False
             if self.events_file.exists():
-                with open(self.events_file) as f:
+                with open(self.events_file, encoding="utf-8") as f:
                     for line in f:
                         stripped = line.strip()
                         if not stripped:
@@ -140,7 +140,7 @@ class SEOEventStore:
                 lines.append(event.to_jsonl())
 
             # Rewrite the file
-            with open(self.events_file, "w") as f:
+            with open(self.events_file, "w", encoding="utf-8") as f:
                 for line in lines:
                     f.write(line + "\n")
 
@@ -175,7 +175,7 @@ class SEOEventStore:
         """
         events = []
 
-        with open(self.events_file) as f:
+        with open(self.events_file, encoding="utf-8") as f:
             for line in f:
                 try:
                     # Deserialize event
@@ -223,7 +223,7 @@ class SEOEventStore:
         """
         events = []
 
-        with open(self.events_file) as f:
+        with open(self.events_file, encoding="utf-8") as f:
             for line in f:
                 try:
                     event = SEOEvent.from_jsonl(line.strip())
@@ -242,7 +242,7 @@ class SEOEventStore:
         """Load or create indexes, rebuilding from events.jsonl if corrupted."""
         if self.index_file.exists():
             try:
-                with open(self.index_file) as f:
+                with open(self.index_file, encoding="utf-8") as f:
                     self.indexes = json.load(f)
                 return
             except (json.JSONDecodeError, ValueError) as e:
@@ -268,7 +268,7 @@ class SEOEventStore:
         """Rebuild indexes by scanning events.jsonl. Skips corrupted lines."""
         rebuilt = 0
         skipped = 0
-        with open(self.events_file) as f:
+        with open(self.events_file, encoding="utf-8") as f:
             for line in f:
                 stripped = line.strip()
                 if not stripped:
@@ -334,5 +334,5 @@ class SEOEventStore:
 
     def _save_indexes(self):
         """Persist indexes to disk"""
-        with open(self.index_file, "w") as f:
+        with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(self.indexes, f, indent=2)

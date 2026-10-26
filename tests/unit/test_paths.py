@@ -12,6 +12,7 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.delenv("SEO_MANAGER_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))  # ~ on Windows
     return tmp_path
 
 

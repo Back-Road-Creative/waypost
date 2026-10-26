@@ -817,7 +817,7 @@ class ThemeRotator:
 
         if state_file.exists():
             try:
-                with open(state_file) as f:
+                with open(state_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 for content_id, usage_data in data.get("usage", {}).items():

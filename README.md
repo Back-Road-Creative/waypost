@@ -362,7 +362,8 @@ metadata = manager.generate(
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.12+ on Linux or Windows (CI runs the test suite on both: the `test`
+  and `test-windows` jobs in `.github/workflows/ci.yml`)
 - The runtime dependencies declared in `pyproject.toml` (filelock, PyYAML, the
   Google API client and auth packages, cryptography, Pillow, structlog); all are
   imported unconditionally, so install the package rather than picking from the list

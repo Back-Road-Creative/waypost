@@ -1,5 +1,7 @@
-# One job on a standard hosted runner. No secrets, no self-hosted runner, no
-# matrix: a pull request from a fork runs exactly what a maintainer's does.
+# Standard hosted runners. No secrets, no self-hosted runner: a pull request
+# from a fork runs exactly what a maintainer's does. "test" runs every check on
+# Linux; "test-windows" runs the test suite on Windows, where Framegrade's
+# Windows app runs this package.
 # Only the "Set up" step downloads anything. Every check after it runs with the
 # package index switched off, so a check cannot pass or fail on what it fetched.
 name: ci
@@ -91,3 +93,46 @@ jobs:
       - name: Tree cleanliness (after build and tests)
         if: always()
         run: python3 -I tools/check_public_tree.py --check-clean
+
+  # The suite on Windows, the platform of the Framegrade Windows app. Lint,
+  # types and the secret scan do not depend on the OS and stay in "test"; the
+  # coverage floor is held there too, since POSIX-only tests skip here.
+  test-windows:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache downloaded packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/uv/cache
+          key: uv-${{ runner.os }}-py312-${{ hashFiles('pyproject.toml', 'requirements.lock') }}
+
+      - name: Set up the project
+        run: |
+          python -m pip install --quiet uv==0.11.17
+          grep -v '^-e ' requirements.lock > "$RUNNER_TEMP/constraints.txt"
+          uv venv .venv --python python -q
+          uv pip install --python .venv/Scripts/python.exe -q --constraint "$RUNNER_TEMP/constraints.txt" -e '.[dev]'
+
+      - name: Tests
+        env:
+          UV_OFFLINE: "1"
+          PIP_NO_INDEX: "1"
+        run: .venv/Scripts/python.exe -m pytest --no-cov
+
+      - name: Tree cleanliness (after build and tests)
+        if: always()
+        run: python -I tools/check_public_tree.py --check-clean

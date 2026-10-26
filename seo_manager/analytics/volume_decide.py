@@ -308,7 +308,9 @@ def _line(d: Decision, status: str, dow: Sequence[int] | None = None) -> str:
 
 
 def _load(source: str) -> Any:
-    text = sys.stdin.read() if source == "-" else Path(source).read_text()
+    text = (
+        sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    )
     return json.loads(text)
 
 

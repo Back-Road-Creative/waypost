@@ -124,7 +124,7 @@ class QuotaManager:
         """Load quota state (must be called with lock held)"""
         if self.quota_file.exists():
             try:
-                with open(self.quota_file) as f:
+                with open(self.quota_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Check if we need to reset (new day)
@@ -388,7 +388,7 @@ class QuotaManager:
         if not quota_file.exists():
             return 0
 
-        with open(quota_file) as f:
+        with open(quota_file, encoding="utf-8") as f:
             data = json.load(f)
 
         return data.get("total_used", 0)
