@@ -233,6 +233,22 @@ print(f"Avg CTR: {avg_ctr:.2%}" if avg_ctr is not None else "Avg CTR: unmeasured
   Thumbnail impressions and impression CTR are shown only in YouTube Studio;
   the API does not expose them, so the sync never records them.
 
+### Reach probe (YouTube Reporting API)
+The Reporting API's channel reach reports may carry thumbnail impressions and
+click rate per video. `seo_manager.analytics.youtube_reach_probe` asks whether a
+token can read one, and prints one `REACH_PROBE verdict=...` line naming the
+step that stops it (no reach report type, no job, no report yet, columns
+missing, or `reach-available` with `has_traffic_source`):
+
+```bash
+python -m seo_manager.analytics.youtube_reach_probe --sops-file <dir>/youtube_upload_token.json.enc
+```
+
+It is read-only. `--create-job` creates the reach reporting job if none exists;
+YouTube then fills it with daily reports, the first within about 48 hours. An
+API refusal prints its status and message (`verdict=api-error`), such as a
+token without the `yt-analytics.readonly` scope.
+
 Watch time is requested from the API but not stored. The API offers other
 metrics (average view duration, traffic sources, and so on) that this package
 does not fetch or store.
