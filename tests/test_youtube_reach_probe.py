@@ -235,3 +235,64 @@ def test_sops_failure_is_reported_without_the_payload(monkeypatch, capsys):
     )
     assert probe_mod.main(["--sops-file", "/x/t.enc"]) == 3
     assert "REACH_PROBE verdict=sops-error rc=128" in capsys.readouterr().out
+
+
+BASIC = {"id": "channel_reach_basic_a1", "name": "Reach basic"}
+CSV_NO_SOURCE = (
+    "date,channel_id,video_id,video_thumbnail_impressions,video_thumbnail_impressions_ctr\n"
+    "20261025,UC1,v1,200,0.04\n"
+)
+
+
+def test_create_job_asks_for_every_reach_type_not_just_the_first():
+    # Live run 2026-10-26: the channel offers basic and combined; only combined
+    # may carry traffic_source_type, and basic sorts first.
+    reporting = FakeReporting([BASIC, REACH])
+    result = probe(reporting, _no_download, create_job=True)
+    assert result["verdict"] == "job-created"
+    assert [b["reportTypeId"] for b in reporting.jobs().created] == [
+        "channel_reach_basic_a1",
+        "channel_reach_combined_a1",
+    ]
+
+
+def test_create_job_fills_in_a_reach_type_that_has_no_job_yet():
+    job = {"id": "j1", "reportTypeId": "channel_reach_basic_a1"}
+    reporting = FakeReporting([BASIC, REACH], [job])
+    result = probe(reporting, _no_download, create_job=True)
+    assert result["verdict"] == "job-created"
+    assert reporting.jobs().created == [
+        {"reportTypeId": "channel_reach_combined_a1", "name": "waypost-reach-probe"}
+    ]
+
+
+def test_a_newer_report_without_traffic_source_does_not_hide_one_with_it():
+    jobs = [
+        {"id": "jb", "reportTypeId": "channel_reach_basic_a1"},
+        {"id": "jc", "reportTypeId": "channel_reach_combined_a1"},
+    ]
+    reports = {
+        "jb": [
+            {
+                "id": "basic",
+                "createTime": "2026-10-26T00:00:00Z",
+                "downloadUrl": "https://x/basic",
+            }
+        ],
+        "jc": [
+            {
+                "id": "combined",
+                "createTime": "2026-10-25T00:00:00Z",
+                "downloadUrl": "https://x/combined",
+            }
+        ],
+    }
+    csv_by_url = {
+        "https://x/basic": CSV_NO_SOURCE,
+        "https://x/combined": CSV_WITH_SOURCE,
+    }
+    result = probe(FakeReporting([BASIC, REACH], jobs, reports), csv_by_url.__getitem__)
+    assert result["verdict"] == "reach-available"
+    assert result["newest_report"] == "combined"
+    assert result["has_traffic_source"] is True
+    assert result["reports"] == 2

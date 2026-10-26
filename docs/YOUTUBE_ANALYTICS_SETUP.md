@@ -244,8 +244,12 @@ missing, or `reach-available` with `has_traffic_source`):
 python -m seo_manager.analytics.youtube_reach_probe --sops-file <dir>/youtube_upload_token.json.enc
 ```
 
-It is read-only. `--create-job` creates the reach reporting job if none exists;
-YouTube then fills it with daily reports, the first within about 48 hours. An
+It is read-only. `--create-job` creates a reporting job for each reach report
+type that has none (a channel may offer `channel_reach_basic_a1` and
+`channel_reach_combined_a1`; only the report columns say which one carries
+`traffic_source_type`). YouTube then fills each job with daily reports, the first
+within about 48 hours. With several reach jobs the probe reads the newest report
+of each and prefers one with the traffic source. An
 API refusal prints its status and message (`verdict=api-error`), such as a
 token without the `yt-analytics.readonly` scope.
 
