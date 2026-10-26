@@ -622,3 +622,52 @@ def test_carry_check_counts_the_share_each_lf_day_gets():
     states[2] = vc.KnobState("lf_days", "south", 3, last_validated=None)
     (got,) = vd._carry_check([dec("shorts_per_lf", None, 7, 8)], states)
     assert (got.action, got.value, got.reason_code) == (vc.HOLD, 7, vc.JOINT_CEILING)
+
+
+# ---- bundle v2: only YouTube rows feed the cadence knobs ----
+
+FIXTURE_V2 = FIXTURE.with_name("evidence_bundle_v2.json")
+
+
+def test_facebook_rows_leave_the_controller_evidence_unchanged():
+    from seo_manager.analytics.evidence import parse_bundle
+
+    raw = json.loads(FIXTURE_V2.read_text())
+    both = vd._evidence(parse_bundle(raw))
+    raw["shorts"] = [s for s in raw["shorts"] if s["platform"] == "youtube"]
+    only_yt = vd._evidence(parse_bundle(raw))
+    assert both == only_yt
+    assert vd.DECISION_PLATFORM == "youtube"
+    assert [s.video_id for s in both.shorts] == ["yt-a", "yt-b"]
+
+
+def test_facebook_rows_do_not_change_the_decisions(capsys, tmp_path):
+    raw = json.loads(FIXTURE_V2.read_text())
+    p1 = tmp_path / "a.json"
+    p1.write_text(json.dumps(raw))
+    raw["shorts"] = [s for s in raw["shorts"] if s["platform"] == "youtube"]
+    p2 = tmp_path / "b.json"
+    p2.write_text(json.dumps(raw))
+    (tmp_path / "x").mkdir()
+    (tmp_path / "y").mkdir()
+    _, l1, _ = run(capsys, tmp_path / "x", p1)
+    _, l2, _ = run(capsys, tmp_path / "y", p2)
+    assert l1 == l2 and len(l1) == 3
+
+
+def test_platform_reach_line_appears_only_with_non_youtube_rows(capsys, tmp_path):
+    _, _, out = run(capsys, tmp_path, bundle(tmp_path))
+    assert "PLATFORM_REACH" not in out
+    p = tmp_path / "v2.json"
+    p.write_text(FIXTURE_V2.read_text())
+    (tmp_path / "z").mkdir()
+    _, _, out = run(capsys, tmp_path / "z", p)
+    line = next(x for x in out.splitlines() if x.startswith("PLATFORM_REACH "))
+    summary = json.loads(line.split(" ", 1)[1])
+    assert summary["facebook"] == {
+        "metric": "reel_total_plays",
+        "n": 1,
+        "median_day7": 1300,
+    }
+    assert summary["youtube"]["metric"] == "views"
+    assert "UNMEASURED" in out and "fb-none" in out

@@ -15,6 +15,28 @@ knob's current state from the decision log, runs the pure controller
 `VOLUME_DECISION knob=... region=... action=... value=... reason=... policy_rev=...`
 line per knob, holds included.
 
+### Evidence bundle versions
+
+The bundle is schema v1 or v2 (`seo_manager/analytics/evidence.py`); anything else is
+`EVIDENCE_REFUSED`. v1 shorts are YouTube rows with `day7_views`. v2 shorts carry
+`platform` (`youtube` or `facebook`), `post_format` (`short`, `reel`, `video`, null)
+and `day7`, an object of raw counters (`views`, `reel_total_plays`,
+`reel_initial_plays`, `watch_time_seconds`); an unknown counter is refused. The
+producer reports counters only. Waypost owns the reach table (`REACH_METRIC`):
+YouTube is `views`, Facebook reel is `reel_total_plays`, Facebook video is `views`,
+Facebook with no format has no reach. Plays are not views and are never pooled.
+
+- Every parsed short carries `day7_views` = its reach value. A v2 row with no reach
+  value goes to `unmeasured`, not `shorts`.
+- Only YouTube rows feed the knobs (`volume_decide.DECISION_PLATFORM`), so a bundle
+  with Facebook rows decides exactly as the same bundle without them.
+- When the bundle has a non-YouTube row or an unmeasured row, `volume_decide` prints
+  `PLATFORM_REACH {platform: {metric, n, median_day7}}` and one
+  `UNMEASURED video_id=... platform=... reason=...` line each, after the
+  `VOLUME_DECISION` lines. A YouTube-only bundle prints neither. If a platform's rows
+  use two reach metrics, the summary has one `platform/metric` entry each.
+- `longforms` is the same in v1 and v2 (YouTube only).
+
 The log is the `cadence_decisions.sqlite3` file passed as `volume_decide --db` (and read by
 `schedule --decisions-db` / `SEO_DECISIONS_DB`); it has no default location. It is
 append-only (SQL triggers reject UPDATE and DELETE); the current value of a knob is
