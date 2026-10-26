@@ -92,8 +92,8 @@ class MetricoolAnalyticsImporter:
         impressions = _safe_int(row.get("Impressions", ""))
         reach = _safe_int(row.get("Reach", ""))
 
-        # Skip rows with no meaningful data
-        if impressions == 0 and reach == 0:
+        # Skip rows with no meaningful data (nothing reported, or reported 0)
+        if not impressions and not reach:
             return None
 
         data = {
@@ -126,24 +126,27 @@ class MetricoolAnalyticsImporter:
         )
 
 
-def _safe_int(val: str) -> int:
-    """Parse an integer from a potentially messy CSV value."""
-    if not val:
-        return 0
+def _safe_int(val: str) -> int | None:
+    """Parse an integer from a potentially messy CSV value.
+
+    A blank or unparseable cell is None (not reported), never 0: a reported
+    "0" is a measurement, an empty cell is not."""
+    if not val or not val.strip():
+        return None
     try:
         # Handle commas in numbers (e.g., "1,234")
         return int(val.replace(",", "").strip())
     except (ValueError, TypeError):
-        return 0
+        return None
 
 
-def _safe_float(val: str) -> float:
-    """Parse a float from a potentially messy CSV value."""
-    if not val:
-        return 0.0
+def _safe_float(val: str) -> float | None:
+    """Parse a float from a potentially messy CSV value (None when unreported)."""
+    if not val or not val.strip():
+        return None
     try:
         # Handle percentage strings (e.g., "2.5%")
         clean = val.replace(",", "").replace("%", "").strip()
         return float(clean)
     except (ValueError, TypeError):
-        return 0.0
+        return None

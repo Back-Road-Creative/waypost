@@ -252,7 +252,10 @@ class SEOOptimizer:
         # Eligible performers (above the min-views floor, with metadata).
         eligible = []
         for performer in top_performers:
-            if performer.get("views", 0) < min_views:
+            # Views the platform never reported cannot clear a floor, and are
+            # not 0 views either: leave the item out rather than score it.
+            views = performer.get("views")
+            if views is None or views < min_views:
                 continue
             metadata = self.manager.get_metadata(performer["content_id"])
             if not metadata:

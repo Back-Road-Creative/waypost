@@ -17,6 +17,10 @@ tagged is listed under Unreleased.
   and only YouTube rows feed the cadence decisions. The run also prints a
   per-platform reach summary when a bundle has non-YouTube rows
 
+### Fixed
+
+- Analytics keep unreported metrics unknown instead of zero: summaries, the optimizer, the theme rotator and the Metricool import no longer turn a missing count into 0, and repeated lifetime snapshots of one post are no longer summed
+
 ## [0.2.1] - 2026-10-25
 
 ### Added

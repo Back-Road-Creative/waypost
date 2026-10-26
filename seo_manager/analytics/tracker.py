@@ -32,6 +32,15 @@ CTR_BASIS_REPORTED = "reported_rate"
 TOP_PERFORMERS_CAP = 10
 
 
+def _sum_reported(values) -> int | None:
+    """Sum of the values that were reported, None when none were.
+
+    A reported 0 is a measurement and is summed; an absent value is left out,
+    and a sum over nothing is unknown rather than 0."""
+    reported = [v for v in values if v is not None]
+    return sum(reported) if reported else None
+
+
 def _round_or_none(value: float | None, digits: int) -> float | None:
     """Round a possibly-unknown average. None survives as None: an average
     nobody measured must not come out of the rounding as 0.0."""
@@ -174,11 +183,20 @@ class AnalyticsTracker:
         avg_tag_count = self._mean_of_reported(generation_events, "tag_count")
 
         # Aggregate performance metrics
-        total_views = sum(e.data.get("views") or 0 for e in performance_events)
-        total_clicks = sum(e.data.get("clicks") or 0 for e in performance_events)
-        total_impressions = sum(
-            e.data.get("impressions") or 0 for e in performance_events
-        )
+        # Totals run over each content's latest reported value (see
+        # ``_aggregate``), never over every snapshot: a platform count is
+        # lifetime, so summing repeated syncs counts the same views again. A
+        # total nobody reported stays None, not a 0.
+        per_content = list(self._aggregate(performance_events).values())
+        total_views = _sum_reported(c["views"] for c in per_content)
+        total_clicks = _sum_reported(c["clicks"] for c in per_content)
+        total_impressions = _sum_reported(c["impressions"] for c in per_content)
+        # Pooled over the content that reported BOTH halves of the ratio.
+        paired = [
+            c
+            for c in per_content
+            if c["clicks"] is not None and c["impressions"] is not None
+        ]
 
         # The site-wide rate goes through the same resolver as the per-content
         # one, so a period with no impressions reads as unmeasured here
@@ -188,8 +206,8 @@ class AnalyticsTracker:
         # the optimizer refuses.
         pooled = self._resolve_rate(
             {
-                "clicks": total_clicks,
-                "impressions": total_impressions,
+                "clicks": sum(c["clicks"] for c in paired),
+                "impressions": sum(c["impressions"] for c in paired),
                 "_explicit_ctr": None,
             }
         )
@@ -287,9 +305,13 @@ class AnalyticsTracker:
         shape -- the caller never has to tell them apart by a missing key."""
         return {
             "content_id": content_id,
-            "views": 0,
-            "clicks": 0,
-            "impressions": 0,
+            # None until some event reports the field: an unreported count is
+            # unknown, not zero. Each holds the LATEST reported value, because
+            # these are lifetime counts and repeated snapshots of one post are
+            # not additive (see ``_aggregate``).
+            "views": None,
+            "clicks": None,
+            "impressions": None,
             # How many performance updates this aggregate is made of. A rate
             # from one sample and a rate from fifty are both "the rate"; only
             # this says which you are looking at.
@@ -326,14 +348,22 @@ class AnalyticsTracker:
         -- when the two copies disagreed, the same video reported a different
         click rate depending on which screen asked."""
         by_content: dict[str, dict] = {}
+        latest: dict[tuple[str, str], str] = {}
 
         for event in performance_events:
             cp = by_content.setdefault(
                 event.content_id, cls._blank_aggregate(event.content_id)
             )
-            cp["views"] += event.data.get("views") or 0
-            cp["clicks"] += event.data.get("clicks") or 0
-            cp["impressions"] += event.data.get("impressions") or 0
+            # Latest snapshot wins; a tie (or no timestamp) goes to the later
+            # event in read order.
+            stamp = event.timestamp or ""
+            for field in ("views", "clicks", "impressions"):
+                value = event.data.get(field)
+                if value is not None and stamp >= latest.get(
+                    (event.content_id, field), ""
+                ):
+                    cp[field] = value
+                    latest[(event.content_id, field)] = stamp
             cp["data_points"] += 1
             if event.data.get("ctr") is not None:
                 cp["_explicit_ctr"] = event.data["ctr"]
@@ -363,7 +393,7 @@ class AnalyticsTracker:
         sources. It rounds to 4 dp, the precision this reader has always
         used, so the two readers agree to the digit rather than approximately.
         """
-        if aggregate["impressions"]:
+        if aggregate["impressions"] and aggregate["clicks"] is not None:
             aggregate["ctr"] = round(aggregate["clicks"] / aggregate["impressions"], 4)
             aggregate["ctr_basis"] = CTR_BASIS_RECOMPUTED
         elif aggregate["_explicit_ctr"] is not None:
@@ -387,7 +417,9 @@ class AnalyticsTracker:
         """
         top_content = sorted(
             self._aggregate(performance_events).values(),
-            key=lambda x: x["views"],
+            # Content with no reported views sorts below any measured count,
+            # a measured 0 included.
+            key=lambda x: -1 if x["views"] is None else x["views"],
             reverse=True,
         )[:TOP_PERFORMERS_CAP]
 

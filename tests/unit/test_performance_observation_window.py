@@ -76,7 +76,9 @@ def test_top_performers_carry_the_window_too(tracker):
     _record(
         tracker, "slow", "2024-09-01T00:00:00", views=900, clicks=40, impressions=1000
     )
-    _record(tracker, "slow", "2026-09-01T00:00:00", views=1, clicks=0, impressions=0)
+    # A later snapshot that reported no counts: it widens the window and
+    # replaces nothing, since an unreported count is not a 0.
+    _record(tracker, "slow", "2026-09-01T00:00:00", views=None)
 
     rows = {row["content_id"]: row for row in tracker.get_summary()["top_performers"]}
 

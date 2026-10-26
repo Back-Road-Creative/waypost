@@ -54,10 +54,10 @@ class TestPooledCTR:
 
         assert performance["avg_ctr"] is None
         assert performance["avg_ctr_basis"] is None
-        # Totals still absorb the unknown addend -- a sum over what we know is
-        # a real sum. Only the rate is refused.
+        # Totals sum what was reported; a total nobody reported is unknown,
+        # not 0. Only the rate is refused.
         assert performance["total_views"] == 100
-        assert performance["total_impressions"] == 0
+        assert performance["total_impressions"] is None
 
     def test_measured_rate_is_still_reported_with_its_basis(self, tracker):
         tracker.track_performance("c0", views=1000, clicks=50, impressions=2500)
