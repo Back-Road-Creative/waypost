@@ -45,6 +45,12 @@ META_EARNINGS metric=<m> status=error code=<graph error code> message=<graph mes
 - `available`: at least one metric returned data points.
 - `unavailable`: every metric came back empty or refused. A refusal with code
   `10` or `200` means the token lacks one of the permissions above.
+- A per-metric refusal with code `200` and "only visible for Page admins with
+  access to monetization insights" is a Page-role gap, not a token scope: the
+  person who issued the token needs the monetization insights permission on the
+  Page (in Meta Business Suite). Other earnings metrics can still read `ok` in
+  the same run, as `monetization_approximate_earnings` and
+  `content_monetization_earnings` did on a live Page on 2026-10-26.
 - `status=empty` means the call worked but Meta has no data. That is not the
   same as earning zero.
 
