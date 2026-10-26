@@ -8,10 +8,13 @@ instead of a guess, and names the step that stops it:
 
     no-reach-report-type   the token sees no report type whose id has "reach"
     no-job                 a reach type exists, but no reporting job asks for it
-    job-created            --create-job made one; YouTube fills it within ~48 h
+    job-created            --create-job made one per reach type lacking one;
+                           YouTube fills each within ~48 h
     no-report-yet          a reach job exists and has produced no report yet
     reach-columns-missing  the newest report lacks the impression columns
-    reach-available        it has them (has_traffic_source says if split by source)
+    reach-available        it has them (has_traffic_source says if split by source);
+                           with several reach jobs, a report carrying the
+                           traffic source is preferred over a newer one without
     api-error              the API refused; status and message are printed
 
 Read-only unless ``--create-job``. The token is the authorized-user JSON,
@@ -69,30 +72,50 @@ def probe(
         if j.get("reportTypeId") in reach_types
     ]
     result["jobs"] = [j["id"] for j in jobs]
+    # Every reach type gets a job: they differ in dimensions, and only the
+    # report's columns say which one carries the traffic source.
+    without_job = [t for t in reach_types if t not in {j["reportTypeId"] for j in jobs}]
+    if create_job and without_job:
+        result["created_jobs"] = [
+            reporting.jobs()
+            .create(body={"reportTypeId": t, "name": JOB_NAME})
+            .execute()
+            .get("id")
+            for t in without_job
+        ]
+        result["verdict"] = "job-created"
+        return result
     if not jobs:
-        if create_job:
-            body = {"reportTypeId": reach_types[0], "name": JOB_NAME}
-            created = reporting.jobs().create(body=body).execute()
-            result["created_job"] = created.get("id")
-            result["verdict"] = "job-created"
-        else:
-            result["verdict"] = "no-job"
+        result["verdict"] = "no-job"
         return result
 
-    reports = [
-        r
+    reports_by_job = {
+        j["id"]: _pages(reporting.jobs().reports().list, "reports", jobId=j["id"])
         for j in jobs
-        for r in _pages(reporting.jobs().reports().list, "reports", jobId=j["id"])
-    ]
-    result["reports"] = len(reports)
-    if not reports:
+    }
+    result["reports"] = sum(len(r) for r in reports_by_job.values())
+    if not result["reports"]:
         result["verdict"] = "no-report-yet"
         return result
 
-    newest = max(reports, key=lambda r: r.get("createTime", ""))
-    rows = list(csv.reader(io.StringIO(download(newest["downloadUrl"]))))
-    columns = rows[0] if rows else []
-    body = rows[1:]
+    # The newest report of each job; one with the traffic source wins over a
+    # newer one without it, then one with the reach metrics, then recency.
+    candidates = []
+    for reports in reports_by_job.values():
+        if not reports:
+            continue
+        newest = max(reports, key=lambda r: r.get("createTime", ""))
+        rows = list(csv.reader(io.StringIO(download(newest["downloadUrl"]))))
+        columns = rows[0] if rows else []
+        candidates.append((newest, columns, rows[1:]))
+    newest, columns, body = max(
+        candidates,
+        key=lambda c: (
+            TRAFFIC_SOURCE_COLUMN in c[1],
+            all(m in c[1] for m in REACH_METRICS),
+            c[0].get("createTime", ""),
+        ),
+    )
     result.update(
         newest_report=newest["id"],
         newest_window=f"{newest.get('startTime', '?')}..{newest.get('endTime', '?')}",
@@ -169,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--create-job",
         action="store_true",
-        help="create the reach reporting job if none exists",
+        help="create a reporting job for each reach type that has none",
     )
     args = parser.parse_args(argv)
     if args.sops_file:
