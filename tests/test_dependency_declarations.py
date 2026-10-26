@@ -129,4 +129,6 @@ def test_tzdata_is_declared_for_windows():
     """
     cfg = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
     specs = [s.replace(" ", "") for s in cfg["project"]["dependencies"]]
-    assert any(s.startswith("tzdata") and 'sys_platform=="win32"' in s for s in specs), specs
+    assert any(
+        s.startswith("tzdata") and 'sys_platform=="win32"' in s for s in specs
+    ), specs
