@@ -10,16 +10,16 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
 ### Added
 
-- EvidenceBundle v2 carries per-platform day-7 counters (YouTube views, Facebook
-  reel plays); Waypost picks the reach counter per platform, v1 is still accepted,
-  and only YouTube rows feed the cadence decisions. The run also prints a
-  per-platform reach summary when a bundle has non-YouTube rows
+- Evidence bundle v2 carries per-platform day-7 counters (#57)
+- CLI accepts the decisions database from the environment (#56)
 
 ### Fixed
 
-- Analytics keep unreported metrics unknown instead of zero: summaries, the optimizer, the theme rotator and the Metricool import no longer turn a missing count into 0, and repeated lifetime snapshots of one post are no longer summed
+- Analytics keep unreported metrics unknown instead of zero (#58)
 
 ## [0.2.1] - 2026-10-25
 
@@ -136,7 +136,8 @@ These modules have no compatibility shim in 0.2:
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.3.0...main
+[0.3.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Back-Road-Creative/waypost/releases/tag/v0.1.0
