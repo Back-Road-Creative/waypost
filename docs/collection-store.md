@@ -146,6 +146,14 @@ Exit codes: 0 when at least one source ran and none failed; 1 when any source fa
 prints the same rows as a list of objects (`status: "not_run"` with a `reason` for a
 source not run).
 
+## Daily report
+
+`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH]
+[--limit N] [--json]` is the read-only daily report: top opportunities, source
+health and missing evidence. It never creates or writes the store; a missing
+database exits 2. See [opportunities.md](opportunities.md#daily-report). As with
+`collect run`, scheduling it stays with the caller's existing scheduler.
+
 ## Not here yet
 
 A schedule for `collect run` (the caller's scheduler owns it), and adapters beyond
