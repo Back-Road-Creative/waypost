@@ -388,6 +388,9 @@ class DaemonState:
     # Learned optimal values
     optimal_title_length_min: int = 50
     optimal_title_length_max: int = 70
+    #: "measured" or "style" (the editorial default, nothing measured); None
+    #: for a state saved before the basis was recorded -- unknown, not style.
+    title_length_basis: str | None = None
     top_performing_tags: list[str] = field(default_factory=list)
     thumbnail_style_performance: dict[str, float] = field(default_factory=dict)
 
@@ -807,18 +810,25 @@ class ContinuousOptimizationDaemon:
 
                 self.state.top_performing_tags = top_tags
 
-            # 2. Optimal title length
-            min_len, max_len = optimizer.get_optimal_title_length()
+            # 2. Title length, with what backs it: with no usable history
+            # this is the editorial style range, not a measured optimum.
+            guidance = optimizer.get_title_length_guidance()
+            min_len, max_len = guidance.range
 
             if (
                 min_len != self.state.optimal_title_length_min
                 or max_len != self.state.optimal_title_length_max
+                or guidance.basis != self.state.title_length_basis
             ):
-                changes.append(f"updated_title_length_{min_len}-{max_len}")
+                changes.append(
+                    f"updated_title_length_{min_len}-{max_len}_{guidance.basis}"
+                )
                 self.state.optimal_title_length_min = min_len
                 self.state.optimal_title_length_max = max_len
+                self.state.title_length_basis = guidance.basis
 
             metrics["optimal_title_length"] = f"{min_len}-{max_len}"
+            metrics["title_length_basis"] = guidance.basis
 
             # 3. Pattern counts
             total_patterns = sum(len(v) for v in patterns.values())
@@ -1101,6 +1111,7 @@ class ContinuousOptimizationDaemon:
             "title": {
                 "optimal_length_min": self.state.optimal_title_length_min,
                 "optimal_length_max": self.state.optimal_title_length_max,
+                "basis": self.state.title_length_basis,
             },
             "tags": {
                 "recommended": self.state.top_performing_tags[:15],
@@ -1224,6 +1235,7 @@ class ContinuousOptimizationDaemon:
             "total_patterns_learned": self.state.total_patterns_learned,
             "top_tags_count": len(self.state.top_performing_tags),
             "optimal_title_length": f"{self.state.optimal_title_length_min}-{self.state.optimal_title_length_max}",
+            "title_length_basis": self.state.title_length_basis,
             "next_sync": self._get_next_run_time().isoformat()
             if self._get_next_run_time()
             else None,

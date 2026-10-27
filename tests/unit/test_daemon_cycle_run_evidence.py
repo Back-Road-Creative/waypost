@@ -49,7 +49,9 @@ def _manager(avg_ctr=0.04):
     return SimpleNamespace(
         optimizer=SimpleNamespace(
             analyze_patterns=lambda min_views=0: {"tags": []},
-            get_optimal_title_length=lambda: (50, 70),
+            get_title_length_guidance=lambda: SimpleNamespace(
+                range=(50, 70), basis="style"
+            ),
         ),
         analytics=SimpleNamespace(
             get_summary=lambda: {
