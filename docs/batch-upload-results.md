@@ -28,3 +28,28 @@ and follows `continue_on_error`.
 
 `tests/unit/test_batch_upload_outcomes.py` exercises these branches with a
 mock uploader and temporary video fixtures, without credentials or API calls.
+
+## Quota model
+
+`BatchUploader` sizes a batch with the same `QuotaManager` the uploader
+charges; every cost comes from its operation table, none is hard-coded.
+
+- `videos.insert` is one call in its own `youtube_data/videos.insert` bucket
+  (100 per day by default), not 1600 units. The pre-check needs that bucket's
+  `remaining` to be at least the number of videos.
+- `thumbnails.set` (50) and `playlistItems.insert` (50, for a video whose
+  metadata sets `playlist_id`) come from the default 10,000-unit pool. The
+  pre-check needs the pool's `remaining` to cover them.
+- An unbudgeted bucket (limit `None`) always passes.
+- The pre-check is advisory: it reserves nothing. Reservations happen per
+  request inside `YouTubeUploader`.
+
+`quota_used`, on `VideoUploadResult` and `BatchUploadResult`, counts
+default-pool units only (thumbnail and playlist calls). Inserts show in their
+own bucket (`QuotaManager.get_bucket_usage("youtube_data", "videos.insert")`),
+not in `quota_used`.
+
+`BatchUploader(credentials_path, project_id, *, quota=None, brand_id=None)`
+passes `quota` and `brand_id` to `YouTubeUploader`. Without `quota` it builds
+one stored under `data_home() / "quota"` (`$SEO_MANAGER_DATA_HOME`, see
+`seo_manager/paths.py`), not under the working directory.
