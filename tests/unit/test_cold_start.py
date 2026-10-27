@@ -202,8 +202,9 @@ class TestColdStartSEO:
 
         assert predictions["estimated_views"] >= 0
         assert predictions["estimated_ctr"] >= 0.0
-        # Confidence should be low without data
-        assert predictions["confidence"] < 0.5
+        # No history: the numbers are placeholders and the state says so.
+        assert predictions["evidence_state"] == "no_history"
+        assert predictions["heuristic_score"] is None
 
     def test_cold_start_validation_works(self, empty_manager):
         """Test best practices validation works without analytics"""
@@ -330,7 +331,7 @@ class TestProgressiveImprovement:
         assert len(top_tags) > 0  # Should have identified top tags
 
     def test_confidence_increases_with_data(self, progressive_manager):
-        """Test prediction confidence increases as data grows"""
+        """Test the evidence behind a prediction grows with data"""
         from seo_manager.analytics.seo_optimizer import SEOOptimizer
 
         # Generate test metadata
@@ -344,7 +345,8 @@ class TestProgressiveImprovement:
         # Prediction with no data
         optimizer_empty = SEOOptimizer(progressive_manager)
         pred_empty = optimizer_empty.predict_performance(test_metadata)
-        confidence_before = pred_empty["confidence"]
+        assert pred_empty["evidence_state"] == "no_history"
+        samples_before = pred_empty["evidence_sample_size"]
 
         # Add 5 videos with performance
         for i in range(5):
@@ -362,7 +364,7 @@ class TestProgressiveImprovement:
         # Prediction with data
         optimizer_with_data = SEOOptimizer(progressive_manager)
         pred_with_data = optimizer_with_data.predict_performance(test_metadata)
-        confidence_after = pred_with_data["confidence"]
+        samples_after = pred_with_data["evidence_sample_size"]
 
-        # Confidence should increase with data
-        assert confidence_after >= confidence_before
+        # The evidence base grows with data (a state, not a probability)
+        assert samples_after >= samples_before

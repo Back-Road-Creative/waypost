@@ -104,9 +104,9 @@ def test_the_views_estimate_averages_the_best_five_not_the_first_five():
 
     predictions = opt.predict_performance(_candidate())
 
-    confidence = predictions["confidence"]
-    assert confidence > 0, "a zero confidence would hide the difference"
-    assert predictions["estimated_views"] == pytest.approx(400 * confidence)
+    assert predictions["evidence_sample_size"] == 6
+    # the observed mean of the best five, unscaled by any invented factor
+    assert predictions["estimated_views"] == pytest.approx(400)
 
 
 def test_the_click_rate_estimate_averages_the_best_five_too():
@@ -132,7 +132,5 @@ def test_the_click_rate_estimate_averages_the_best_five_too():
 
     predictions = opt.predict_performance(_candidate())
 
-    confidence = predictions["confidence"]
-    assert confidence > 0, "a zero confidence would hide the difference"
     assert predictions["estimated_ctr_sample_size"] == 5
-    assert predictions["estimated_ctr"] == pytest.approx(0.04 * confidence)
+    assert predictions["estimated_ctr"] == pytest.approx(0.04)

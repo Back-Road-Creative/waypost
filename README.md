@@ -70,7 +70,7 @@ metadata = manager.generate(
 )
 
 # Metadata includes:
-# - Optimized title (50-70 chars for YouTube)
+# - Optimized title (at most 70 chars: a mobile-display style cap; the YouTube API limit is 100)
 # - SEO-friendly description with timestamps
 # - Relevant tags extracted from content
 # - Quality scores and readability metrics
