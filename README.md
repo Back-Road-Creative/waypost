@@ -298,6 +298,8 @@ configured" and the code says which variable or option to set:
 
 ## Documentation
 
+- **SEO opportunity and recovery roadmap**: [docs/seo-improvement-plan.md](docs/seo-improvement-plan.md) (proposal; no runtime changes)
+
 - **Upgrading from 0.1.0**: [docs/migrating-0.2.md](docs/migrating-0.2.md)
 - **Credential directory names**: [docs/credential-brand-paths.md](docs/credential-brand-paths.md)
 - **Security policy and reporting**: [SECURITY.md](SECURITY.md)
