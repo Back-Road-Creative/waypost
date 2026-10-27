@@ -116,8 +116,38 @@ source: last outcome (`unknown` when none), age since the last success (`never`)
 is not created; a database with no health rows says no sources have run. It reads
 through `CollectionStore.list_health(tenant)` (tenant-scoped, read-only).
 
+## Running a cycle
+
+`seo-manager collect run --tenant T [--db PATH] [--youtube-credentials PATH]
+[--video-mapping PATH] [--search-console-site URL] [--json]` runs `run_cycle` once
+with `now` set to the current UTC time. It is the daily entry point; scheduling it
+stays with the caller's existing scheduler, and this repo ships no schedule artifact.
+The database is created only through `CollectionStore.init()`, which is safe on an
+existing file.
+
+`--youtube-credentials` is an authorized-user token JSON file; `--video-mapping` is
+the daemon's `video_id -> content_id` JSON (the video ids are its sorted keys).
+
+| Source | Needs |
+|---|---|
+| `youtube_analytics_search_terms` | credentials and a non-empty video mapping |
+| `youtube_reach` | credentials |
+| `search_console` | credentials and `--search-console-site` |
+
+A source that cannot run is printed as `<source>  not run: <reason>` and is never
+written to the store or shown as a success. The reason is
+`not_configured:<input>` (`youtube_credentials`, `video_mapping`,
+`video_mapping_empty`, `search_console_site`) or `client_build_failed:<ExceptionType>`
+(only the type is shown, never a message or token content). Built adapters print one
+line each: source, status, outcome, `added`, `error`.
+
+Exit codes: 0 when at least one source ran and none failed; 1 when any source failed
+(the others still ran); 2 when no source is configured, or on a store error. `--json`
+prints the same rows as a list of objects (`status: "not_run"` with a `reason` for a
+source not run).
+
 ## Not here yet
 
-Real source adapters (YouTube Analytics, Search Console, and others) and anything
-that schedules `run_cycle`: this layer ships the protocol, the cycle and the
-status surface only. The JSONL event store (`storage/event_store.py`) is separate.
+A schedule for `collect run` (the caller's scheduler owns it), and adapters beyond
+YouTube Analytics search terms, YouTube reach and Search Console. The JSONL event
+store (`storage/event_store.py`) is separate.
