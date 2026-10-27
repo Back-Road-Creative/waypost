@@ -404,8 +404,60 @@ def _cmd_collect_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_collect_run(args: argparse.Namespace) -> int:
+    from seo_manager.collection.cycle import run_cycle
+    from seo_manager.collection.sources import build_adapters
+    from seo_manager.collection.store import CollectionStore, CollectionStoreError
+    from seo_manager.paths import collection_db
+
+    def path(value):
+        return Path(value) if value else None
+
+    adapters, skipped = build_adapters(
+        youtube_credentials=path(args.youtube_credentials),
+        video_mapping=path(args.video_mapping),
+        search_console_site=args.search_console_site,
+    )
+    runs = []
+    if adapters:
+        store = CollectionStore(Path(args.db) if args.db else collection_db())
+        try:
+            store.init()
+            runs = run_cycle(store, args.tenant, adapters, now=datetime.now(UTC))
+        except CollectionStoreError as exc:
+            print(f"seo-manager collect run: {exc}", file=sys.stderr)
+            return 2
+    if args.json:
+        rows = [
+            {
+                "source": r.source,
+                "status": r.status,
+                "outcome": r.outcome.value if r.outcome else None,
+                "added": r.added,
+                "error_class": r.error_class,
+            }
+            for r in runs
+        ] + [
+            {"source": n.source, "status": "not_run", "reason": n.reason}
+            for n in skipped
+        ]
+        print(json.dumps(rows))
+    else:
+        for r in runs:
+            print(
+                f"{r.source}  {r.status}  outcome={r.outcome.value if r.outcome else 'none'}  "
+                f"added={r.added}  error={r.error_class or 'none'}"
+            )
+        for n in skipped:
+            print(f"{n.source}  not run: {n.reason}")
+    if not adapters:
+        print("seo-manager collect run: no source is configured", file=sys.stderr)
+        return 2
+    return 1 if any(r.status == "failed" for r in runs) else 0
+
+
 def _add_collect_parser(sub) -> None:
-    sp = sub.add_parser("collect", help="collection store: status")
+    sp = sub.add_parser("collect", help="collection store: status, run")
     act = sp.add_subparsers(dest="action", required=True)
     st = act.add_parser("status", help="per-source health for a tenant")
     st.add_argument("--tenant", required=True)
@@ -414,6 +466,16 @@ def _add_collect_parser(sub) -> None:
     )
     st.add_argument("--json", action="store_true", help="machine-readable output")
     st.set_defaults(func=_cmd_collect_status)
+    run = act.add_parser("run", help="run one collection cycle for a tenant")
+    run.add_argument("--tenant", required=True)
+    run.add_argument(
+        "--db", help="default: $SEO_COLLECTION_DB or <data home>/collection.sqlite3"
+    )
+    run.add_argument("--youtube-credentials", help="authorized-user token JSON file")
+    run.add_argument("--video-mapping", help="JSON object: video_id -> content_id")
+    run.add_argument("--search-console-site", help="Search Console property URL")
+    run.add_argument("--json", action="store_true", help="machine-readable output")
+    run.set_defaults(func=_cmd_collect_run)
 
 
 def build_parser() -> argparse.ArgumentParser:
