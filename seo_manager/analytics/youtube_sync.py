@@ -10,8 +10,12 @@ install of this package brings them; there is no reduced mode without them.
 """
 
 import json
+import logging
 import os
+import random
 import tempfile
+import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -27,9 +31,17 @@ from google.auth.transport.requests import Request  # noqa: F401
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
+from ..transport import (
+    AuthError,
+    QuotaExhaustedError,
+    RetryPolicy,
+    TransportError,
+    retry_read,
+)
 from . import metric_source
+
+logger = logging.getLogger(__name__)
 
 # Default scopes used ONLY for the interactive client-secret flow
 # (create_credentials_from_flow) and as a last-resort fallback when a token
@@ -44,16 +56,17 @@ _DEFAULT_FLOW_SCOPES = [
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 
-# ANALYTICS_CTR_LIMITATION — the true thumbnail-impression CTR
-# ("impressions" / "impressionClickThroughRate") shown in YouTube Studio is
-# NOT exposed by the YouTube Analytics API v2: Google deliberately keeps it
-# Studio-UI-only (verified against developers.google.com/youtube/analytics/
-# metrics; corroborated by issuetracker.google.com/issues/254665034).
-# The closest real click-through signal the API DOES expose is `cardClickRate`
-# (with `cardImpressions`/`cardClicks`). We surface that as the `ctr` proxy and
-# document it; we never synthesize a fake impression CTR, and a missing row
-# degrades to None (not a 0 that masquerades as real data). A durable true-CTR
-# backfill would require a Studio CSV-export ingest path.
+# ANALYTICS_CTR_LIMITATION — the targeted YouTube Analytics API v2 query used
+# here does NOT return thumbnail impressions or impressions click-through rate
+# (verified against developers.google.com/youtube/analytics/metrics;
+# corroborated by issuetracker.google.com/issues/254665034). Those numbers are
+# not Studio-only, though: the YouTube Reporting API's channel reach reports
+# carry video thumbnail impressions and impressions CTR (see
+# youtube_reach_probe.py, which checks a real token for them). This module
+# does not read those reports, so it uses the closest signal the Analytics
+# query DOES expose: `cardClickRate` (with `cardImpressions`/`cardClicks`),
+# surfaced as the `ctr` proxy. We never synthesize a fake impression CTR, and a
+# missing row degrades to None (not a 0 that masquerades as real data).
 _ANALYTICS_METRICS = [
     "views",
     "estimatedMinutesWatched",
@@ -87,12 +100,21 @@ class YouTubeAnalyticsSync:
     Requires YouTube Data API v3 access and OAuth 2.0 credentials.
     """
 
-    def __init__(self, credentials_path: str):
+    def __init__(
+        self,
+        credentials_path: str,
+        *,
+        retry_policy: RetryPolicy | None = None,
+        sleep: Callable[[float], None] | None = None,
+        rand: Callable[[], float] | None = None,
+    ):
         """
         Initialize YouTube Analytics sync.
 
         Args:
             credentials_path: Path to OAuth 2.0 credentials JSON file
+            retry_policy: Bound for retrying transient read failures
+            sleep, rand: Injectable for deterministic tests
 
         Raises:
             FileNotFoundError: If credentials file not found
@@ -116,6 +138,18 @@ class YouTubeAnalyticsSync:
             "youtubeAnalytics", "v2", credentials=self.credentials
         )
 
+        # Reads retry within a bound (seo_manager/transport.py); sleep/rand are
+        # injectable so tests never wait.
+        self.retry_policy = retry_policy or RetryPolicy()
+        self._sleep = sleep or time.sleep
+        self._rand = rand or random.random
+
+    def _read(self, fn: Callable[[], dict]) -> dict:
+        """Run one idempotent API read with bounded retry. Reads only."""
+        return retry_read(
+            fn, policy=self.retry_policy, sleep=self._sleep, rand=self._rand
+        )
+
     def fetch_video_statistics(self, video_id: str) -> dict | None:
         """
         Fetch statistics for a single video.
@@ -124,7 +158,10 @@ class YouTubeAnalyticsSync:
             video_id: YouTube video ID
 
         Returns:
-            Dict with statistics or None if error
+            Dict with statistics, or None for a missing video or a request
+            that failed terminally / stayed transient past the retry bound.
+
+        Raises QuotaExhaustedError / AuthError (never retried).
 
         Example response:
             {
@@ -135,10 +172,12 @@ class YouTubeAnalyticsSync:
             }
         """
         try:
-            response = (
-                self.youtube_data.videos()
-                .list(part="statistics", id=video_id)
-                .execute()
+            response = self._read(
+                lambda: (
+                    self.youtube_data.videos()
+                    .list(part="statistics", id=video_id)
+                    .execute()
+                )
             )
 
             if "items" in response and len(response["items"]) > 0:
@@ -146,8 +185,10 @@ class YouTubeAnalyticsSync:
             else:
                 return None
 
-        except HttpError as e:
-            print(f"Error fetching stats for video {video_id}: {e}")
+        except (QuotaExhaustedError, AuthError):
+            raise
+        except TransportError as e:
+            logger.warning("Error fetching stats for video %s: %s", video_id, e)
             return None
 
     def fetch_video_analytics(self, video_id: str) -> dict | None:
@@ -168,24 +209,31 @@ class YouTubeAnalyticsSync:
 
         Returns:
             ``{metric_name: value}`` for the requested metrics, or ``None``
-            when the report has no row (no-data is degraded explicitly — the
-            caller threads ``ctr=None``, never a fake 0 that looks real).
+            when the report has no row or the request failed terminally /
+            stayed transient past the retry bound (no-data is degraded
+            explicitly — the caller threads ``ctr=None``, never a fake 0).
+
+        Raises QuotaExhaustedError / AuthError (never retried).
         """
         start_date, end_date = analytics_report_window()
         try:
-            response = (
-                self.youtube_analytics.reports()
-                .query(
-                    ids="channel==MINE",
-                    startDate=start_date,
-                    endDate=end_date,
-                    metrics=",".join(_ANALYTICS_METRICS),
-                    filters=f"video=={video_id}",
+            response = self._read(
+                lambda: (
+                    self.youtube_analytics.reports()
+                    .query(
+                        ids="channel==MINE",
+                        startDate=start_date,
+                        endDate=end_date,
+                        metrics=",".join(_ANALYTICS_METRICS),
+                        filters=f"video=={video_id}",
+                    )
+                    .execute()
                 )
-                .execute()
             )
-        except HttpError as e:
-            print(f"Error fetching analytics for video {video_id}: {e}")
+        except (QuotaExhaustedError, AuthError):
+            raise
+        except TransportError as e:
+            logger.warning("Error fetching analytics for video %s: %s", video_id, e)
             return None
 
         rows = response.get("rows") or []
@@ -273,7 +321,11 @@ class YouTubeAnalyticsSync:
             video_mapping: Dict of {video_id: content_id}
 
         Returns:
-            List of results with success status
+            One result per video. On daily quota exhaustion or a rejected
+            credential the run stops calling the API; the failing and untried
+            videos get ``success=False`` and ``error_class`` (``quota_exhausted``
+            or ``auth``). Quota results add ``deferred=True`` and
+            ``next_eligible`` (ISO-8601 next Pacific midnight).
 
         Example:
             results = sync.batch_sync(manager, {
@@ -281,9 +333,20 @@ class YouTubeAnalyticsSync:
                 "def456": "episode_002"
             })
         """
-        results = []
+        results: list[dict] = []
+        stop: dict | None = None
 
         for video_id, content_id in video_mapping.items():
+            if stop is not None:
+                results.append(
+                    {
+                        "video_id": video_id,
+                        "content_id": content_id,
+                        "success": False,
+                        **stop,
+                    }
+                )
+                continue
             try:
                 event_id = self.sync_video_analytics(manager, video_id, content_id)
 
@@ -296,6 +359,34 @@ class YouTubeAnalyticsSync:
                     }
                 )
 
+            except (QuotaExhaustedError, AuthError) as e:
+                if isinstance(e, QuotaExhaustedError):
+                    stop = {
+                        "error_class": "quota_exhausted",
+                        "deferred": True,
+                        "next_eligible": e.next_eligible.isoformat(),
+                        "error": str(e),
+                    }
+                    logger.warning(
+                        "YouTube daily quota exhausted; deferring remaining "
+                        "videos until %s",
+                        stop["next_eligible"],
+                    )
+                else:
+                    stop = {"error_class": "auth", "error": str(e)}
+                    logger.error(
+                        "YouTube credential rejected (%s): re-authorize the "
+                        "token; stopping this run",
+                        e,
+                    )
+                results.append(
+                    {
+                        "video_id": video_id,
+                        "content_id": content_id,
+                        "success": False,
+                        **stop,
+                    }
+                )
             except Exception as e:
                 results.append(
                     {

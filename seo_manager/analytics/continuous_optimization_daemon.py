@@ -686,6 +686,21 @@ class ContinuousOptimizationDaemon:
             metrics["videos_failed"] = failed
             metrics["videos_missing"] = missing
 
+            # Quota/auth stops stay PARTIAL/FAILED; these say why and until when.
+            deferred = [r for r in results if r.get("deferred")]
+            blocked = {r["error_class"] for r in results if r.get("error_class")}
+            if deferred:
+                metrics["videos_deferred"] = len(deferred)
+                metrics["sync_next_eligible"] = deferred[0].get("next_eligible")
+                changes.append(
+                    f"deferred_{len(deferred)}_videos_until_"
+                    f"{metrics['sync_next_eligible']}"
+                )
+            if blocked:
+                metrics["sync_blocked_by"] = sorted(blocked)
+                if "auth" in blocked:
+                    changes.append("auth_error_reauthorize_token")
+
             if synced == requested:
                 outcome = SyncOutcome.FRESH
             elif synced == 0:
