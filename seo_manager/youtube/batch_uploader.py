@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from ..core.metadata import SEOMetadata
+from ..quota.manager import QuotaExceededError
+from ..transport import AuthError, QuotaExhaustedError
 from .uploader import YouTubeUploader
 
 
@@ -81,6 +83,10 @@ class VideoUploadResult:
         video_url: YouTube video URL (if successful)
         quota_used: Quota units used for this video
         error: Error message (if failed)
+        error_class: ``quota_exhausted``, ``quota_budget``, ``auth`` or the
+            failure's own ``error_class`` (e.g. ``outcome_unknown``), if any
+        deferred: Not tried (or refused) for quota; retry at ``next_eligible``
+        next_eligible: ISO time the quota resets, when known
     """
 
     video_path: str
@@ -89,6 +95,9 @@ class VideoUploadResult:
     video_url: str | None = None
     quota_used: int = 0
     error: str | None = None
+    error_class: str | None = None
+    deferred: bool = False
+    next_eligible: str | None = None
 
 
 @dataclass
@@ -403,6 +412,32 @@ class BatchUploader:
 
                 print(f"   ✅ Success: {video_id}")
 
+            except (QuotaExhaustedError, QuotaExceededError, AuthError) as e:
+                # Nothing more can be sent today (or with these credentials):
+                # this video and every untried one are recorded, not attempted.
+                if isinstance(e, AuthError):
+                    error_class, deferred, next_eligible = "auth", False, None
+                elif isinstance(e, QuotaExhaustedError):
+                    error_class, deferred = "quota_exhausted", True
+                    next_eligible = e.next_eligible.isoformat()
+                else:
+                    error_class, deferred, next_eligible = "quota_budget", True, None
+                for j, rest in enumerate(config.videos[i - 1 :], i):
+                    result.results.append(
+                        VideoUploadResult(
+                            video_path=rest.video_path,
+                            success=False,
+                            error=str(e) if j == i else f"not tried: {error_class}",
+                            error_class=error_class,
+                            deferred=deferred,
+                            next_eligible=next_eligible,
+                        )
+                    )
+                    result.failed += 1
+                result.errors.append(f"Video {i} ({video_title}): {e}")
+                print(f"   🛑 {error_class}: stopping the batch ({e})")
+                break
+
             except Exception as e:
                 # Record failure
                 error_msg = str(e)
@@ -411,6 +446,7 @@ class BatchUploader:
                     success=False,
                     error=error_msg,
                     quota_used=0,
+                    error_class=getattr(e, "error_class", None),
                 )
                 result.results.append(video_result)
                 result.failed += 1
