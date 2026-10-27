@@ -13,6 +13,7 @@ Total per video: ~1700 units (can upload ~5-6 videos per day safely)
 Daily quota: 10,000 units
 """
 
+import logging
 import os
 import random
 import time
@@ -56,10 +57,13 @@ from .upload_recovery import (
     UploadOutcomeUnknown,
     UploadRecord,
     UploadState,
+    file_key,
     find_upload,
     metered,
     upload_key,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PrivacyStatus(Enum):
@@ -170,6 +174,8 @@ class YouTubeUploader:
     clock: Callable[[], datetime] = staticmethod(lambda: datetime.now(UTC))
     rand: Callable[[], float] = staticmethod(random.random)
     last_upload_key: str | None = None
+    _journal_pruned = False
+    _upload_context: tuple[str, str, str] | None = None
 
     def __init__(
         self,
@@ -324,7 +330,15 @@ class YouTubeUploader:
 
         key = upload_key(video_path, body)
         self.last_upload_key = key
+        self._upload_context = (
+            file_key(video_path),
+            body["snippet"]["title"],
+            body["snippet"]["description"],
+        )
+        self._prune_journal()
         record = self.journal.get(key) if self.journal else None
+        if record is None:
+            self._settle_same_file(key, video_path)
         video_id, follow_ups = (
             self._previous(record, video_path, body) if record else (None, False)
         )
@@ -351,7 +365,86 @@ class YouTubeUploader:
         error: str | None = None,
     ) -> None:
         if self.journal is not None:
-            self.journal.put(UploadRecord(key, state, started, video_id, error))
+            fkey, title, description = (
+                self._upload_context
+                if self._upload_context and key == self.last_upload_key
+                else (None, None, None)
+            )
+            self.journal.put(
+                UploadRecord(
+                    key, state, started, video_id, error, fkey, title, description
+                )
+            )
+
+    def _prune_journal(self) -> None:
+        """Drop old settled records, once per uploader; never blocks an upload."""
+        if self.journal is None or self._journal_pruned:
+            return
+        self._journal_pruned = True
+        try:
+            self.journal.prune(self.clock())
+        except OSError as exc:
+            logger.warning("upload journal prune failed: %s", exc)
+
+    def _settle_same_file(self, key: str, video_path: str) -> None:
+        """Settle earlier unresolved attempts of this file sent with other metadata.
+
+        Each is looked up by ITS OWN title and description. One that landed is
+        never returned as if the new metadata were applied: the caller must
+        update that video instead. Raises ``UploadOutcomeUnknown`` for a found
+        or unsettled one; an absent one past ``RECONCILE_GRACE`` is marked
+        not uploaded and the new upload goes ahead.
+        """
+        if self.journal is None or self._upload_context is None:
+            return
+        for old in self.journal.unresolved_for_file(
+            self._upload_context[0], other_than=key
+        ):
+            try:
+                if old.title is None or old.description is None:
+                    raise UploadOutcomeUnknown(
+                        f"journal record {old.key} has no title to look up",
+                        key=old.key,
+                        video_path=video_path,
+                    )
+                found = find_upload(
+                    self.youtube,
+                    title=old.title,
+                    description=old.description,
+                    since=old.started_at,
+                    key=old.key,
+                    video_path=video_path,
+                    quota=self.quota,
+                    brand_id=self.brand_id,
+                    sleep=self.sleep,
+                )
+            except UploadOutcomeUnknown as exc:
+                self.journal.put(
+                    replace(old, state=UploadState.UNKNOWN, error=str(exc))
+                )
+                raise
+            if found:
+                self.journal.put(
+                    replace(old, state=UploadState.UPLOADED, video_id=found)
+                )
+                raise UploadOutcomeUnknown(
+                    f"{Path(video_path).name} is already uploaded as {found} with "
+                    "earlier metadata; update that video instead of uploading again",
+                    key=key,
+                    video_path=video_path,
+                )
+            if (
+                old.started_at is not None
+                and self.clock() - old.started_at >= RECONCILE_GRACE
+            ):
+                self.journal.put(replace(old, state=UploadState.NOT_UPLOADED))
+                continue
+            message = (
+                f"an earlier upload of {Path(video_path).name} with other metadata "
+                "is not visible yet; a later run reconciles it"
+            )
+            self.journal.put(replace(old, state=UploadState.UNKNOWN, error=message))
+            raise UploadOutcomeUnknown(message, key=key, video_path=video_path)
 
     def _settle(self, reservation: Reservation | None, outcome: Outcome) -> None:
         if reservation is not None and self.quota is not None:

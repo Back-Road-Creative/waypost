@@ -28,6 +28,8 @@ RECONCILE_GRACE = timedelta(minutes=15)
 CLOCK_SKEW = timedelta(minutes=10)
 #: Uploads-playlist pages read per lookup (50 items each, newest first).
 MAX_PAGES = 4
+#: Settled journal records older than this are deleted (``UploadJournal.prune``).
+JOURNAL_RETENTION = timedelta(days=30)
 
 
 class UploadState(StrEnum):
@@ -55,6 +57,19 @@ class UploadRecord:
     started_at: datetime | None = None  # None: unreadable record, time unknown
     video_id: str | None = None
     error: str | None = None
+    # What the attempt was for, so it can be reconciled even after the metadata
+    # changes. None on a record written before these fields existed.
+    file_key: str | None = None
+    title: str | None = None
+    description: str | None = None
+
+
+def file_key(video_path: str) -> str:
+    """Identity of the video file alone: its name and size, whatever the metadata."""
+    path = Path(video_path)
+    return hashlib.sha256(
+        json.dumps([path.name, path.stat().st_size]).encode()
+    ).hexdigest()
 
 
 def upload_key(video_path: str, body: dict[str, Any]) -> str:
@@ -87,6 +102,9 @@ class UploadJournal:
                 started_at=datetime.fromisoformat(started) if started else None,
                 video_id=raw.get("video_id"),
                 error=raw.get("error"),
+                file_key=raw.get("file_key"),
+                title=raw.get("title"),
+                description=raw.get("description"),
             )
         except FileNotFoundError:
             return None
@@ -100,6 +118,46 @@ class UploadJournal:
             record.started_at.isoformat() if record.started_at else None
         )
         atomic_write_json(self._path(record.key), data)
+
+    def unresolved_for_file(
+        self, wanted: str, *, other_than: str
+    ) -> list[UploadRecord]:
+        """IN_FLIGHT or UNKNOWN records of the file ``wanted``, under any other key.
+
+        A record with no ``file_key`` (written before it existed) cannot be
+        matched by file, so it is skipped; its own key still reaches it.
+        """
+        found = []
+        for path in sorted(self.directory.glob("*.json")):
+            if path.stem == other_than:
+                continue
+            record = self.get(path.stem)
+            if (
+                record is not None
+                and record.file_key == wanted
+                and record.state in (UploadState.IN_FLIGHT, UploadState.UNKNOWN)
+            ):
+                found.append(record)
+        return found
+
+    def prune(self, now: datetime, older_than: timedelta = JOURNAL_RETENTION) -> int:
+        """Delete settled records started before ``now - older_than``; return how many.
+
+        In-flight, unknown and unreadable records, and records with no start
+        time, are never deleted: someone still has to settle them.
+        """
+        removed = 0
+        for path in self.directory.glob("*.json"):
+            record = self.get(path.stem)
+            if (
+                record is not None
+                and record.state in (UploadState.UPLOADED, UploadState.NOT_UPLOADED)
+                and record.started_at is not None
+                and record.started_at < now - older_than
+            ):
+                path.unlink(missing_ok=True)
+                removed += 1
+        return removed
 
 
 def metered(
