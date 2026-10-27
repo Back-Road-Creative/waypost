@@ -119,10 +119,10 @@ class UploadJournal:
         )
         atomic_write_json(self._path(record.key), data)
 
-    def unresolved_for_file(
-        self, wanted: str, *, other_than: str
-    ) -> list[UploadRecord]:
-        """IN_FLIGHT or UNKNOWN records of the file ``wanted``, under any other key.
+    def same_file_records(self, wanted: str, *, other_than: str) -> list[UploadRecord]:
+        """Records of the file ``wanted`` under any other key that still matter.
+
+        That is IN_FLIGHT, UNKNOWN, and UPLOADED with a video ID.
 
         A record with no ``file_key`` (written before it existed) cannot be
         matched by file, so it is skipped; its own key still reaches it.
@@ -135,7 +135,10 @@ class UploadJournal:
             if (
                 record is not None
                 and record.file_key == wanted
-                and record.state in (UploadState.IN_FLIGHT, UploadState.UNKNOWN)
+                and (
+                    record.state in (UploadState.IN_FLIGHT, UploadState.UNKNOWN)
+                    or (record.state == UploadState.UPLOADED and record.video_id)
+                )
             ):
                 found.append(record)
         return found

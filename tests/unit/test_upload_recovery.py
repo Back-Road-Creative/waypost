@@ -481,12 +481,47 @@ class TestChangedMetadata:
         assert again.inserts == 1
         assert up.journal.get(old_key).state == UploadState.IN_FLIGHT
 
-    def test_a_settled_record_for_the_same_file_is_ignored(self, make):
+    def test_a_retry_after_a_found_upload_is_refused_again(self, make):
+        up = make(FakeYouTube())
+        _crash_in_flight(make, up)
+        up.youtube = FakeYouTube(
+            [], uploads=[uploaded_item("oldvid")], existing={"oldvid"}
+        )
+        with pytest.raises(UploadOutcomeUnknown, match="oldvid"):
+            _upload_changed(up, make.video)
+        retry = FakeYouTube([FakeRequest([{"id": "dup"}])], existing={"oldvid"})
+        up.youtube = retry
+        with pytest.raises(UploadOutcomeUnknown, match="oldvid") as err:
+            _upload_changed(up, make.video)
+        assert "earlier metadata" in str(err.value)
+        assert retry.inserts == 0
+
+    def test_a_completed_upload_blocks_the_same_file_with_new_metadata(self, make):
         up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
         _upload(up, make.video)
-        again = FakeYouTube([FakeRequest([{"id": "vid2"}])])
+        again = FakeYouTube([FakeRequest([{"id": "vid2"}])], existing={"vid1"})
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown, match="vid1"):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
+
+    def test_a_completed_upload_whose_video_is_gone_does_not_block(self, make):
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        _upload(up, make.video)
+        old_key = up.last_upload_key
+        again = FakeYouTube([FakeRequest([{"id": "vid2"}])], existing=set())
         up.youtube = again
         assert _upload_changed(up, make.video) == "vid2"
+        assert up.journal.get(old_key).state == UploadState.NOT_UPLOADED
+
+    def test_an_unconfirmable_completed_upload_raises(self, make):
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        _upload(up, make.video)
+        again = FakeYouTube([FakeRequest([{"id": "dup"}])], read_errors=[OSError("x")])
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
 
 
 class TestPrune:

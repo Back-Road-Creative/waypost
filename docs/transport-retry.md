@@ -96,6 +96,14 @@ again. The code is in `seo_manager/youtube/upload_recovery.py`.
     new upload goes ahead.
   - Absent within the grace period, ambiguous, or a failed lookup: raises
     `UploadOutcomeUnknown`.
+  - An `uploaded` record of the same file also blocks while its video still
+    exists (checked with `videos.list`), whether it was settled by this check or
+    by an ordinary upload. If the video is gone, the record becomes
+    `not_uploaded` and the new upload goes ahead. This also refuses a deliberate
+    re-upload of the same file (same name and size) with new metadata while the
+    old video exists and its record is under 30 days old, because that would be
+    a duplicate video. To override, delete the old video (the existence check
+    then lets it through) or remove its journal record.
   - A record written before `file_key` existed cannot be matched by file and is
     skipped; its own key still reaches it.
 - **Pruning.** Once per uploader instance, `UploadJournal.prune` deletes

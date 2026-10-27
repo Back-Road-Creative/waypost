@@ -386,10 +386,19 @@ class YouTubeUploader:
         except OSError as exc:
             logger.warning("upload journal prune failed: %s", exc)
 
-    def _settle_same_file(self, key: str, video_path: str) -> None:
-        """Settle earlier unresolved attempts of this file sent with other metadata.
+    @staticmethod
+    def _already_uploaded(video_path: str, video_id: str | None) -> str:
+        return (
+            f"{Path(video_path).name} is already uploaded as {video_id} with "
+            "earlier metadata; update that video instead of uploading again"
+        )
 
-        Each is looked up by ITS OWN title and description. One that landed is
+    def _settle_same_file(self, key: str, video_path: str) -> None:
+        """Settle earlier attempts of this file sent with other metadata.
+
+        An UPLOADED record blocks while its video still exists (``_exists``);
+        once the video is gone it is marked not uploaded. Each unresolved one
+        is looked up by ITS OWN title and description. One that landed is
         never returned as if the new metadata were applied: the caller must
         update that video instead. Raises ``UploadOutcomeUnknown`` for a found
         or unsettled one; an absent one past ``RECONCILE_GRACE`` is marked
@@ -397,9 +406,18 @@ class YouTubeUploader:
         """
         if self.journal is None or self._upload_context is None:
             return
-        for old in self.journal.unresolved_for_file(
+        for old in self.journal.same_file_records(
             self._upload_context[0], other_than=key
         ):
+            if old.state == UploadState.UPLOADED:
+                if self._exists(old, video_path):
+                    raise UploadOutcomeUnknown(
+                        self._already_uploaded(video_path, old.video_id),
+                        key=key,
+                        video_path=video_path,
+                    )
+                self.journal.put(replace(old, state=UploadState.NOT_UPLOADED))
+                continue
             try:
                 if old.title is None or old.description is None:
                     raise UploadOutcomeUnknown(
@@ -428,8 +446,7 @@ class YouTubeUploader:
                     replace(old, state=UploadState.UPLOADED, video_id=found)
                 )
                 raise UploadOutcomeUnknown(
-                    f"{Path(video_path).name} is already uploaded as {found} with "
-                    "earlier metadata; update that video instead of uploading again",
+                    self._already_uploaded(video_path, found),
                     key=key,
                     video_path=video_path,
                 )
