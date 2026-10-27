@@ -10,6 +10,10 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- Versioned collection contracts and a transactional SQLite store with migrations, quarantine of corrupt state and replayable projections
+
 ## [0.3.0] - 2026-10-25
 
 ### Added
