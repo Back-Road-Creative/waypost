@@ -302,7 +302,6 @@ Consumers own credentials, private configuration, process isolation and backup.
 All state changes recorded as immutable events:
 - Complete audit trail
 - Time-travel queries
-- Rollback capability
 - Corruption detection (CRC32)
 
 ### 2. Site Isolation
@@ -372,7 +371,7 @@ class InstagramMetadataGenerator(BaseSEOGenerator):
 - Never commit `youtube_credentials.json`
 - Use environment variables in production
 - Rotate credentials periodically
-- Read-only scopes (youtube.readonly, yt-analytics.readonly)
+- Scopes are not read-only: the uploader (`seo_manager/youtube/uploader.py`) requests `youtube.upload`, the full `youtube` scope and `youtube.readonly`; the analytics sync (`seo_manager/analytics/youtube_sync.py`) requests only `youtube.readonly` and `yt-analytics.readonly`
 
 ### Event Store
 - Append-only (no deletions)

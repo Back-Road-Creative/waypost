@@ -429,7 +429,7 @@ class ThumbnailABTracker:
         return (
             f"no thumbnail click-through data: the rates on record ({', '.join(have)})"
             " are measured against something other than thumbnail impressions;"
-            " the Analytics API exposes no impressionClickThroughRate"
+            " the YouTube Analytics API exposes no impressionClickThroughRate"
         )
 
     def get_style_analysis(self) -> dict[ThumbnailStyle, StyleAnalysis]:

@@ -230,8 +230,9 @@ print(f"Avg CTR: {avg_ctr:.2%}" if avg_ctr is not None else "Avg CTR: unmeasured
 
 ### From YouTube Analytics API (Advanced):
 - **Card impressions and card click rate** - recorded as the click-through proxy.
-  Thumbnail impressions and impression CTR are shown only in YouTube Studio;
-  the API does not expose them, so the sync never records them.
+  The YouTube Analytics API (the targeted query API) does not expose thumbnail
+  impressions or impression CTR, so the sync never records them. The YouTube
+  Reporting API's reach reports do carry them (see the reach probe below).
 
 ### Reach probe (YouTube Reporting API)
 The Reporting API's channel reach reports may carry thumbnail impressions and
