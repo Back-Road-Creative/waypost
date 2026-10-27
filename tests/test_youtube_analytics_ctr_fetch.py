@@ -7,8 +7,9 @@ and the optimizer's `performer.get("ctr", 0)` was structurally always 0.
 
 These tests pin the NEW behavior: a `.reports().query()` call against
 `youtubeAnalytics` that requests the click/engagement metrics the API
-actually exposes (the true thumbnail-impression CTR is Studio-only and NOT
-available in the API — see ANALYTICS_CTR_LIMITATION), and an explicit
+actually exposes (the Analytics API v2 query does not return the thumbnail-
+impression CTR, though the Reporting API's reach reports do — see
+ANALYTICS_CTR_LIMITATION), and an explicit
 degrade-not-zero path when no analytics row comes back.
 
 Google API libs are mocked so the suite runs without google-api-python-client.

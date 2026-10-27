@@ -254,6 +254,9 @@ of each and prefers one with the traffic source. An
 API refusal prints its status and message (`verdict=api-error`), such as a
 token without the `yt-analytics.readonly` scope.
 
+Reading those reports into the collection store is described in
+[youtube-reach-ingestion.md](youtube-reach-ingestion.md).
+
 Watch time is requested from the API but not stored. The API offers other
 metrics (average view duration, traffic sources, and so on) that this package
 does not fetch or store.
