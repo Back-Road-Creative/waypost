@@ -25,6 +25,11 @@ tagged is listed under Unreleased.
 - YouTube reach reports are ingested, read-only (#84)
 - YouTube search terms are collected per video, read-only (#85)
 - Search Console query and page evidence is collected, read-only (#86)
+- `seo-manager collect run` runs one collection cycle from the command line (#88)
+- Search terms that bring a video views but are missing from its title and
+  description are reported as opportunities (#89)
+- `seo-manager collect report` shows source health, open opportunities, missing
+  evidence and the next evaluation, read-only (#90)
 
 ### Changed
 
