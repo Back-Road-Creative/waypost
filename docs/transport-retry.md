@@ -82,6 +82,34 @@ again. The code is in `seo_manager/youtube/upload_recovery.py`.
     again.
   - An unreadable record has no start time and never times out. Check the
     channel, then delete the file the error names.
+- **Same file, new metadata.** Each record also keeps a `file_key` (file name
+  and size) and the title and description it was sent with. Before sending
+  under a key with no record, the uploader looks for `in_flight` or `unknown`
+  records with the same `file_key` and another key (for example, the metadata
+  was regenerated after a crash). Each is looked up by its own title and
+  description:
+  - Found: the old record becomes `uploaded` and `UploadOutcomeUnknown` is
+    raised, naming the existing video. The file is already uploaded with
+    earlier metadata, so update that video; the ID is never returned as if the
+    new metadata had been applied.
+  - Absent past `RECONCILE_GRACE`: the old record becomes `not_uploaded` and the
+    new upload goes ahead.
+  - Absent within the grace period, ambiguous, or a failed lookup: raises
+    `UploadOutcomeUnknown`.
+  - An `uploaded` record of the same file also blocks while its video still
+    exists (checked with `videos.list`), whether it was settled by this check or
+    by an ordinary upload. If the video is gone, the record becomes
+    `not_uploaded` and the new upload goes ahead. This also refuses a deliberate
+    re-upload of the same file (same name and size) with new metadata while the
+    old video exists and its record is under 30 days old, because that would be
+    a duplicate video. To override, delete the old video (the existence check
+    then lets it through) or remove its journal record.
+  - A record written before `file_key` existed cannot be matched by file and is
+    skipped; its own key still reaches it.
+- **Pruning.** Once per uploader instance, `UploadJournal.prune` deletes
+  `uploaded` and `not_uploaded` records started more than `JOURNAL_RETENTION`
+  (30 days) ago. It never deletes `in_flight`, `unknown`, unreadable or
+  undated records. A prune `OSError` is logged and never blocks an upload.
 - **Seen again.** An `uploaded` record is confirmed with `videos.list` and
   returned; it is uploaded again only if the video was deleted.
 - **Terminal errors.** A 400 or 404 returns `None` (`not_uploaded`), as before.

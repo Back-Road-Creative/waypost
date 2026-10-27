@@ -6,6 +6,7 @@ each ``next_chunk`` call does; ``FakeYouTube`` answers the reconcile reads
 ``videos.list`` for a journalled ID) and counts every ``videos.insert``.
 """
 
+import dataclasses
 import json
 import ssl
 from datetime import UTC, datetime, timedelta
@@ -19,9 +20,11 @@ from seo_manager.quota.manager import QuotaExceededError, QuotaManager
 from seo_manager.transport import AuthError, QuotaExhaustedError, RetryPolicy
 from seo_manager.youtube import uploader as uploader_mod
 from seo_manager.youtube.upload_recovery import (
+    JOURNAL_RETENTION,
     RECONCILE_GRACE,
     UploadJournal,
     UploadOutcomeUnknown,
+    UploadRecord,
     UploadState,
 )
 from seo_manager.youtube.uploader import YouTubeUploader
@@ -399,3 +402,165 @@ class TestRefusals:
     def test_works_without_quota_or_journal(self, make):
         up = make(FakeYouTube([FakeRequest([{"id": "v"}])]), quota=False, journal=False)
         assert _upload(up, make.video) == "v"
+
+
+def _crash_in_flight(make, up):
+    """Leave an IN_FLIGHT record for the current metadata; return its key."""
+
+    class Crash(BaseException):
+        pass
+
+    up.youtube = FakeYouTube([FakeRequest([Crash()])])
+    with pytest.raises(Crash):
+        _upload(up, make.video)
+    return up.last_upload_key
+
+
+def _upload_changed(up, video, title="Quillhaven Harbour at dusk"):
+    meta = dataclasses.replace(_metadata(), title=title, **sent_fields(title))
+    return up.upload_video(video, meta, **upload_kwargs(title))
+
+
+class TestChangedMetadata:
+    def test_an_old_landed_upload_is_reported_never_resent(self, make):
+        up = make(FakeYouTube())
+        old_key = _crash_in_flight(make, up)
+        again = FakeYouTube([], uploads=[uploaded_item("oldvid")])
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown, match="oldvid") as err:
+            _upload_changed(up, make.video)
+        assert "earlier metadata" in str(err.value)
+        assert again.inserts == 0
+        old = up.journal.get(old_key)
+        assert old.state == UploadState.UPLOADED
+        assert old.video_id == "oldvid"
+        assert up.journal.get(up.last_upload_key) is None
+
+    def test_an_old_absent_past_grace_is_not_uploaded_and_the_new_one_goes(self, make):
+        up = make(FakeYouTube())
+        old_key = _crash_in_flight(make, up)
+        again = FakeYouTube([FakeRequest([{"id": "fresh"}])])
+        up.youtube = again
+        up.clock = lambda: NOW + RECONCILE_GRACE
+        assert _upload_changed(up, make.video) == "fresh"
+        assert again.inserts == 1
+        assert up.journal.get(old_key).state == UploadState.NOT_UPLOADED
+
+    def test_an_old_absent_within_grace_raises(self, make):
+        up = make(FakeYouTube())
+        old_key = _crash_in_flight(make, up)
+        again = FakeYouTube([FakeRequest([{"id": "dup"}])])
+        up.youtube = again
+        up.clock = lambda: NOW + RECONCILE_GRACE - timedelta(seconds=1)
+        with pytest.raises(UploadOutcomeUnknown, match="not visible yet"):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
+        assert up.journal.get(old_key).state == UploadState.UNKNOWN
+
+    def test_a_failed_lookup_for_the_old_record_raises(self, make):
+        up = make(FakeYouTube())
+        _crash_in_flight(make, up)
+        again = FakeYouTube([FakeRequest([{"id": "dup"}])], read_errors=[OSError("x")])
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
+
+    def test_a_record_without_file_key_is_skipped(self, make):
+        up = make(FakeYouTube())
+        old_key = _crash_in_flight(make, up)
+        old = up.journal.get(old_key)
+        up.journal.put(
+            UploadRecord(old.key, old.state, old.started_at)  # pre-change shape
+        )
+        again = FakeYouTube(
+            [FakeRequest([{"id": "fresh"}])], uploads=[uploaded_item("o")]
+        )
+        up.youtube = again
+        assert _upload_changed(up, make.video) == "fresh"
+        assert again.inserts == 1
+        assert up.journal.get(old_key).state == UploadState.IN_FLIGHT
+
+    def test_a_retry_after_a_found_upload_is_refused_again(self, make):
+        up = make(FakeYouTube())
+        _crash_in_flight(make, up)
+        up.youtube = FakeYouTube(
+            [], uploads=[uploaded_item("oldvid")], existing={"oldvid"}
+        )
+        with pytest.raises(UploadOutcomeUnknown, match="oldvid"):
+            _upload_changed(up, make.video)
+        retry = FakeYouTube([FakeRequest([{"id": "dup"}])], existing={"oldvid"})
+        up.youtube = retry
+        with pytest.raises(UploadOutcomeUnknown, match="oldvid") as err:
+            _upload_changed(up, make.video)
+        assert "earlier metadata" in str(err.value)
+        assert retry.inserts == 0
+
+    def test_a_completed_upload_blocks_the_same_file_with_new_metadata(self, make):
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        _upload(up, make.video)
+        again = FakeYouTube([FakeRequest([{"id": "vid2"}])], existing={"vid1"})
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown, match="vid1"):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
+
+    def test_a_completed_upload_whose_video_is_gone_does_not_block(self, make):
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        _upload(up, make.video)
+        old_key = up.last_upload_key
+        again = FakeYouTube([FakeRequest([{"id": "vid2"}])], existing=set())
+        up.youtube = again
+        assert _upload_changed(up, make.video) == "vid2"
+        assert up.journal.get(old_key).state == UploadState.NOT_UPLOADED
+
+    def test_an_unconfirmable_completed_upload_raises(self, make):
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        _upload(up, make.video)
+        again = FakeYouTube([FakeRequest([{"id": "dup"}])], read_errors=[OSError("x")])
+        up.youtube = again
+        with pytest.raises(UploadOutcomeUnknown):
+            _upload_changed(up, make.video)
+        assert again.inserts == 0
+
+
+class TestPrune:
+    def _put(self, journal, key, state, age_days):
+        started = None if age_days is None else NOW - timedelta(days=age_days)
+        journal.put(UploadRecord(key, state, started))
+
+    def test_deletes_only_old_settled_records(self, tmp_path):
+        journal = UploadJournal(tmp_path / "j")
+        old = JOURNAL_RETENTION.days + 1
+        self._put(journal, "oldup", UploadState.UPLOADED, old)
+        self._put(journal, "oldno", UploadState.NOT_UPLOADED, old)
+        self._put(journal, "newup", UploadState.UPLOADED, 1)
+        self._put(journal, "oldfl", UploadState.IN_FLIGHT, old)
+        self._put(journal, "oldun", UploadState.UNKNOWN, old)
+        self._put(journal, "nodate", UploadState.UPLOADED, None)
+        journal._path("broken").write_text("{not json")
+        assert journal.prune(NOW) == 2
+        left = {p.stem for p in journal.directory.glob("*.json")}
+        assert left == {"newup", "oldfl", "oldun", "nodate", "broken"}
+
+    def test_a_missing_directory_is_fine(self, tmp_path):
+        assert UploadJournal(tmp_path / "nope").prune(NOW) == 0
+
+    def test_runs_once_per_instance(self, make, monkeypatch):
+        up = make(FakeYouTube([FakeRequest([{"id": "a"}]), FakeRequest([{"id": "b"}])]))
+        calls = []
+        monkeypatch.setattr(
+            UploadJournal, "prune", lambda self, now, **_: calls.append(now) or 0
+        )
+        _upload(up, make.video)
+        _upload_changed(up, make.video)
+        assert calls == [NOW]
+
+    def test_a_prune_failure_does_not_block_the_upload(self, make, monkeypatch):
+        up = make(FakeYouTube([FakeRequest([{"id": "ok"}])]))
+
+        def boom(self, now, **_):
+            raise OSError("disk")
+
+        monkeypatch.setattr(UploadJournal, "prune", boom)
+        assert _upload(up, make.video) == "ok"
