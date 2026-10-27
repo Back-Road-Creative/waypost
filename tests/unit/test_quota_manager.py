@@ -7,15 +7,16 @@ Tests cover:
 - Daily quota limits (10,000 units per project)
 - Quota exhaustion prevention
 - Operation cost tracking
-- Quota reset at midnight UTC
+- Quota reset at midnight America/Los_Angeles
 - Warning thresholds
 
 Critical: Must prevent ANY operation from exceeding quota limits.
 
 YouTube API Quota Costs:
-- videos.insert (upload): 1600 units
+- videos.insert (upload): 1 call from its own bucket (default 100 calls/day)
 - thumbnails.set: 50 units
-- search.list: 100 units per call
+- videos.update: 50 units
+- search.list: 1 call from its own bucket (default 100 calls/day)
 - videos.list: 1 unit per call
 - channels.list: 1 unit
 - playlistItems.insert: 50 units
@@ -48,13 +49,18 @@ class TestQuotaManager:
 
         manager = QuotaManager(project_id="test_project", storage_path=tmp_path)
 
-        # Track video upload (1600 units)
-        manager.track_operation("video_upload", cost=1600)
+        # Track a pool operation (thumbnails.set: 50 units)
+        manager.track_operation("thumbnails.set", cost=50)
 
         # Check usage
         usage = manager.get_usage()
-        assert usage["total_used"] == 1600
-        assert usage["remaining"] == 10000 - 1600
+        assert usage["total_used"] == 50
+        assert usage["remaining"] == 10000 - 50
+
+        # A video upload is one call against the videos.insert bucket
+        manager.track_operation("video_upload", cost=1)
+        assert manager.get_usage()["total_used"] == 50
+        assert manager.get_bucket_usage("youtube_data", "videos.insert")["used"] == 1
 
     def test_multiple_operations_cumulative(self, tmp_path):
         """Test that multiple operations accumulate"""
@@ -187,14 +193,15 @@ class TestQuotaManager:
         manager = QuotaManager(project_id="test_project", storage_path=tmp_path)
 
         # Should provide cost estimates
+        # videos.insert is one call against its own bucket, not 1600 units.
         upload_cost = manager.estimate_cost("video_upload")
-        assert upload_cost == 1600
+        assert upload_cost == 1
 
         thumbnail_cost = manager.estimate_cost("thumbnail_upload")
         assert thumbnail_cost == 50
 
         search_cost = manager.estimate_cost("video_search")
-        assert search_cost == 100
+        assert search_cost == 1
 
     def test_safe_operation_check(self, tmp_path):
         """Test checking if operation is safe before executing"""
@@ -207,13 +214,15 @@ class TestQuotaManager:
         # Use 9000 units
         manager.track_operation("bulk", cost=9000)
 
-        # Check if upload is safe (1600 units)
-        is_safe = manager.can_safely_perform("video_upload")
-        assert is_safe is False  # Would exceed limit
+        # The pool is nearly full, but uploads and searches draw from their
+        # own buckets: both still fit.
+        assert manager.can_safely_perform("video_upload") is True
+        assert manager.can_safely_perform("video_search") is True
 
-        # Check if search is safe (100 units)
-        is_safe = manager.can_safely_perform("video_search")
-        assert is_safe is True  # Within limit
+        # videos.update (50 units) comes from the pool: 9000 + 50 fits, 9980 + 50 not
+        assert manager.can_safely_perform("videos.update") is True
+        manager.track_operation("bulk2", cost=980)
+        assert manager.can_safely_perform("videos.update") is False
 
     def test_quota_persistence(self):
         """Test quota state persists across sessions"""
@@ -381,11 +390,12 @@ class TestQuotaLimitsAndSafety:
         )
 
         # Exhaust quota
-        manager.track_operation("bulk", cost=9900)
+        manager.track_operation("bulk", cost=9980)
 
-        # Upload should be blocked (1600 units needed)
-        can_upload = manager.can_safely_perform("video_upload")
-        assert can_upload is False
+        # A pool operation (thumbnails.set, 50 units) is blocked; uploads
+        # draw from their own bucket and are not.
+        assert manager.can_safely_perform("thumbnails.set") is False
+        assert manager.can_safely_perform("video_upload") is True
 
     def test_cannot_batch_fetch_if_quota_low(self, tmp_path):
         """Test batch operations blocked when quota insufficient"""
@@ -431,8 +441,8 @@ class TestQuotaLimitsAndSafety:
         manager = QuotaManager(project_id="test_project", storage_path=tmp_path)
 
         # Dry run simulation
-        cost = manager.estimate_cost("video_upload")
-        assert cost == 1600
+        cost = manager.estimate_cost("thumbnails.set")
+        assert cost == 50
 
         # Dry run should NOT track
         usage_before = manager.get_usage()["total_used"]
