@@ -40,6 +40,8 @@ class UploadState(StrEnum):
 class UploadOutcomeUnknown(Exception):
     """The upload may or may not exist. Nothing is sent again until it is settled."""
 
+    error_class = "outcome_unknown"
+
     def __init__(self, message: str, *, key: str, video_path: str):
         super().__init__(message)
         self.key = key

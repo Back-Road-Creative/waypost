@@ -239,8 +239,9 @@ class TestAmbiguousOutcome:
             [FakeRequest([TimeoutError("t")] * 3)],
             uploads=[uploaded_item("a"), uploaded_item("b")],
         )
-        with pytest.raises(UploadOutcomeUnknown, match="2 uploads match"):
+        with pytest.raises(UploadOutcomeUnknown, match="2 uploads match") as exc:
             _upload(make(youtube), make.video)
+        assert exc.value.error_class == "outcome_unknown"  # batch results show it
 
     def test_an_older_or_different_upload_does_not_match(self, make):
         youtube = FakeYouTube(
