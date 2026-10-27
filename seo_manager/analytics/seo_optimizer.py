@@ -9,9 +9,74 @@ them to new content generation.
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
+from typing import Any
 
 from ..core.metadata import ContentType, SEOMetadata
+from ..platforms.youtube import (
+    YOUTUBE_TAG_COUNT_STYLE_RANGE,
+    YOUTUBE_TITLE_API_MAX_CHARS,
+    YOUTUBE_TITLE_DISPLAY_CHARS,
+    YOUTUBE_TITLE_STYLE_MIN_CHARS,
+)
 from . import metric_source
+
+#: Shared with the validator and the adapter (`platforms.youtube`): a (min, max)
+#: tag-count STYLE habit. It is not an API rule (the API bounds tag characters)
+#: and nobody measured it on this channel.
+TAG_COUNT_STYLE_RANGE = YOUTUBE_TAG_COUNT_STYLE_RANGE
+
+#: Editorial default title range used when the channel has no usable history.
+#: It is advice, not a finding -- see `TitleLengthGuidance.basis`.
+STYLE_TITLE_RANGE = (YOUTUBE_TITLE_STYLE_MIN_CHARS, YOUTUBE_TITLE_DISPLAY_CHARS)
+
+#: Fewer analysed videos than this and a "pattern" is anecdote.
+MIN_MEASURED_SAMPLES = 10
+#: Mean evidence older than this (the recency half-life) is stale.
+STALE_EVIDENCE_DAYS = 180.0
+
+
+class EvidenceState(StrEnum):
+    """What a prediction or recommendation actually rests on.
+
+    This replaces a numeric "confidence", which was a fixed-weight score no
+    outcome ever calibrated. A state plus the sample size says what a reader
+    can believe without implying a probability.
+    """
+
+    NO_HISTORY = "no_history"
+    SPARSE = "sparse"
+    MEASURED = "measured"
+    STALE = "stale"
+
+
+@dataclass(frozen=True)
+class EvidenceAssessment:
+    """The evidence behind a pattern-based statement."""
+
+    state: EvidenceState
+    sample_size: int
+    #: What the click rates in that history are a rate OF: a `metric_source`
+    #: tag, `MIXED_DENOMINATORS`, or `metric_source.UNKNOWN`.
+    source: str
+    mean_age_days: float | None
+
+
+@dataclass(frozen=True)
+class TitleLengthGuidance:
+    """A title-length range together with what backs it."""
+
+    min_chars: int
+    max_chars: int
+    #: "measured" (association from this channel's data, with n) or "style"
+    #: (editorial default; nothing measured).
+    basis: str
+    evidence: EvidenceAssessment
+
+    @property
+    def range(self) -> tuple[int, int]:
+        return (self.min_chars, self.max_chars)
+
 
 # Performance score = blend of normalized age-adjusted views and a CLICK RATE.
 # That rate is NOT a thumbnail click-through rate and is not evidence that a
@@ -146,6 +211,13 @@ class SEORecommendation:
     #: operator as `Confidence: 85%` -- a statistic-shaped claim with
     #: no statistic behind it.
     priority: str
+    #: Where the advice comes from, so the three are never blurred:
+    #: "api_limit" (the platform rejects it), "style" (editorial advice,
+    #: not measured) or "measured" (an association in this channel's data,
+    #: with `evidence_n` videos behind it -- association, not causation).
+    basis: str = "style"
+    #: Videos behind a "measured" recommendation; 0 for the other bases.
+    evidence_n: int = 0
 
 
 @dataclass
@@ -437,38 +509,70 @@ class SEOOptimizer:
 
         return [p.value for p in self.patterns["tags"][:limit]]
 
+    def assess_evidence(self) -> EvidenceAssessment:
+        """Classify the history every pattern here is derived from."""
+        if not self._analyzed:
+            self.analyze_patterns()
+        lengths = (self.patterns or {}).get("title_lengths") or []
+        n = sum(getattr(p, "sample_size", 1) for p in lengths)
+        if n == 0:
+            return EvidenceAssessment(
+                EvidenceState.NO_HISTORY, 0, metric_source.UNKNOWN, None
+            )
+        rated = [p for p in lengths if getattr(p, "ctr_sample_size", 0) > 0]
+        source = _sole_source(p.ctr_source for p in rated)
+        ages = [
+            p.evidence_age_days
+            for p in lengths
+            if getattr(p, "evidence_age_days", None) is not None
+        ]
+        mean_age = (sum(ages) / len(ages)) if ages else None
+        if n < MIN_MEASURED_SAMPLES:
+            state = EvidenceState.SPARSE
+        elif mean_age is not None and mean_age > STALE_EVIDENCE_DAYS:
+            state = EvidenceState.STALE
+        else:
+            state = EvidenceState.MEASURED
+        return EvidenceAssessment(state, n, source, mean_age)
+
+    def get_title_length_guidance(self) -> TitleLengthGuidance:
+        """Title-length range with its basis.
+
+        "measured" only when the history is MEASURED (enough fresh videos);
+        otherwise the editorial style range, labelled as such. A measured
+        range is an association between title length and the channel's own
+        performance score, not a demonstrated cause.
+        """
+        evidence = self.assess_evidence()
+        if evidence.state is not EvidenceState.MEASURED:
+            lo, hi = STYLE_TITLE_RANGE
+            return TitleLengthGuidance(lo, hi, "style", evidence)
+
+        # Top quarter by the CTR-weighted, age-decayed performance score --
+        # NOT raw views, which would tune the length toward whatever went
+        # viral regardless of how well the title converted.
+        # `analyze_patterns` has already ranked the list, so this slices.
+        by_score = self.patterns["title_lengths"]
+        top_quarter = by_score[: max(1, len(by_score) // 4)]
+        lengths = [p.value for p in top_quarter]
+        avg_length = sum(lengths) / len(lengths)
+        return TitleLengthGuidance(
+            int(avg_length - 10), int(avg_length + 10), "measured", evidence
+        )
+
     def get_optimal_title_length(self) -> tuple[int, int]:
         """
-        Get optimal title length range based on top performers.
+        Title-length range to steer generation with.
+
+        Thin wrapper over `get_title_length_guidance` kept for existing
+        callers. With no usable history this is the editorial STYLE range
+        (50-70), not a finding; call `get_title_length_guidance` to learn
+        which one a given range is.
 
         Returns:
             Tuple of (min_length, max_length)
         """
-        if not self._analyzed:
-            self.analyze_patterns()
-
-        if not self.patterns or not self.patterns["title_lengths"]:
-            # Default to platform best practices
-            return (50, 70)
-
-        # Get the top 25% of performers by the CTR-weighted, age-decayed
-        # performance score — NOT raw views, which would tune the
-        # title length toward whatever happened to go viral regardless of how
-        # well the title itself converted. `analyze_patterns` has already put
-        # them in that order, so this slices rather than re-sorting, exactly
-        # as `get_top_performing_tags` slices `tags`.
-        by_score = self.patterns["title_lengths"]
-
-        top_quarter = by_score[: max(1, len(by_score) // 4)]
-
-        if not top_quarter:
-            return (50, 70)
-
-        lengths = [p.value for p in top_quarter]
-        avg_length = sum(lengths) / len(lengths)
-
-        # Return range around average
-        return (int(avg_length - 10), int(avg_length + 10))
+        return self.get_title_length_guidance().range
 
     def generate_recommendations(self, content_id: str) -> list[SEORecommendation]:
         """
@@ -489,24 +593,69 @@ class SEOOptimizer:
 
         recommendations = []
 
-        # Check title length
-        optimal_min, optimal_max = self.get_optimal_title_length()
-        if len(metadata.title) < optimal_min:
+        guidance = self.get_title_length_guidance()
+        optimal_min, optimal_max = guidance.range
+        n = guidance.evidence.sample_size
+        title_len = len(metadata.title)
+        measured = guidance.basis == "measured"
+        if title_len > YOUTUBE_TITLE_API_MAX_CHARS:
             recommendations.append(
                 SEORecommendation(
                     category="title",
-                    issue=f"Title too short ({len(metadata.title)} chars)",
-                    suggestion=f"Expand title to {optimal_min}-{optimal_max} chars for better CTR",
+                    issue=(
+                        f"Title exceeds the YouTube API limit "
+                        f"({title_len} > {YOUTUBE_TITLE_API_MAX_CHARS} chars)"
+                    ),
+                    suggestion=(
+                        f"API limit: shorten to {YOUTUBE_TITLE_API_MAX_CHARS} "
+                        "characters or fewer or the upload is rejected"
+                    ),
                     priority="high",
+                    basis="api_limit",
                 )
             )
-        elif len(metadata.title) > optimal_max + 10:
+        elif title_len < optimal_min:
+            if measured:
+                suggestion = (
+                    f"Measured association (n={n} videos): your top-scoring "
+                    f"titles run {optimal_min}-{optimal_max} chars. This is an "
+                    "association in your data, not shown to cause better results"
+                )
+            else:
+                suggestion = (
+                    f"Style advice, not measured: titles of {optimal_min}-"
+                    f"{optimal_max} chars display in full on mobile"
+                )
             recommendations.append(
                 SEORecommendation(
                     category="title",
-                    issue=f"Title too long ({len(metadata.title)} chars)",
-                    suggestion=f"Shorten title to {optimal_min}-{optimal_max} chars",
-                    priority="medium",
+                    issue=f"Title short ({title_len} chars)",
+                    suggestion=suggestion,
+                    priority="high",
+                    basis=guidance.basis,
+                    evidence_n=n if measured else 0,
+                )
+            )
+        elif title_len > (optimal_max + 10 if measured else optimal_max):
+            if measured:
+                suggestion = (
+                    f"Measured association (n={n} videos): your top-scoring "
+                    f"titles run {optimal_min}-{optimal_max} chars; association "
+                    "only"
+                )
+            else:
+                suggestion = (
+                    f"Style advice, not measured: shorten to {optimal_max} "
+                    "chars so it is not cut off on mobile"
+                )
+            recommendations.append(
+                SEORecommendation(
+                    category="title",
+                    issue=f"Title long ({title_len} chars)",
+                    suggestion=suggestion,
+                    priority="medium" if measured else "low",
+                    basis=guidance.basis,
+                    evidence_n=n if measured else 0,
                 )
             )
 
@@ -515,13 +664,24 @@ class SEOOptimizer:
         current_tags = set(metadata.tags)
         missing_tags = top_tags - current_tags
 
-        if missing_tags and len(current_tags) < 10:
+        tag_evidence = self.assess_evidence()
+        if (
+            missing_tags
+            and len(current_tags) < TAG_COUNT_STYLE_RANGE[0]
+            and tag_evidence.state is EvidenceState.MEASURED
+        ):
             recommendations.append(
                 SEORecommendation(
                     category="tags",
-                    issue="Missing high-performing tags",
-                    suggestion=f"Consider adding: {', '.join(list(missing_tags)[:5])}",
+                    issue="Tags that appear on your higher-scoring videos are absent",
+                    suggestion=(
+                        f"Measured association (n={tag_evidence.sample_size} "
+                        "videos, not shown to cause better results): consider "
+                        f"adding {', '.join(sorted(missing_tags)[:5])}"
+                    ),
                     priority="medium",
+                    basis="measured",
+                    evidence_n=tag_evidence.sample_size,
                 )
             )
 
@@ -531,7 +691,10 @@ class SEOOptimizer:
                 SEORecommendation(
                     category="quality",
                     issue=f"Low quality score ({metadata.quality_score:.2f})",
-                    suggestion="Improve title length, keyword density, and tag count",
+                    suggestion=(
+                        "Style advice, not measured: review title length, "
+                        "keyword density, and tag count"
+                    ),
                     priority="medium",
                 )
             )
@@ -542,7 +705,12 @@ class SEOOptimizer:
                 SEORecommendation(
                     category="tags",
                     issue=f"Too few tags ({len(metadata.tags)})",
-                    suggestion="Add more relevant tags (target 8-12 tags)",
+                    suggestion=(
+                        "Style advice, not measured: add more relevant tags "
+                        f"(a common habit is {TAG_COUNT_STYLE_RANGE[0]}-"
+                        f"{TAG_COUNT_STYLE_RANGE[1]}; the API limit is on total "
+                        "characters, not count)"
+                    ),
                     priority="medium",
                 )
             )
@@ -577,7 +745,7 @@ class SEOOptimizer:
         else:
             combined_tags = top_tags
 
-        kwargs["existing_tags"] = combined_tags[:12]  # Limit to 12
+        kwargs["existing_tags"] = combined_tags[: TAG_COUNT_STYLE_RANGE[1]]
 
         # Feed the learned title-length range into generation. Previously this
         # value was computed and dropped on the floor, so every "optimized"
@@ -599,25 +767,36 @@ class SEOOptimizer:
 
         return metadata
 
-    def predict_performance(self, metadata: SEOMetadata) -> dict[str, float]:
+    def predict_performance(self, metadata: SEOMetadata) -> dict[str, Any]:
         """
-        Predict performance metrics for given metadata.
+        Report what the channel's own history says about similar metadata.
+
+        This is NOT a forecast. `estimated_views` and `estimated_ctr` are the
+        OBSERVED means of the five best-scoring past title-length patterns,
+        unscaled -- an association with past performance, never a promised
+        gain. Read them with `evidence_state`: `no_history` means the 0.0 is a
+        placeholder, `sparse` means too few videos to trust, `stale` means the
+        evidence is old, `measured` means enough fresh history to be worth
+        looking at (still correlation, still not calibrated).
 
         Args:
             metadata: Metadata to analyze
 
         Returns:
-            Dict with predicted metrics (views, ctr, engagement_rate) plus
-            `estimated_ctr_sample_size` (an int): how many of the patterns
-            behind `estimated_ctr` carried a measured rate. Zero means the
-            0.0 is a placeholder, not a prediction. The rate itself stays a
-            float because callers format it with `:.2%`; the count is what
-            says whether the number means anything.
+            Dict with `estimated_views`, `estimated_ctr`,
+            `estimated_ctr_sample_size`, `estimated_ctr_source`, the evidence
+            fields `evidence_state` (an `EvidenceState`, a str),
+            `evidence_sample_size` (videos behind the history) and
+            `evidence_source` (what click rates there are a rate OF), and
+            `heuristic_score`: a fixed-weight 0-1 fit score for ranking
+            variants against each other. It is not a probability and not a
+            confidence; it is None without history.
         """
         if not self._analyzed:
             self.analyze_patterns()
 
-        predictions = {
+        evidence = self.assess_evidence()
+        predictions: dict[str, Any] = {
             "estimated_views": 0.0,
             "estimated_ctr": 0.0,
             "estimated_ctr_sample_size": 0,
@@ -626,13 +805,17 @@ class SEOOptimizer:
             #: were not the same thing -- a different answer, and the screen
             #: has to be able to tell them apart.
             "estimated_ctr_source": metric_source.UNKNOWN,
-            "confidence": 0.0,
+            "evidence_state": evidence.state,
+            "evidence_sample_size": evidence.sample_size,
+            "evidence_source": evidence.source,
+            "heuristic_score": None,
         }
 
-        if not self.patterns:
+        if evidence.state is EvidenceState.NO_HISTORY:
             return predictions
 
-        # Base prediction on similar successful content
+        # Heuristic fit score: fixed weights, uncalibrated, comparable only
+        # between variants scored against the same history.
         score = 0.0
         factors = 0
 
@@ -643,13 +826,14 @@ class SEOOptimizer:
         score += tag_overlap * 0.4
         factors += 1
 
-        # Factor 2: Title length optimization
+        # Factor 2: Title length against the learned range. With a style
+        # range (history not yet MEASURED) this is closeness to the editorial
+        # default, which the evidence fields already flag as such.
         optimal_min, optimal_max = self.get_optimal_title_length()
         title_len = len(metadata.title)
         if optimal_min <= title_len <= optimal_max:
             score += 0.3
         else:
-            # Partial score based on how close
             deviation = min(abs(title_len - optimal_min), abs(title_len - optimal_max))
             score += max(0, 0.3 - (deviation / 100))
         factors += 1
@@ -659,39 +843,34 @@ class SEOOptimizer:
             score += metadata.quality_score * 0.3
             factors += 1
 
-        # Normalize score
-        if factors > 0:
-            predictions["confidence"] = score / factors
+        predictions["heuristic_score"] = score / factors
 
-        # Estimate views and click rate from the top patterns — the five
-        # best-scoring, which is what this slice takes now that
-        # `analyze_patterns` ranks the list. Both divide by the number of
-        # patterns actually summed, never by a literal 5: with two patterns
-        # the old form reported two fifths of what it measured.
+        # Observed means of the five best-scoring patterns -- what the slice
+        # takes now that `analyze_patterns` ranks the list. Both divide by the
+        # number of patterns actually summed, never by a literal 5.
         #
         # Note the two halves are not measured the same way: the selection is
         # by `perf_score`, which is age-decayed views-PER-DAY blended with a
         # click rate, while `avg_views` is an undecayed LIFETIME total. So the
         # best-scoring five are chosen on current momentum and then averaged
-        # on career totals. Picking the right five is a prerequisite for that
-        # mismatch mattering, not a fix for it.
+        # on career totals.
         top_patterns = self.patterns["title_lengths"][:5]
         if top_patterns:
-            avg_top_views = sum(p.avg_views for p in top_patterns) / len(top_patterns)
-            predictions["estimated_views"] = avg_top_views * predictions["confidence"]
+            predictions["estimated_views"] = sum(
+                p.avg_views for p in top_patterns
+            ) / len(top_patterns)
 
             measured = [p for p in top_patterns if p.avg_ctr is not None]
             source = _sole_source(p.ctr_source for p in measured)
             predictions["estimated_ctr_source"] = source
-            # Same rule one level up: patterns measured against different
-            # denominators have no common rate to predict.
+            # Patterns measured against different denominators have no common
+            # rate to report.
             rates = (
                 [p.avg_ctr for p in measured] if source != MIXED_DENOMINATORS else []
             )
             predictions["estimated_ctr_sample_size"] = len(rates)
             if rates:
-                avg_top_ctr = sum(rates) / len(rates)
-                predictions["estimated_ctr"] = avg_top_ctr * predictions["confidence"]
+                predictions["estimated_ctr"] = sum(rates) / len(rates)
 
         return predictions
 
@@ -699,7 +878,12 @@ class SEOOptimizer:
         self, metadata_a: SEOMetadata, metadata_b: SEOMetadata
     ) -> dict:
         """
-        Compare two metadata variants and predict which will perform better.
+        Compare two metadata variants against the channel's history.
+
+        A winner is named only when the history is MEASURED; with no, sparse
+        or stale evidence `recommendation` is None and `evidence_state` says
+        why. The comparison is by `heuristic_score`, a fit score, not a
+        forecast of which variant will perform better.
 
         Args:
             metadata_a: First variant
@@ -711,16 +895,24 @@ class SEOOptimizer:
         pred_a = self.predict_performance(metadata_a)
         pred_b = self.predict_performance(metadata_b)
 
+        state = pred_a["evidence_state"]
         comparison = {
             "variant_a": {"title": metadata_a.title, "predictions": pred_a},
             "variant_b": {"title": metadata_b.title, "predictions": pred_b},
             "recommendation": None,
-            "confidence_delta": abs(pred_a["confidence"] - pred_b["confidence"]),
+            "evidence_state": state,
+            "evidence_sample_size": pred_a["evidence_sample_size"],
+            "heuristic_score_delta": None,
         }
 
-        if pred_a["estimated_views"] > pred_b["estimated_views"]:
-            comparison["recommendation"] = "variant_a"
-        else:
-            comparison["recommendation"] = "variant_b"
+        score_a, score_b = pred_a["heuristic_score"], pred_b["heuristic_score"]
+        if score_a is None or score_b is None:
+            return comparison
+
+        comparison["heuristic_score_delta"] = abs(score_a - score_b)
+        if state is EvidenceState.MEASURED and score_a != score_b:
+            comparison["recommendation"] = (
+                "variant_a" if score_a > score_b else "variant_b"
+            )
 
         return comparison

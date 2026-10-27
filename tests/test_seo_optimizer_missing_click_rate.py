@@ -138,7 +138,7 @@ def test_the_estimate_is_built_only_from_measured_rates():
     predictions = optimizer.predict_performance(_FakeMetadata("A" * 30, ["t"]))
 
     assert predictions["estimated_ctr_sample_size"] == 1
-    assert predictions["estimated_ctr"] == 0.20 * predictions["confidence"]
+    assert predictions["estimated_ctr"] == 0.20
 
 
 def test_an_estimate_with_nothing_measured_says_so():
@@ -156,7 +156,7 @@ def test_an_estimate_with_nothing_measured_says_so():
 
 def test_the_views_estimate_divides_by_the_patterns_it_has():
     # Two patterns, both at 1000 views/day: the estimate was divided by a hard
-    # 5 regardless, so it read 400 * confidence instead of 1000 * it.
+    # 5 regardless, so it read 400 instead of 1000.
     top = [
         {
             "content_id": "a",
@@ -176,7 +176,7 @@ def test_the_views_estimate_divides_by_the_patterns_it_has():
 
     predictions = optimizer.predict_performance(_FakeMetadata("A" * 30, ["t"]))
 
-    assert predictions["estimated_views"] == 1000 * predictions["confidence"]
+    assert predictions["estimated_views"] == 1000
 
 
 def test_a_performer_with_unreported_views_is_left_out_not_scored_as_zero():

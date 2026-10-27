@@ -9,6 +9,16 @@ Best Practices Source: YouTube Creator Academy + SEO research
 
 from dataclasses import dataclass
 
+from ..platforms.youtube import (
+    YOUTUBE_TAG_COUNT_STYLE_RANGE,
+    YOUTUBE_TAGS_API_MAX_CHARS,
+    YOUTUBE_TITLE_API_MAX_CHARS,
+    YOUTUBE_TITLE_DISPLAY_CHARS,
+    YOUTUBE_TITLE_STYLE_MIN_CHARS,
+)
+
+_TAG_MIN, _TAG_MAX = YOUTUBE_TAG_COUNT_STYLE_RANGE
+
 
 @dataclass
 class ValidationIssue:
@@ -25,7 +35,11 @@ class YouTubeBestPracticesValidator:
     """
     Validates YouTube metadata against 2026 best practices.
 
-    Best Practices (2026):
+    Each issue is one of: a hard API limit (severity "error", cited as such),
+    or editorial STYLE advice (never an error, labelled "style advice, not
+    measured"). Nothing here is a measured effect on this channel.
+
+    Style advice (2026):
     - Title: 50-70 chars for mobile, front-load keywords
     - Description: Hook in first 125 chars, timestamps, value-add content
     - Tags: 10-15 relevant tags, avoid tag stuffing
@@ -67,30 +81,39 @@ class YouTubeBestPracticesValidator:
         """Validate title against best practices"""
         issues = []
 
-        # Length check (50-70 optimal for mobile)
+        # Length check -- STYLE advice (mobile display), not an API rule.
         if len(title) < 40:
             issues.append(
                 ValidationIssue(
                     category="title",
                     severity="warning",
                     issue=f"Title too short ({len(title)} chars)",
-                    recommendation="Aim for 50-70 characters for optimal mobile display",
-                    best_practice="YouTube titles display up to 70 chars on mobile. Short titles miss SEO opportunity.",
+                    recommendation=(
+                        f"Style advice: aim for {YOUTUBE_TITLE_STYLE_MIN_CHARS}-"
+                        f"{YOUTUBE_TITLE_DISPLAY_CHARS} characters for full mobile display"
+                    ),
+                    best_practice=(
+                        "Style advice, not measured: titles display up to "
+                        f"{YOUTUBE_TITLE_DISPLAY_CHARS} chars on mobile."
+                    ),
                 )
             )
-        elif len(title) > 70:
+        elif len(title) > YOUTUBE_TITLE_DISPLAY_CHARS:
             issues.append(
                 ValidationIssue(
                     category="title",
                     severity="warning",
                     issue=f"Title too long ({len(title)} chars)",
-                    recommendation="Shorten to 70 characters - excess will be cut off on mobile",
-                    best_practice="YouTube truncates titles over 70 chars on mobile devices.",
+                    recommendation=(
+                        f"Style advice: shorten to {YOUTUBE_TITLE_DISPLAY_CHARS} "
+                        "characters to avoid being cut off on mobile"
+                    ),
+                    best_practice=(
+                        "Style advice, not an API rule: mobile display cuts titles "
+                        f"over {YOUTUBE_TITLE_DISPLAY_CHARS} chars."
+                    ),
                 )
             )
-        elif 50 <= len(title) <= 70:
-            # Perfect length
-            pass
 
         # Keyword front-loading
         if title and title[0].islower():
@@ -119,14 +142,23 @@ class YouTubeBestPracticesValidator:
 
         # HARD YouTube Data API v3 limits (rejection, not best-practice):
         # title must be <= 100 chars and contain no '<' or '>'.
-        if len(title) > 100:
+        if len(title) > YOUTUBE_TITLE_API_MAX_CHARS:
             issues.append(
                 ValidationIssue(
                     category="title",
                     severity="error",
-                    issue=f"Title exceeds YouTube API limit ({len(title)} > 100 chars)",
-                    recommendation="Shorten the title to 100 characters or fewer",
-                    best_practice="YouTube Data API rejects titles over 100 chars with a 400.",
+                    issue=(
+                        f"Title exceeds YouTube API limit "
+                        f"({len(title)} > {YOUTUBE_TITLE_API_MAX_CHARS} chars)"
+                    ),
+                    recommendation=(
+                        f"Shorten the title to {YOUTUBE_TITLE_API_MAX_CHARS} "
+                        "characters or fewer"
+                    ),
+                    best_practice=(
+                        "API limit: YouTube Data API rejects titles over "
+                        f"{YOUTUBE_TITLE_API_MAX_CHARS} chars with a 400."
+                    ),
                 )
             )
         if any(c in title for c in "<>"):
@@ -217,25 +249,56 @@ class YouTubeBestPracticesValidator:
         """Validate tags against best practices"""
         issues = []
 
-        # Tag count (10-15 optimal)
+        # HARD API limit: tags are bounded by total characters, not by count.
+        total_chars = sum(len(t) for t in tags)
+        if total_chars > YOUTUBE_TAGS_API_MAX_CHARS:
+            issues.append(
+                ValidationIssue(
+                    category="tags",
+                    severity="error",
+                    issue=(
+                        f"Tags exceed YouTube API limit "
+                        f"({total_chars} > {YOUTUBE_TAGS_API_MAX_CHARS} chars)"
+                    ),
+                    recommendation="Remove tags until the total is within the limit",
+                    best_practice=(
+                        "API limit: the YouTube Data API bounds tags by total "
+                        f"characters ({YOUTUBE_TAGS_API_MAX_CHARS})."
+                    ),
+                )
+            )
+
+        # Tag count -- STYLE advice, not an API rule and not measured.
         if len(tags) < 5:
             issues.append(
                 ValidationIssue(
                     category="tags",
                     severity="warning",
                     issue=f"Too few tags ({len(tags)})",
-                    recommendation="Add more relevant tags - aim for 10-15 tags",
-                    best_practice="10-15 well-chosen tags help YouTube understand your content.",
+                    recommendation=(
+                        f"Style advice: add more relevant tags - aim for "
+                        f"{_TAG_MIN}-{_TAG_MAX}"
+                    ),
+                    best_practice=(
+                        f"Style advice, not measured: {_TAG_MIN}-{_TAG_MAX} "
+                        "well-chosen tags is a common habit."
+                    ),
                 )
             )
-        elif len(tags) > 15:
+        elif len(tags) > _TAG_MAX:
             issues.append(
                 ValidationIssue(
                     category="tags",
                     severity="info",
                     issue=f"Many tags ({len(tags)})",
-                    recommendation="Consider reducing to 10-15 most relevant tags",
-                    best_practice="Quality over quantity - 10-15 highly relevant tags outperform 20+ loose tags.",
+                    recommendation=(
+                        f"Style advice: consider reducing to the {_TAG_MIN}-"
+                        f"{_TAG_MAX} most relevant tags"
+                    ),
+                    best_practice=(
+                        "Style advice, not measured: fewer, relevant tags "
+                        "beat a long loose list."
+                    ),
                 )
             )
 

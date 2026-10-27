@@ -132,9 +132,18 @@ External Integrations:
 - Validation methods
 
 **YouTubeAdapter**
-- Title: 70 chars (mobile optimized)
+- Title: 70 chars is a **style** cap (mobile display) that generation honours
+  via `get_title_limit()`; the **API limit** is 100 (`get_title_api_limit()`)
 - Description: 5,000 chars
-- Tags: 15 max, comma-separated, lowercase
+- Tags: 15 is a **style** cap (`get_tag_limit()`); the **API limit** is 500
+  characters in total (`get_tag_char_limit()`), not a count
+- Comma-separated, lowercase
+
+All YouTube numbers live once, in `platforms/youtube.py` (`YOUTUBE_*`
+constants); the optimizer and `YouTubeBestPracticesValidator` import them.
+Advice is always one of three kinds: an **API limit** (rejection), **style
+advice** (editorial, not measured) or a **measured association** (this
+channel's data, always with its sample size).
 
 ---
 
@@ -166,6 +175,14 @@ top quarter of performers by CTR-weighted, age-decayed score.
 `title_length_range`, which hands it to `BaseSEOGenerator._optimize_title` as
 `target_range`. Every generator inherits that one method, so the constraint is
 honoured uniformly — no generator silently ignores it.
+
+`get_title_length_guidance()` says what backs a range: `measured` (an
+association in the channel's data, with n) only when the history is enough
+and fresh, otherwise `style` (the editorial 50-70 default). Predictions carry
+an `evidence_state` (`no_history` / `sparse` / `measured` / `stale`), the
+sample size and the click-rate source instead of a "confidence"; their
+`estimated_*` values are observed means, never promised gains, and the fit
+score is named `heuristic_score`.
 
 The range is **advisory**; the platform's `get_title_limit()` is not. No range
 (`None`) reproduces the pre-constraint output byte for byte. A range wider than
@@ -344,7 +361,7 @@ Thorough test coverage:
 # 1. Create adapter
 class InstagramAdapter(BasePlatformAdapter):
     def get_title_limit(self) -> int:
-        return 2200  # Caption limit
+        return 2200  # Caption limit (a platform may expose its API limit separately)
 
 # 2. Register in platforms/__init__.py
 # 3. Use immediately
