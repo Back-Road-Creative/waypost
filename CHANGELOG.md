@@ -20,6 +20,11 @@ tagged is listed under Unreleased.
 - Pre-bucket quota state migrates into the shared pool (#74)
 - An interrupted upload resumes, and is reconciled before any re-send (#76)
 - A batch stops on spent quota or refused credentials and defers the rest (#77)
+- A collection cycle runs source adapters, records source health and shows it
+  with `seo-manager collect status` (#83)
+- YouTube reach reports are ingested, read-only (#84)
+- YouTube search terms are collected per video, read-only (#85)
+- Search Console query and page evidence is collected, read-only (#86)
 
 ### Changed
 
@@ -37,7 +42,7 @@ tagged is listed under Unreleased.
 - An earlier upload of the same file is reconciled before new metadata is sent,
   and settled upload journal records are pruned after 30 days (#81)
 - The uploader's session quota total counts default-pool units, not 1600 per
-  insert
+  insert (#82)
 
 ## [0.3.0] - 2026-10-25
 
