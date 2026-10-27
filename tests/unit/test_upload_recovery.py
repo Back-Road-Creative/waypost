@@ -193,6 +193,12 @@ class TestResume:
         rec = _record(up, make.video)
         assert rec.state == UploadState.UPLOADED and rec.video_id == "vid1"
 
+    def test_the_insert_adds_no_default_pool_units_to_quota_used(self, make):
+        # videos.insert is one call in its own bucket, not 1600 pool units.
+        up = make(FakeYouTube([FakeRequest([{"id": "vid1"}])]))
+        assert _upload(up, make.video) == "vid1"
+        assert up.get_quota_usage() == 0
+
     @pytest.mark.parametrize(
         "fault",
         [

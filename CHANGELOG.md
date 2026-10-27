@@ -32,6 +32,12 @@ tagged is listed under Unreleased.
 - Event store rewrites are crash-safe (#70)
 - The daemon records whether the stored title length is measured or the style
   default (#78)
+- Batches are sized by the per-bucket quota model and pass the budget to the
+  uploader (#80)
+- An earlier upload of the same file is reconciled before new metadata is sent,
+  and settled upload journal records are pruned after 30 days (#81)
+- The uploader's session quota total counts default-pool units, not 1600 per
+  insert
 
 ## [0.3.0] - 2026-10-25
 
