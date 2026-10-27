@@ -456,8 +456,76 @@ def _cmd_collect_run(args: argparse.Namespace) -> int:
     return 1 if any(r.status == "failed" for r in runs) else 0
 
 
+def _youtube_data_client(credentials: Path):
+    """The YouTube Data v3 client for read-only video text (tests replace this)."""
+    from seo_manager.collection.sources import GoogleClients
+
+    return GoogleClients().analytics(credentials).youtube_data
+
+
+def _cmd_collect_report(args: argparse.Namespace) -> int:
+    from seo_manager.collection.search_console import SearchConsoleAdapter
+    from seo_manager.collection.store import CollectionStore, CollectionStoreError
+    from seo_manager.collection.youtube_reach import YouTubeReachAdapter
+    from seo_manager.collection.youtube_search_terms import (
+        SOURCE as TERMS_SOURCE,
+    )
+    from seo_manager.opportunities.report import build_report, render_text
+    from seo_manager.opportunities.video_text import fetch_video_text
+    from seo_manager.opportunities.youtube_search import (
+        find_search_demand_opportunities,
+    )
+    from seo_manager.paths import collection_db
+
+    if args.limit < 1:
+        print("seo-manager collect report: --limit must be >= 1", file=sys.stderr)
+        return 2
+    db = Path(args.db) if args.db else collection_db()
+    store = CollectionStore(db)
+    try:
+        health = store.list_health(args.tenant)
+        observations = store.latest(args.tenant, source=TERMS_SOURCE)
+    except CollectionStoreError as exc:
+        print(f"seo-manager collect report: {exc}", file=sys.stderr)
+        return 2
+    now = datetime.now(UTC)
+    video_ids = sorted({o.subject.split("|", 1)[0] for o in observations})
+    texts: dict = {}
+    video_text = {"state": "not_configured", "error_class": None}
+    if args.youtube_credentials and video_ids:
+        try:
+            client = _youtube_data_client(Path(args.youtube_credentials))
+        except Exception as exc:  # the type only: a message could echo a token
+            video_text = {
+                "state": "error",
+                "error_class": f"client_build_failed:{type(exc).__name__}",
+            }
+        else:
+            fetched = fetch_video_text(client, video_ids)
+            texts = fetched.texts
+            video_text = {"state": fetched.state, "error_class": fetched.error_class}
+    elif args.youtube_credentials:
+        video_text = {"state": "not_needed", "error_class": None}
+    opportunities = find_search_demand_opportunities(
+        observations, texts, tenant=args.tenant, now=now
+    )
+    report = build_report(
+        health,
+        (TERMS_SOURCE, YouTubeReachAdapter.source, SearchConsoleAdapter.source),
+        opportunities,
+        tenant=args.tenant,
+        now=now,
+        limit=args.limit,
+        video_text=video_text,
+    )
+    print(json.dumps(report) if args.json else render_text(report), end="")
+    if args.json:
+        print()
+    return 0
+
+
 def _add_collect_parser(sub) -> None:
-    sp = sub.add_parser("collect", help="collection store: status, run")
+    sp = sub.add_parser("collect", help="collection store: status, run, report")
     act = sp.add_subparsers(dest="action", required=True)
     st = act.add_parser("status", help="per-source health for a tenant")
     st.add_argument("--tenant", required=True)
@@ -476,6 +544,20 @@ def _add_collect_parser(sub) -> None:
     run.add_argument("--search-console-site", help="Search Console property URL")
     run.add_argument("--json", action="store_true", help="machine-readable output")
     run.set_defaults(func=_cmd_collect_run)
+    rep = act.add_parser(
+        "report", help="read-only daily report: opportunities and source health"
+    )
+    rep.add_argument("--tenant", required=True)
+    rep.add_argument(
+        "--db", help="default: $SEO_COLLECTION_DB or <data home>/collection.sqlite3"
+    )
+    rep.add_argument(
+        "--youtube-credentials",
+        help="authorized-user token JSON file; reads video titles and descriptions",
+    )
+    rep.add_argument("--limit", type=int, default=10, help="open opportunities shown")
+    rep.add_argument("--json", action="store_true", help="machine-readable output")
+    rep.set_defaults(func=_cmd_collect_report)
 
 
 def build_parser() -> argparse.ArgumentParser:

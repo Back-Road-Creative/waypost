@@ -56,6 +56,41 @@ policy=DEFAULT_POLICY)`; source: `youtube_analytics_search_terms`
 10. `next_evaluation` = `now` + `policy.reevaluate_after`. Output order is
     priority descending (`None` last) then id, independent of input order.
 
+## Daily report
+
+`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH]
+[--limit N] [--json]` reads the collection store (never writes it, never creates
+it; a missing database exits 2) and prints:
+
+- **Source health**: exactly one entry per expected source
+  (`youtube_analytics_search_terms`, `youtube_reach`, `search_console`), plus any
+  other source found in health. A source with no health row is `never_ran` ("no
+  run recorded: never run or not configured": the store cannot tell the two
+  apart). Otherwise the last outcome (`fresh`, `partial`, `failed`, `empty`,
+  `unconfigured`, or `unknown`), age since the last success, `error_class` and
+  `next_eligible`.
+- **Recovery history is not recorded.** Health keeps only the latest state, so an
+  incident that recovered leaves no trace; the report says so
+  (`recovery_history: "not_recorded"`) rather than listing recoveries.
+- **Open opportunities**: the top `--limit` (default 10) in the rule's order, with
+  `open_total` for the full count. `priority` is an ordering key, not a confidence.
+- **Needs evidence**: every `needs_evidence` opportunity with its
+  `missing_evidence` reasons.
+- **Next evaluation**: the earliest `next_evaluation`, or none.
+
+Video titles and descriptions are read only when `--youtube-credentials` is given
+(YouTube Data `videos.list`, up to 50 ids per call, read-only, bounded retry; each
+call costs quota units). Without it nothing is fetched, `video_text.state` is
+`not_configured`, and each video's opportunity is `needs_evidence` with
+`video_text_unavailable`. A failed fetch leaves those videos without text and
+records only the exception type (`video_text.error_class`). `video_text.state` is
+`fetched` (no error), `partial` (an error, but some texts were read), `error`
+(nothing read, including `client_build_failed:<Type>`), or `not_needed`
+(credentials given, but no search-term observations to fetch text for).
+
+Exit codes: 0 when a report was produced (failures are shown inside it), 2 when
+the store is missing or unreadable.
+
 ## Policy versioning
 
 `SearchDemandPolicy` holds `version` (`search-demand-1`), `min_views` (10),
