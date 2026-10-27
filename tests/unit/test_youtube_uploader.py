@@ -176,8 +176,7 @@ class TestYouTubeUploader:
 
         uploader = YouTubeUploader(credentials_path="fake_creds.json")
 
-        # Upload uses 1600 units
-        # Should track quota usage
+        # Should track default-pool quota usage
         assert hasattr(uploader, "get_quota_usage")
 
     def test_upload_progress_callback(self):
@@ -321,12 +320,12 @@ class TestUploadConfiguration:
             success=True,
             video_id="abc123xyz",
             video_url="https://youtube.com/watch?v=abc123xyz",
-            quota_used=1600,
+            quota_used=50,
         )
 
         assert result.success is True
         assert result.video_id == "abc123xyz"
-        assert result.quota_used == 1600
+        assert result.quota_used == 50
 
     def test_category_mapping(self):
         """Test YouTube category ID mapping"""

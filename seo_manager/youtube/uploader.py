@@ -4,13 +4,10 @@ YouTube Video Uploader with SEO Metadata Integration.
 Uploads videos to YouTube with optimized metadata, thumbnails,
 and scheduling capabilities.
 
-API QUOTA USAGE:
-- videos.insert: 1600 units per upload
-- thumbnails.set: 50 units
-- playlistItems.insert: 50 units
-Total per video: ~1700 units (can upload ~5-6 videos per day safely)
-
-Daily quota: 10,000 units
+API QUOTA USAGE (costs come from ``seo_manager.quota.manager.OPERATIONS``):
+- videos.insert: 1 call in its own ``videos.insert`` bucket (100 per day)
+- thumbnails.set: 50 units of the default 10,000-unit daily pool
+- playlistItems.insert: 50 units of the default pool
 """
 
 import logging
@@ -39,7 +36,13 @@ from ..analytics.final_text_review import FinalTextReviewRefused, verify_review
 from ..analytics.title_selection import DEFAULT_POLICY
 from ..paths import data_home
 from ..platforms.youtube import YouTubeAdapter
-from ..quota.manager import Outcome, QuotaExceededError, QuotaManager, Reservation
+from ..quota.manager import (
+    OPERATIONS,
+    Outcome,
+    QuotaExceededError,
+    QuotaManager,
+    Reservation,
+)
 from ..transport import (
     AuthError,
     QuotaExhaustedError,
@@ -264,7 +267,7 @@ class YouTubeUploader:
                 plan, or the title policy in force
 
         API Quota:
-            - Upload: 1600 units
+            - Upload: 1 call in the ``videos.insert`` bucket (no pool units)
             - Thumbnail: 50 units (if provided)
             - Playlist: 50 units (if specified)
             Total: ~1700 units per video
@@ -598,7 +601,6 @@ class YouTubeUploader:
         video_id = response["id"]
         self._settle(reservation, Outcome.USED)
         self._journal(key, UploadState.UPLOADED, started, video_id=video_id)
-        self.quota_used += 1600  # Upload quota cost
         print(f"   ✅ Uploaded: {video_id}")
         return video_id
 
@@ -720,7 +722,7 @@ class YouTubeUploader:
                 self.brand_id,
             )
 
-            self.quota_used += 50
+            self.quota_used += OPERATIONS["thumbnails.set"].cost
             print("   ✅ Thumbnail uploaded")
 
         # The video exists: a failed follow-up is reported, never raised.
@@ -762,7 +764,7 @@ class YouTubeUploader:
                 self.brand_id,
             )
 
-            self.quota_used += 50
+            self.quota_used += OPERATIONS["playlistItems.insert"].cost
             print("   ✅ Added to playlist")
 
         except (HttpError, OSError, QuotaExceededError) as e:
@@ -828,9 +830,11 @@ class YouTubeUploader:
 
     def get_quota_usage(self) -> int:
         """
-        Get total quota used in this session.
+        Get the default-pool units used in this session.
+
+        ``videos.insert`` calls are counted in their own bucket, not here.
 
         Returns:
-            Quota units used
+            Default-pool units used
         """
         return self.quota_used
