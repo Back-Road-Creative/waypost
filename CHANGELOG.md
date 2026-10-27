@@ -12,7 +12,26 @@ tagged is listed under Unreleased.
 
 ### Added
 
-- Versioned collection contracts and a transactional SQLite store with migrations, quarantine of corrupt state and replayable projections
+- Versioned collection contracts and a transactional SQLite store with migrations,
+  quarantine of corrupt state and replayable projections (#75)
+- Recommendations are labelled by evidence state (#71, breaking)
+- API errors are classified and reads retry within a bound (#72)
+- Quota is budgeted by project, API and bucket with reservations (#73, breaking)
+- Pre-bucket quota state migrates into the shared pool (#74)
+- An interrupted upload resumes, and is reconciled before any re-send (#76)
+- A batch stops on spent quota or refused credentials and defers the rest (#77)
+
+### Changed
+
+- SEO plan for opportunities and automatic recovery, with refined evidence and
+  implementation sequence (#67, #68)
+- OAuth scope, rollback and reach-data claims are corrected in the docs (#69)
+
+### Fixed
+
+- Event store rewrites are crash-safe (#70)
+- The daemon records whether the stored title length is measured or the style
+  default (#78)
 
 ## [0.3.0] - 2026-10-25
 
