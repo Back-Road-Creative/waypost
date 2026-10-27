@@ -66,6 +66,8 @@ as `"upload"` charge that pool; known methods and aliases (`video_upload`)
 charge their own bucket. `OperationCost.VIDEO_UPLOAD` and `VIDEO_SEARCH` are
 now 1 call, not the obsolete 1600 and 100 units.
 
-State written before buckets existed (no `version` key) is **not carried
-over**: the manager logs a warning and starts a fresh day. That is acceptable
-because nothing in production calls `QuotaManager` yet.
+State written before buckets existed (no `version` key) is migrated: if it was
+written on today's Los Angeles day, its total and per-brand usage move into
+`youtube_data/default` (not split across buckets) and the file is rewritten in
+the new format. Older state is dropped. An unreadable file starts a fresh day
+with a warning.

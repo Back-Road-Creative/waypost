@@ -1,9 +1,8 @@
 """Quota accounting by (project, API, bucket) with atomic reservations."""
 
 import json
-import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -226,20 +225,30 @@ class TestLosAngelesDay:
 
 
 class TestOldFormatState:
-    def test_old_state_starts_fresh_with_a_warning(self, tmp_path, caplog):
+    def _write_old(self, tmp_path, last_reset):
         d = tmp_path / "proj"
         d.mkdir()
+        ts = last_reset.isoformat()
+        ops = [
+            {"operation": "upload", "cost": 1600, "timestamp": ts, "brand_id": "a"},
+            {"operation": "search", "cost": 150, "timestamp": ts, "brand_id": None},
+        ]
         (d / "quota_usage.json").write_text(
-            json.dumps(
-                {
-                    "total_used": 1750,
-                    "last_reset": datetime.now(UTC).isoformat(),
-                    "operations": [],
-                }
-            )
+            json.dumps({"total_used": 1750, "last_reset": ts, "operations": ops})
         )
-        with caplog.at_level(logging.WARNING):
-            m = _mgr(tmp_path)
-        assert m.get_bucket_usage(DATA, "default")["used"] == 0
-        assert any("old format" in r.message for r in caplog.records)
+
+    def test_same_day_old_state_lands_in_the_pool(self, tmp_path):
+        now = datetime(2026, 10, 27, 20, 0, tzinfo=UTC)
+        self._write_old(tmp_path, now - timedelta(hours=1))
+        m = _mgr(tmp_path, clock=Clock(now))
+        usage = m.get_bucket_usage(DATA, "default")
+        assert usage["used"] == 1750
+        assert usage["by_brand"] == {"a": 1600}
+        assert m.get_usage()["total_used"] == 1750
         assert json.loads(m.quota_file.read_text())["version"] == 2
+
+    def test_old_state_from_an_earlier_la_day_is_dropped(self, tmp_path):
+        now = datetime(2026, 10, 27, 20, 0, tzinfo=UTC)
+        self._write_old(tmp_path, now - timedelta(days=2))
+        m = _mgr(tmp_path, clock=Clock(now))
+        assert m.get_bucket_usage(DATA, "default")["used"] == 0
