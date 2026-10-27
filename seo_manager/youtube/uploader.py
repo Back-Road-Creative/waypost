@@ -14,6 +14,8 @@ Daily quota: 10,000 units
 """
 
 import os
+import random
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -34,8 +36,30 @@ from googleapiclient.http import MediaFileUpload
 
 from ..analytics.final_text_review import FinalTextReviewRefused, verify_review
 from ..analytics.title_selection import DEFAULT_POLICY
+from ..paths import data_home
 from ..platforms.youtube import YouTubeAdapter
+from ..quota.manager import Outcome, QuotaExceededError, QuotaManager, Reservation
+from ..transport import (
+    AuthError,
+    QuotaExhaustedError,
+    RetryPolicy,
+    TransientError,
+    TransportError,
+    _retry_after_seconds,
+    classify,
+    retry_read,
+)
 from ..validation.validators import PlatformValidator
+from .upload_recovery import (
+    RECONCILE_GRACE,
+    UploadJournal,
+    UploadOutcomeUnknown,
+    UploadRecord,
+    UploadState,
+    find_upload,
+    metered,
+    upload_key,
+)
 
 
 class PrivacyStatus(Enum):
@@ -134,12 +158,36 @@ class YouTubeUploader:
         "https://www.googleapis.com/auth/youtube.readonly",
     ]
 
-    def __init__(self, credentials_path: str):
+    # Class defaults, so an uploader built without __init__ runs with no
+    # budget and no journal. ``sleep``/``clock``/``rand`` are injectable.
+    quota: QuotaManager | None = None
+    brand_id: str | None = None
+    journal: UploadJournal | None = None
+    resume_policy = RetryPolicy(
+        max_attempts=5, base_delay=2.0, max_delay=60.0, max_total_delay=300.0
+    )
+    sleep: Callable[[float], None] = staticmethod(time.sleep)
+    clock: Callable[[], datetime] = staticmethod(lambda: datetime.now(UTC))
+    rand: Callable[[], float] = staticmethod(random.random)
+    last_upload_key: str | None = None
+
+    def __init__(
+        self,
+        credentials_path: str,
+        *,
+        quota: QuotaManager | None = None,
+        brand_id: str | None = None,
+        journal_dir: str | Path | None = None,
+    ):
         """
         Initialize YouTube uploader.
 
         Args:
             credentials_path: Path to OAuth credentials JSON
+            quota: Budget every request is reserved against (none: unmetered)
+            brand_id: Brand the reservations are charged to
+            journal_dir: Where upload attempts are journalled (default:
+                ``<data home>/upload-journal``)
 
         Raises:
             FileNotFoundError: If credentials file not found
@@ -157,6 +205,9 @@ class YouTubeUploader:
 
         # Track quota usage
         self.quota_used = 0
+        self.quota = quota
+        self.brand_id = brand_id
+        self.journal = UploadJournal(journal_dir or data_home() / "upload-journal")
 
     def upload_video(
         self,
@@ -191,11 +242,17 @@ class YouTubeUploader:
                 recomputed from current state
 
         Returns:
-            Video ID if successful, None if failed
+            Video ID if successful (or found already uploaded), None if the
+            upload was refused or never started
 
         Raises:
             FileNotFoundError: If video file doesn't exist
             ValueError: If metadata is invalid
+            QuotaExhaustedError: The daily quota is spent (``next_eligible``)
+            QuotaExceededError: The local budget refused the insert; nothing sent
+            AuthError: The credentials were refused
+            UploadOutcomeUnknown: Interrupted and not found: the video may
+                exist, so nothing is sent again until a later run settles it
             FinalTextReviewRefused: If the review does not cover the title in
                 the request body, the visible text, the current source and
                 plan, or the title policy in force
@@ -265,34 +322,16 @@ class YouTubeUploader:
             print(f"   Privacy: {privacy}")
             return "DRY_RUN_SUCCESS"
 
-        # Create media file upload
-        media = MediaFileUpload(
-            video_path,
-            chunksize=-1,  # Upload in single request
-            resumable=True,
+        key = upload_key(video_path, body)
+        self.last_upload_key = key
+        record = self.journal.get(key) if self.journal else None
+        video_id, follow_ups = (
+            self._previous(record, video_path, body) if record else (None, False)
         )
-
-        try:
-            # Execute upload
-            print(f"📤 Uploading video: {Path(video_path).name}")
-            print(f"   Title: {metadata.title}")
-            print(f"   Privacy: {privacy}")
-
-            request = self.youtube.videos().insert(
-                part="snippet,status", body=body, media_body=media
-            )
-
-            response = None
-            while response is None:
-                status, response = request.next_chunk()
-                if status and progress_callback:
-                    progress_callback(status.resumable_progress, status.total_size)
-
-            video_id = response["id"]
-            self.quota_used += 1600  # Upload quota cost
-
-            print(f"   ✅ Uploaded: {video_id}")
-
+        if video_id is None:
+            video_id = self._insert(key, video_path, body, progress_callback)
+            follow_ups = video_id is not None
+        if video_id and follow_ups:
             # Upload thumbnail if provided
             if thumbnail_path:
                 self._upload_thumbnail(video_id, thumbnail_path)
@@ -301,13 +340,199 @@ class YouTubeUploader:
             playlist_id = metadata.youtube_metadata.get("playlist_id")
             if playlist_id:
                 self._add_to_playlist(video_id, playlist_id)
+        return video_id
 
-            return video_id
+    def _journal(
+        self,
+        key: str,
+        state: UploadState,
+        started: datetime | None,
+        video_id: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if self.journal is not None:
+            self.journal.put(UploadRecord(key, state, started, video_id, error))
 
-        except HttpError as e:
-            error_msg = f"YouTube API error: {e}"
-            print(f"   ❌ Upload failed: {error_msg}")
+    def _settle(self, reservation: Reservation | None, outcome: Outcome) -> None:
+        if reservation is not None and self.quota is not None:
+            self.quota.settle(reservation, outcome)
+
+    def _previous(
+        self, record: UploadRecord, video_path: str, body: dict
+    ) -> tuple[str | None, bool]:
+        """``(video_id, follow-ups owed)`` from an earlier attempt; no ID = send."""
+        if record.state == UploadState.NOT_UPLOADED:
+            return None, False
+        if record.state == UploadState.UPLOADED and record.video_id:
+            if self._exists(record, video_path):
+                print(f"   ✅ Already uploaded: {record.video_id}")
+                return record.video_id, False
+            return None, False
+        return self._reconcile(record.key, record.started_at, video_path, body), True
+
+    def _exists(self, record: UploadRecord, video_path: str) -> bool:
+        try:
+            found = retry_read(
+                lambda: metered(
+                    self.quota,
+                    "videos.list",
+                    lambda: (
+                        self.youtube.videos()
+                        .list(part="id", id=record.video_id)
+                        .execute()
+                    ),
+                    self.brand_id,
+                ),
+                sleep=self.sleep,
+            )
+        except (TransportError, QuotaExceededError, OSError) as exc:
+            raise UploadOutcomeUnknown(
+                f"could not confirm {record.video_id} still exists: {exc}",
+                key=record.key,
+                video_path=video_path,
+            ) from exc
+        return bool(found.get("items"))
+
+    def _reconcile(
+        self, key: str, started: datetime | None, video_path: str, body: dict
+    ) -> str | None:
+        """The ID of this upload if it exists; None once its absence is settled.
+
+        Raises ``UploadOutcomeUnknown`` while the absence is not yet settled:
+        a new upload can take a while to show in the uploads playlist.
+        """
+        try:
+            found = find_upload(
+                self.youtube,
+                title=body["snippet"]["title"],
+                description=body["snippet"]["description"],
+                since=started,
+                key=key,
+                video_path=video_path,
+                quota=self.quota,
+                brand_id=self.brand_id,
+                sleep=self.sleep,
+            )
+        except UploadOutcomeUnknown as exc:
+            self._journal(key, UploadState.UNKNOWN, started, error=str(exc))
+            raise
+        if found:
+            print(f"   ✅ Found the interrupted upload: {found}")
+            self._journal(key, UploadState.UPLOADED, started, video_id=found)
+            return found
+        if started is not None and self.clock() - started >= RECONCILE_GRACE:
+            self._journal(key, UploadState.NOT_UPLOADED, started)
             return None
+        where = self.journal._path(key) if self.journal else key
+        message = (
+            "interrupted upload not visible yet; a later run reconciles it"
+            if started is not None
+            else f"unreadable journal record {where}: check the channel, then remove it"
+        )
+        self._journal(key, UploadState.UNKNOWN, started, error=message)
+        raise UploadOutcomeUnknown(message, key=key, video_path=video_path)
+
+    def _insert(
+        self,
+        key: str,
+        video_path: str,
+        body: dict,
+        progress_callback: Callable | None,
+    ) -> str | None:
+        """Send one videos.insert, resuming its session on transient faults."""
+        reservation = (
+            self.quota.reserve("videos.insert", brand_id=self.brand_id)
+            if self.quota is not None
+            else None
+        )
+        started = self.clock()
+        try:
+            media = MediaFileUpload(
+                video_path,
+                chunksize=-1,  # Upload in single request
+                resumable=True,
+            )
+            request = self.youtube.videos().insert(
+                part="snippet,status", body=body, media_body=media
+            )
+        except BaseException:
+            self._settle(reservation, Outcome.NOT_SENT)
+            self._journal(key, UploadState.NOT_UPLOADED, started)
+            raise
+        # Journalled before the first byte: a crash from here on reconciles.
+        self._journal(key, UploadState.IN_FLIGHT, started)
+
+        print(f"📤 Uploading video: {Path(video_path).name}")
+        print(f"   Title: {body['snippet']['title']}")
+        print(f"   Privacy: {body['status']['privacyStatus']}")
+        try:
+            response = self._send(request, progress_callback)
+        except TransientError as err:
+            if getattr(request, "resumable_uri", None) is None:
+                # The session never started, so no video can exist.
+                self._settle(reservation, Outcome.FAILED)
+                self._journal(key, UploadState.NOT_UPLOADED, started, error=str(err))
+                print(f"   ❌ Upload never started: {err}")
+                return None
+            self._settle(reservation, Outcome.USED)
+            print(f"   ⚠️  Upload interrupted ({err}); looking for it")
+            return self._reconcile(key, started, video_path, body)
+        except TransportError as err:
+            self._settle(reservation, Outcome.FAILED)
+            self._journal(key, UploadState.NOT_UPLOADED, started, error=str(err))
+            if isinstance(err, QuotaExhaustedError | AuthError):
+                raise
+            print(f"   ❌ Upload failed: YouTube API error: {err}")
+            return None
+
+        video_id = response["id"]
+        self._settle(reservation, Outcome.USED)
+        self._journal(key, UploadState.UPLOADED, started, video_id=video_id)
+        self.quota_used += 1600  # Upload quota cost
+        print(f"   ✅ Uploaded: {video_id}")
+        return video_id
+
+    def _send(self, request: Any, progress_callback: Callable | None) -> dict:
+        """Drive ``next_chunk`` to a response; transient faults resume the session.
+
+        The client resumes an interrupted session by asking it how many bytes
+        arrived, so a retry never starts a second upload. Raises the typed
+        error: terminal at once, ``TransientError`` once resumes run out.
+        """
+        policy = self.resume_policy
+        attempt = 0
+        slept = 0.0
+        while True:
+            try:
+                status, response = request.next_chunk()
+            except Exception as exc:
+                err = classify(exc, now=self.clock())
+                if err is None:
+                    if not isinstance(exc, OSError):  # e.g. ssl.SSLError
+                        raise
+                    err = TransientError(f"{type(exc).__name__}: {exc}")
+                if not isinstance(err, TransientError):
+                    raise err from exc
+                attempt += 1
+                advised = _retry_after_seconds(err.retry_after, self.clock())
+                if advised is not None:
+                    delay = min(advised, policy.max_delay)
+                else:
+                    ceiling = min(
+                        policy.max_delay, policy.base_delay * 2 ** (attempt - 1)
+                    )
+                    delay = self.rand() * ceiling
+                if attempt >= policy.max_attempts or (
+                    slept + delay > policy.max_total_delay
+                ):
+                    raise err from exc
+                self.sleep(delay)
+                slept += delay
+                continue
+            if status and progress_callback:
+                progress_callback(status.resumable_progress, status.total_size)
+            if response is not None:
+                return response
 
     def validate_upload_body(self, metadata: "SEOMetadata", body: dict) -> None:  # noqa: F821
         """
@@ -374,14 +599,22 @@ class YouTubeUploader:
         try:
             print("   📸 Uploading thumbnail...")
 
-            self.youtube.thumbnails().set(
-                videoId=video_id, media_body=MediaFileUpload(thumbnail_path)
-            ).execute()
+            metered(
+                self.quota,
+                "thumbnails.set",
+                lambda: (
+                    self.youtube.thumbnails()
+                    .set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path))
+                    .execute()
+                ),
+                self.brand_id,
+            )
 
             self.quota_used += 50
             print("   ✅ Thumbnail uploaded")
 
-        except HttpError as e:
+        # The video exists: a failed follow-up is reported, never raised.
+        except (HttpError, OSError, QuotaExceededError) as e:
             print(f"   ⚠️  Thumbnail upload failed: {e}")
 
     def _add_to_playlist(self, video_id: str, playlist_id: str):
@@ -397,20 +630,32 @@ class YouTubeUploader:
         try:
             print("   📋 Adding to playlist...")
 
-            self.youtube.playlistItems().insert(
-                part="snippet",
-                body={
-                    "snippet": {
-                        "playlistId": playlist_id,
-                        "resourceId": {"kind": "youtube#video", "videoId": video_id},
-                    }
-                },
-            ).execute()
+            metered(
+                self.quota,
+                "playlistItems.insert",
+                lambda: (
+                    self.youtube.playlistItems()
+                    .insert(
+                        part="snippet",
+                        body={
+                            "snippet": {
+                                "playlistId": playlist_id,
+                                "resourceId": {
+                                    "kind": "youtube#video",
+                                    "videoId": video_id,
+                                },
+                            }
+                        },
+                    )
+                    .execute()
+                ),
+                self.brand_id,
+            )
 
             self.quota_used += 50
             print("   ✅ Added to playlist")
 
-        except HttpError as e:
+        except (HttpError, OSError, QuotaExceededError) as e:
             print(f"   ⚠️  Playlist add failed: {e}")
 
     def _get_category_id_from_metadata(self, metadata: "SEOMetadata") -> int:  # noqa: F821

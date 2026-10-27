@@ -55,3 +55,45 @@ duplicate or overwrite. For writes, `classify`, then reconcile by reading back.
 - The daemon keeps `SyncOutcome`: some synced is `PARTIAL`, none `FAILED`.
   `metrics` adds `videos_deferred`, `sync_next_eligible`, `sync_blocked_by`;
   an auth stop adds `auth_error_reauthorize_token` to `changes_made`.
+
+## Uploads: resume, then reconcile
+
+`videos.insert` is a write, so `YouTubeUploader.upload_video` never just runs it
+again. The code is in `seo_manager/youtube/upload_recovery.py`.
+
+- **Journal.** Each attempt is keyed by the request body plus the file's name
+  and size. Before the first byte is sent, the attempt is recorded `in_flight`
+  under `<data home>/upload-journal/`. It ends as `uploaded` (with the ID),
+  `not_uploaded` (refused, or the session never started) or `unknown`.
+- **Resume.** A transient fault mid-upload (5xx, 429, a socket timeout or
+  reset, an SSL error) resumes the same session. The client asks how many bytes
+  arrived and continues, so no second video can be created. `Retry-After` paces
+  the resume; otherwise the backoff is jittered and exponential, bounded by
+  `resume_policy`.
+- **Reconcile.** When resumes run out, or a run finds an `in_flight` or
+  `unknown` record, the uploader reads the channel's uploads playlist. It looks
+  for exact title and description sent no earlier than the attempt, less
+  `CLOCK_SKEW`.
+  - One match is the upload.
+  - Several matches, or a failed lookup, raise `UploadOutcomeUnknown`.
+  - No match within `RECONCILE_GRACE` (15 minutes) of the attempt also raises
+    `UploadOutcomeUnknown`, because a fresh upload can take a while to appear.
+  - No match after the grace period means it was never created, so it is sent
+    again.
+  - An unreadable record has no start time and never times out. Check the
+    channel, then delete the file the error names.
+- **Seen again.** An `uploaded` record is confirmed with `videos.list` and
+  returned; it is uploaded again only if the video was deleted.
+- **Terminal errors.** A 400 or 404 returns `None` (`not_uploaded`), as before.
+  `QuotaExhaustedError` and `AuthError` now raise instead of returning `None`.
+- **Quota.** Given a `QuotaManager`, the uploader reserves `videos.insert` before
+  sending. The reservation is refunded if the request could not be built,
+  charged as failed on a refusal, and kept when the outcome is unknown. The
+  local `QuotaExceededError` means nothing was sent. Reconcile reads, the
+  thumbnail and the playlist insert are reserved and settled too.
+- **Follow-ups.** The thumbnail and playlist insert run after the video exists,
+  including one found by reconcile. A failure there is reported, never raised.
+
+The reconcile lookup relies on `playlistItems.list` on the owner's uploads
+playlist showing private videos with their real title and description. That
+has not been checked against the live API yet.
