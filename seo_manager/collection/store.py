@@ -372,6 +372,19 @@ class CollectionStore:
             r["schema_version"],
         )
 
+    def list_health(self, tenant: str) -> list[SourceHealth]:
+        """Every source's health for one tenant, ordered by source (read-only)."""
+        with self._conn() as conn:
+            sources = [
+                r["source"]
+                for r in conn.execute(
+                    "SELECT source FROM source_health WHERE tenant=? ORDER BY source",
+                    (tenant,),
+                )
+            ]
+        found = (self.health(tenant, s) for s in sources)
+        return [h for h in found if h is not None]
+
     def projection_matches_history(self) -> bool:
         """True when the stored projection equals one recomputed from history."""
         with self._conn() as conn:
