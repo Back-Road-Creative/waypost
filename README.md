@@ -13,7 +13,7 @@ A Python library for generating, validating, tracking, and auto-optimizing SEO m
 - ✅ **Final-text review**: `analytics.final_text_review.review_final_text` puts the approved on-screen, thumbnail and Shorts text, the final title, and the location/date evidence behind each into one fingerprinted record; `verify_review` refuses an upload that differs from it, and nothing is ever auto-approved. See [docs/final-text-review.md](docs/final-text-review.md).
 - 📊 **Analytics Tracking**: Performance metrics, CTR, engagement rates
 - 🏢 **Multi-Site Management**: Isolated data for multiple websites/channels
-- 📝 **Event Sourcing**: Complete audit trail with rollback capability
+- 📝 **Event Sourcing**: Complete audit trail (append-only; no general rollback, only the cadence rollback in [docs/cadence-decisions.md](docs/cadence-decisions.md))
 
 ## Installation
 

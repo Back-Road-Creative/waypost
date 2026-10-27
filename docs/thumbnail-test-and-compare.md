@@ -37,7 +37,8 @@ This service cannot drive Test & Compare end-to-end. What it does instead:
 ## Explicit follow-up (not built here)
 
 Studio never exposes *which variant won* Test & Compare through any API —
-not the Analytics API, not a CSV export keyed to variant. There is
+not the Analytics API, not the Reporting API reach reports (which give
+per-video, not per-variant, impressions), not a CSV export keyed to variant. There is
 currently **no automated way to learn the Test & Compare winner**; the
 `get_test_compare_outcome` read above can only report whatever ordinary
 per-video Analytics (`cardClickRate`, or a future Studio CSV thumbnail-CTR

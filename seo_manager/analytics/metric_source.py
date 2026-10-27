@@ -4,10 +4,11 @@ A click rate is meaningless without its denominator, and YouTube has two that
 answer different questions. ``cardClickRate`` asks: of the viewers ALREADY
 watching, how many clicked the in-player info card — it cannot see thumbnails.
 ``impressionClickThroughRate`` asks: of the people shown the thumbnail, how
-many clicked — the only rate that measures a thumbnail, and one the Analytics
-API does not expose (Studio-UI only; see ANALYTICS_CTR_LIMITATION in
-``youtube_sync.py``). Its tag exists anyway, so a Studio CSV ingest has a name
-to declare and thumbnail analysis has something to require.
+many clicked — the only rate that measures a thumbnail. The YouTube Analytics
+API does not expose it (see ANALYTICS_CTR_LIMITATION in ``youtube_sync.py``);
+the YouTube Reporting API's reach reports do (see ``youtube_reach_probe.py``),
+as does a Studio CSV export. Its tag exists so such an ingest has a name to
+declare and thumbnail analysis has something to require.
 
 Every click rate crossing a module boundary carries one of these. An absent
 tag is ``UNKNOWN`` and is never assumed to be thumbnail data.

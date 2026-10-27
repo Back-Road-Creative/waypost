@@ -14,8 +14,6 @@ sites:
       - programming
     analytics_enabled: true
     analytics_provider: youtube
-    auto_fix_enabled: true
-    auto_fix_confidence_threshold: 0.85
     platform_config:
       category: "Science & Technology"
       playlist: "Season 1"
