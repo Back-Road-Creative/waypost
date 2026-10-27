@@ -265,3 +265,26 @@ class TestConsumersStillRead:
             restarted, "examplebrand"
         )  # constructs against a recovered store
         assert _ids(restarted) == {"a"}
+
+
+class TestLockFileAfterInit:
+    def test_lock_file_exists_when_release_unlinks_it(self, tmp_path, monkeypatch):
+        # filelock on Windows deletes the lock file on release; init locks, so
+        # the file it pre-creates for callers must survive that release.
+        real = es._group_writable_filelock
+
+        class UnlinkOnRelease:
+            def __init__(self, path):
+                self._lock, self._path = real(path), Path(path)
+
+            def __enter__(self):
+                self._lock.acquire()
+                return self
+
+            def __exit__(self, *exc):
+                self._lock.release()
+                self._path.unlink(missing_ok=True)
+
+        monkeypatch.setattr(es, "_group_writable_filelock", UnlinkOnRelease)
+        store = SEOEventStore(tmp_path)
+        assert store.lock_file.exists()

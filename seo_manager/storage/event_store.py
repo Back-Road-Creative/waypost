@@ -144,18 +144,21 @@ class SEOEventStore:
         # user can still write. The .lock file is pre-created here
         # for caller-visibility (existing tests assert it exists
         # post-init); filelock.FileLock will recreate it under our
-        # _LOCK_MODE on each acquire regardless.
+        # _LOCK_MODE on each acquire regardless. It is touched after the
+        # locked reconcile because filelock on Windows deletes the lock
+        # file on release.
+        self.indexes = self._empty_indexes()
+        self._indexes_dirty = False
+
+        self.events_file.touch(exist_ok=True)
+        # Recover a torn events file and reconcile the indexes with it.
+        with _group_writable_filelock(self.lock_file):
+            self._reconcile_locked()
+
         for f in (self.events_file, self.lock_file):
             f.touch(exist_ok=True)
             with contextlib.suppress(OSError, PermissionError):
                 f.chmod(_LOCK_MODE)
-
-        self.indexes = self._empty_indexes()
-        self._indexes_dirty = False
-
-        # Recover a torn events file and reconcile the indexes with it.
-        with _group_writable_filelock(self.lock_file):
-            self._reconcile_locked()
 
     def append_event(self, event: SEOEvent) -> str:
         """
