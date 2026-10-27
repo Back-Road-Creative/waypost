@@ -275,13 +275,7 @@ class QuotaManager:
             with open(self.quota_file, encoding="utf-8") as f:
                 data = json.load(f)
             if data.get("version") != STATE_VERSION:
-                # State from before buckets existed: not carried over.
-                logger.warning(
-                    "Quota file %s is in the old format; starting with a "
-                    "fresh quota state",
-                    self.quota_file,
-                )
-                self._reset_state()
+                self._migrate_v1(data)
             elif data["day"] != quota_day(self._now()):
                 self._reset_state()
             else:
@@ -302,6 +296,33 @@ class QuotaManager:
         self._reservations = dict(data.get("reservations", {}))
         self.day = data["day"]
         self.last_reset = datetime.fromisoformat(data["last_reset"])
+
+    def _migrate_v1(self, data: dict) -> None:
+        """Import a pre-bucket state file (no ``version`` key).
+
+        Usage written on today's LA day lands in ``youtube_data/default``
+        (not re-bucketed: the old per-operation costs cannot be split
+        reliably); older state is dropped. The file is rewritten as v2.
+        """
+        last_reset = _aware(
+            datetime.fromisoformat(data.get("last_reset", "2000-01-01T00:00:00+00:00"))
+        )
+        today = quota_day(self._now())
+        if quota_day(last_reset) != today:
+            self._reset_state()
+            return
+        operations = [QuotaOperation(**op) for op in data.get("operations", [])]
+        pool = _Bucket(used=int(data.get("total_used", 0)))
+        for op in operations:
+            op.api, op.bucket = YOUTUBE_DATA, DEFAULT_BUCKET
+            if op.brand_id:
+                pool.brands[op.brand_id] = pool.brands.get(op.brand_id, 0) + op.cost
+        self.operations = operations
+        self._buckets = {f"{YOUTUBE_DATA}/{DEFAULT_BUCKET}": pool}
+        self._reservations = {}
+        self.day = today
+        self.last_reset = last_reset
+        self._save_state_inner()
 
     def _reset_state(self):
         """Reset quota state (called from within lock)"""
