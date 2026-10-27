@@ -39,7 +39,7 @@ SCHEDULE_ACTIONS = _discover_schedule_actions()
 
 
 def test_discovery_found_subcommands():
-    assert SUBCOMMAND_NAMES == ["report", "schedule"]
+    assert SUBCOMMAND_NAMES == ["report", "schedule", "collect"]
     assert SCHEDULE_ACTIONS == [
         "report",
         "next",

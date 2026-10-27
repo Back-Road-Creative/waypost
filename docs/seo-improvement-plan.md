@@ -53,7 +53,7 @@ duplicate the existing reach probe.
 | Thumbnail reach acquisition | [probe](../seo_manager/analytics/youtube_reach_probe.py) (`probe` :56-133; job creation only under `--create-job` :78-86; CSV column read :104-130; prints only) | Discovers report types, can create jobs, inspects report columns. Persists nothing; no path into `TemplateObservation`. |
 | Recommendation quality | [optimizer](../seo_manager/analytics/seo_optimizer.py): `get_optimal_title_length` :440 returns `(50, 70)` on empty `title_lengths` :452; `generate_recommendations` :473 emits "Expand title to 50-70 chars for better CTR" :499 and "target 8-12 tags" :545; `optimize_metadata` slices `tags[:12]` :580; `predict_performance` :602 already carries `estimated_ctr_sample_size`/`estimated_ctr_source` but `confidence = score/factors` :664 is nonzero with empty lists | Empty history still returns a 50–70 title range and a "better CTR" suggestion. Prediction confidence is a heuristic score, not calibrated probability (45-char title with no data → 0.125). |
 | Legacy SEO rules | [validator](../seo_manager/validation/youtube_best_practices.py) (title 50–70 :70-91, API cap 100 :122, description ≥200 :150-156, tags 10–15 :220-238), [YouTube adapter](../seo_manager/platforms/youtube.py) (`get_title_limit` 70 :28-33, `get_tag_limit` 15 :46-51, hard slice `tags[:15]` :72) | Three different tag targets exist (8–12 optimizer, 10–15 validator, 15 hard cap adapter) and two title caps (70 adapter, 100 API/selector). Separate API constraints from style advice and measured evidence. |
-| Quota and transport | [quota manager](../seo_manager/quota/manager.py) (`OperationCost` :39-48 lacks `videos.update`; per-brand/operation tracking :348-357; atomic state :184), uploader in-memory `quota_used` :292, [batch uploader](../seo_manager/youtube/batch_uploader.py) `SAFE_DAILY_LIMIT` 8000 :220-259 | `QuotaManager` is imported by tests only; no production caller. No shared HTTP retry/backoff or `Retry-After` handling in the inspected API call paths; `HttpError` is swallowed at `youtube_sync.py:149,:187` and `uploader.py:307,:384,:413` (the probe reports it, :214). |
+| Quota and transport | [quota manager](../seo_manager/quota/manager.py) (`OperationCost` :39-48 lacks `videos.update`; per-brand/operation tracking :348-357; atomic state :184), uploader in-memory `quota_used` :292, [batch uploader](../seo_manager/youtube/batch_uploader.py) `SAFE_DAILY_LIMIT` 8000 :220-259 (since removed: #73 and #80 replaced it with per-bucket quota in `quota/manager.py`, `DEFAULT_LIMITS`; no `SAFE_DAILY_LIMIT` remains in `seo_manager/`) | `QuotaManager` is imported by tests only; no production caller. No shared HTTP retry/backoff or `Retry-After` handling in the inspected API call paths; `HttpError` is swallowed at `youtube_sync.py:149,:187` and `uploader.py:307,:384,:413` (the probe reports it, :214). |
 | Stores available | [cadence decisions](../seo_manager/analytics/cadence_decisions.py) (append-only SQLite, above), [event store](../seo_manager/storage/event_store.py) (JSONL; `upsert_event` :104-151 and `_save_indexes` :335-338 rewrite non-atomically), [atomic JSON](../seo_manager/fsio.py) `atomic_write_json` :14, [public-tree check](../tools/check_public_tree.py) :102 rejects committed `.db/.sqlite/.sqlite3` (+`-wal/-shm/-journal`) | New durable stores follow the cadence-decisions shape and live under an ignored runtime path. `SEOManager` constructs this store (`core/manager.py:150`) and passes it to `AnalyticsTracker` (:156); Metricool importers also use it. Fix crash safety as S1b without changing the JSONL format. |
 | Technical website SEO and search-demand collectors | Search of `seo_manager/`, `tests/`, `docs/` for Search Console/webmasters, Lighthouse, sitemap, robots, JSON-LD, `YT_SEARCH`, `insightTrafficSource` | No implementation found (the one "Lighthouse" hit is a locality noun in `core/locality.py:36`). `canonical_url` (`core/metadata.py:54`) is a field, not a crawler. `youtube_sync.py:57-64` requests only views, watch time, average view percentage and card metrics per video, with no dimensions. Consuming sites may already implement parts. |
 | Thumbnail experiments | [companion](thumbnail-test-and-compare.md), `prepare_test_and_compare_variants` (`thumbnail_generator.py:397`, writes the manifest with plain `json.dump` :457), `record_test_compare_selection` (`thumbnail_ab_tracker.py:250`) | Prepares variants and records the operator's selection, but retrieves no variant-level result. Expand the companion rather than inventing a winner from video-level CTR. |
@@ -256,7 +256,7 @@ description. It costs 50 units in the applicable quota bucket. Before wiring
 documentation lists separate upload and search buckets, each with a default
 100 calls/day at one unit per call, alongside 10,000 daily units for other
 endpoints. The existing upload=1600 and search=100 constants are not a current
-model. Budget by project, API and bucket, with brand allocations underneath;
+model (replaced by the per-bucket model in `quota/manager.py`, #73 and #80). Budget by project, API and bucket, with brand allocations underneath;
 Analytics, Reporting and Search Console need their own verified limits. Read the
 actual configured project limits during implementation; do not assume every
 project has the defaults. Reserve quota atomically before dispatch, reconcile
@@ -296,8 +296,12 @@ automatically once configured; ambiguous facts still require review.
 These units are ordered by dependency, not calendar estimates. Each unit lands
 as one or more reviewable PRs under the 1000-line sum cap. Independent units can
 be authored concurrently; shared files and consumer contracts determine stacking.
-Code changes include their matching documentation in the same change. No units
-are executed by this plan revision.
+Code changes include their matching documentation in the same change.
+
+Status, 2026-10-27 (America/New_York): merged are S0a (#71, #78), S0b (#69), S0c
+(#72, #73, #74, #76, #77, #80, #81, #82), S1b (#70) and S1a part 1 (#75). S1a
+part 2, S2, S3a and S3b are in progress. The baseline text in this document is
+otherwise unchanged and describes the code as of the plan revision.
 
 Waypost owns evidence interpretation and policy; Framegrade/other consumers
 execute and display decisions; site repositories own templates and deployment.

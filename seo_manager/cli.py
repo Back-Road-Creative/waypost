@@ -5,7 +5,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -349,6 +349,73 @@ def _add_schedule_parser(sub) -> None:
     )
 
 
+def _age(delta) -> str:
+    secs = int(delta.total_seconds())
+    if secs < 0:
+        return "0s"
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if secs >= size:
+            return f"{secs // size}{unit}"
+    return f"{secs}s"
+
+
+def _cmd_collect_status(args: argparse.Namespace) -> int:
+    from seo_manager.collection.store import CollectionStore, CollectionStoreError
+    from seo_manager.paths import collection_db
+
+    db = Path(args.db) if args.db else collection_db()
+    try:
+        rows = CollectionStore(db).list_health(args.tenant)
+    except CollectionStoreError as exc:
+        print(f"seo-manager collect status: {exc}", file=sys.stderr)
+        return 2
+    now = datetime.now(UTC)
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "source": h.source,
+                        "last_outcome": h.last_outcome.value
+                        if h.last_outcome
+                        else None,
+                        "last_success_at": h.last_success_at
+                        and h.last_success_at.isoformat(),
+                        "error_class": h.error_class,
+                        "next_eligible": h.next_eligible
+                        and h.next_eligible.isoformat(),
+                    }
+                    for h in rows
+                ]
+            )
+        )
+        return 0
+    if not rows:
+        print(f"no sources have run for tenant {args.tenant}")
+        return 0
+    for h in rows:
+        age = h.age_since_success(now)
+        print(
+            f"{h.source}  {h.last_outcome.value if h.last_outcome else 'unknown'}  "
+            f"success={'never' if age is None else _age(age) + ' ago'}  "
+            f"error={h.error_class or 'none'}  "
+            f"next_eligible={h.next_eligible.isoformat() if h.next_eligible else 'none'}"
+        )
+    return 0
+
+
+def _add_collect_parser(sub) -> None:
+    sp = sub.add_parser("collect", help="collection store: status")
+    act = sp.add_subparsers(dest="action", required=True)
+    st = act.add_parser("status", help="per-source health for a tenant")
+    st.add_argument("--tenant", required=True)
+    st.add_argument(
+        "--db", help="default: $SEO_COLLECTION_DB or <data home>/collection.sqlite3"
+    )
+    st.add_argument("--json", action="store_true", help="machine-readable output")
+    st.set_defaults(func=_cmd_collect_status)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="seo-manager")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -366,6 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--out", help="write markdown here instead of stdout")
     r.set_defaults(func=_cmd_report)
     _add_schedule_parser(sub)
+    _add_collect_parser(sub)
     return p
 
 

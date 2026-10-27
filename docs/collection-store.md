@@ -66,8 +66,58 @@ empty database for an unreadable one.
 Every read and write takes a tenant. A batch refuses an observation, checkpoint
 or health record for another tenant, and every query filters on tenant.
 
+## Collection cycle (`collection/cycle.py`)
+
+`run_cycle(store, tenant, adapters, *, now)` asks each adapter in turn and returns
+one `SourceRun` per source (`source`, `status`, `outcome`, `added`,
+`error_class`). Adapters only fetch; the cycle is the only writer.
+
+Adapter protocol: an object with `source: str`, `stream: str` and
+`collect(tenant, checkpoint, now) -> (observations, checkpoint_or_None, outcome)`.
+The cycle passes `store.checkpoint(tenant, source, stream)`. The outcome is
+`FRESH` (complete), `PARTIAL` (a sub-request failed or a page/row cap was hit) or
+`EMPTY` (succeeded, no rows). A plain 3-tuple is accepted as well as `CollectResult`.
+A whole-source failure raises a `seo_manager.transport.TransportError` subclass
+(a terminal one, or a `TransientError` that outlasted `retry_read`).
+
+Per source:
+
+- `deferred`: stored `next_eligible` is after `now`. No call, no write.
+- `collected`: one `write_batch` with the observations, the checkpoint advance and
+  the success health. Re-collecting the same report adds 0 revisions.
+- `failed`: one `write_batch(health=...)` only. No observations, and the
+  checkpoint does not advance. A non-transport exception from an adapter is a
+  bug: it is recorded as `adapter_error` and the cycle moves on to the next adapter.
+
+| Raised | `error_class` | `next_eligible` |
+| --- | --- | --- |
+| `QuotaExhaustedError` | `quota_exhausted` | `exc.next_eligible` |
+| `AuthError` | `auth` | none |
+| `TransientError` | `transient` | none |
+| `InvalidRequestError` | `invalid_request` | none |
+| `UnknownTransportError`, other `TransportError` | `unknown` | none |
+| any other exception | `adapter_error` | none |
+
+Every failure records `last_outcome=FAILED` and `last_attempt_at=now`, and carries
+`last_success_at` over from the previous health (never reset, never set to now).
+A success sets both times to `now` and clears `error_class` and `next_eligible`.
+
+### Database location
+
+`paths.collection_db()` is `$SEO_COLLECTION_DB` if set, else
+`<data home>/collection.sqlite3` (see `paths.py`; never repo-relative, not
+created by resolving it). Only `CollectionStore.init()` creates the file.
+
+### Health status
+
+`seo-manager collect status --tenant T [--db PATH] [--json]` prints one line per
+source: last outcome (`unknown` when none), age since the last success (`never`),
+`error`, `next_eligible`. A database that does not exist exits 2 with a message and
+is not created; a database with no health rows says no sources have run. It reads
+through `CollectionStore.list_health(tenant)` (tenant-scoped, read-only).
+
 ## Not here yet
 
-Source adapters (a part 2): mapping YouTube Analytics and other source
-responses, and transport errors (`QuotaExhaustedError`, `AuthError`, ...) onto
-`SourceHealth`. The JSONL event store (`storage/event_store.py`) is separate.
+Real source adapters (YouTube Analytics, Search Console, and others) and anything
+that schedules `run_cycle`: this layer ships the protocol, the cycle and the
+status surface only. The JSONL event store (`storage/event_store.py`) is separate.

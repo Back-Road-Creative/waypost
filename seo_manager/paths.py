@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 DATA_HOME_ENV = "SEO_MANAGER_DATA_HOME"
+COLLECTION_DB_ENV = "SEO_COLLECTION_DB"
 
 
 def data_home() -> Path:
@@ -34,3 +35,14 @@ def data_home() -> Path:
     if xdg:
         return Path(xdg).expanduser() / "seo-manager"
     return Path.home() / ".local" / "share" / "seo-manager"
+
+
+def collection_db() -> Path:
+    """Return the collection store file: ``$SEO_COLLECTION_DB`` or under the data home.
+
+    Never repo-relative, and not created here (only ``CollectionStore.init`` does).
+    """
+    explicit = os.environ.get(COLLECTION_DB_ENV)
+    if explicit:
+        return Path(explicit).expanduser()
+    return data_home() / "collection.sqlite3"
