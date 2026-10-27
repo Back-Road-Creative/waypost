@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from ..core.metadata import SEOMetadata
-from ..quota.manager import QuotaExceededError
+from ..paths import data_home
+from ..quota.manager import (
+    DEFAULT_BUCKET,
+    YOUTUBE_DATA,
+    QuotaExceededError,
+    QuotaManager,
+)
 from ..transport import AuthError, QuotaExhaustedError
 from .uploader import YouTubeUploader
 
@@ -81,7 +87,9 @@ class VideoUploadResult:
         success: Whether upload succeeded
         video_id: YouTube video ID (if successful)
         video_url: YouTube video URL (if successful)
-        quota_used: Quota units used for this video
+        quota_used: Default-pool units used for this video (thumbnail and
+            playlist calls). The ``videos.insert`` call is counted in its own
+            bucket, not in these units.
         error: Error message (if failed)
         error_class: ``quota_exhausted``, ``quota_budget``, ``auth`` or the
             failure's own ``error_class`` (e.g. ``outcome_unknown``), if any
@@ -109,7 +117,8 @@ class BatchUploadResult:
         total_videos: Total number of videos in batch
         successful: Number of successful uploads
         failed: Number of failed uploads
-        quota_used: Total quota units used
+        quota_used: Total default-pool units used. ``videos.insert`` calls are
+            counted in their own bucket, not in these units.
         results: List of individual video results
         errors: List of error messages
     """
@@ -163,25 +172,33 @@ class BatchUploader:
     - Per-video metadata and thumbnails
     - Comprehensive result reporting
 
-    API Quota Usage:
-    - videos.insert: 1600 units per video
-    - thumbnails.set: 50 units per video (if thumbnail provided)
-    - Total: ~1650 units per video
+    API Quota Usage (see ``QuotaManager`` for the cost table):
+    - videos.insert: 1 call in its own ``youtube_data/videos.insert`` bucket
+      (100 per day by default), not default-pool units
+    - thumbnails.set: 50 units of the default pool (if a thumbnail is given)
+    - playlistItems.insert: 50 units of the default pool (if a playlist is set)
 
-    Daily quota: 10,000 units (~6 videos per day safely)
+    Default pool: 10,000 units per day. Every cost is read from the
+    ``QuotaManager`` operation table; nothing is hard-coded here.
     """
 
-    # Quota costs
-    UPLOAD_QUOTA_COST = 1600  # videos.insert
-    THUMBNAIL_QUOTA_COST = 50  # thumbnails.set
-
-    def __init__(self, credentials_path: str, project_id: str):
+    def __init__(
+        self,
+        credentials_path: str,
+        project_id: str,
+        *,
+        quota: QuotaManager | None = None,
+        brand_id: str | None = None,
+    ):
         """
         Initialize batch uploader.
 
         Args:
             credentials_path: Path to OAuth credentials JSON
             project_id: Google Cloud project ID
+            quota: Quota budget shared with the uploader. Default: a
+                ``QuotaManager`` stored under ``data_home() / "quota"``.
+            brand_id: Brand the quota is charged to
 
         Raises:
             ImportError: If Google API libraries not installed
@@ -189,6 +206,12 @@ class BatchUploader:
         """
         self.credentials_path = credentials_path
         self.project_id = project_id
+        self.brand_id = brand_id
+        self.quota = quota or QuotaManager(
+            project_id=project_id,
+            storage_path=data_home() / "quota",
+            brand_id=brand_id,
+        )
 
         # Initialize uploader (will be created when needed)
         self._uploader = None
@@ -204,67 +227,109 @@ class BatchUploader:
             YouTubeUploader instance
         """
         if self._uploader is None:
-            self._uploader = YouTubeUploader(self.credentials_path)
+            self._uploader = YouTubeUploader(
+                self.credentials_path, quota=self.quota, brand_id=self.brand_id
+            )
         return self._uploader
 
     def calculate_batch_cost(
-        self, video_count: int, with_thumbnails: bool = False
+        self,
+        video_count: int,
+        with_thumbnails: bool = False,
+        playlist_count: int = 0,
     ) -> int:
         """
-        Calculate total quota cost for batch upload.
+        Calculate the default-pool units a batch needs.
+
+        ``videos.insert`` is one call in its own bucket and adds no pool units;
+        see ``check_batch_quota`` for that bucket. Costs come from the
+        ``QuotaManager`` operation table.
 
         Args:
             video_count: Number of videos to upload
-            with_thumbnails: Whether thumbnails will be uploaded (default: False)
+            with_thumbnails: Whether every video has a thumbnail
+            playlist_count: Number of videos that are added to a playlist
 
         Returns:
-            Total quota units required
+            Default-pool units required
         """
-        cost_per_video = self.UPLOAD_QUOTA_COST
+        total = playlist_count * self.quota.estimate_cost("playlistItems.insert")
         if with_thumbnails:
-            cost_per_video += self.THUMBNAIL_QUOTA_COST
+            total += video_count * self.quota.estimate_cost("thumbnails.set")
+        return total
 
-        return video_count * cost_per_video
+    def _shortfalls(
+        self, video_count: int, with_thumbnails: bool, playlist_count: int
+    ) -> list[str]:
+        """Describe each bucket that cannot cover the batch (advisory, no reservation)."""
+        problems = []
+        insert = self.quota.resolve("videos.insert")
+        inserts_left = self.quota.get_bucket_usage(insert.api, insert.bucket)[
+            "remaining"
+        ]
+        if inserts_left is not None and inserts_left < video_count * insert.cost:
+            problems.append(
+                f"videos.insert bucket has {inserts_left} calls left, "
+                f"batch needs {video_count * insert.cost}"
+            )
+        needed = self.calculate_batch_cost(video_count, with_thumbnails, playlist_count)
+        pool_left = self.quota.get_bucket_usage(YOUTUBE_DATA, DEFAULT_BUCKET)[
+            "remaining"
+        ]
+        if pool_left is not None and pool_left < needed:
+            problems.append(
+                f"default pool has {pool_left} units left, batch needs {needed}"
+            )
+        return problems
 
-    def check_batch_quota(self, video_count: int, with_thumbnails: bool = True) -> bool:
+    def check_batch_quota(
+        self,
+        video_count: int,
+        with_thumbnails: bool = True,
+        playlist_count: int = 0,
+    ) -> bool:
         """
-        Check if batch upload is within quota limits.
+        Check if the batch fits today's remaining quota.
 
-        Uses conservative estimate:
-        - Daily quota: 10,000 units
-        - Safe limit: 8,000 units (buffer for other operations)
+        Advisory: nothing is reserved here. Real reservations happen per
+        request inside ``YouTubeUploader``. Checks that the ``videos.insert``
+        bucket has at least ``video_count`` calls left and that the default
+        pool covers the thumbnails and playlist inserts. An unbudgeted bucket
+        always passes.
 
         Args:
             video_count: Number of videos to upload
             with_thumbnails: Whether thumbnails will be uploaded
+            playlist_count: Number of videos that are added to a playlist
 
         Returns:
             True if quota available, False if would exceed
         """
-        total_cost = self.calculate_batch_cost(video_count, with_thumbnails)
+        return not self._shortfalls(video_count, with_thumbnails, playlist_count)
 
-        # Conservative daily limit (leave buffer)
-        SAFE_DAILY_LIMIT = 8000
-
-        return total_cost <= SAFE_DAILY_LIMIT
-
-    def validate_batch_quota(self, video_count: int, with_thumbnails: bool = True):
+    def validate_batch_quota(
+        self,
+        video_count: int,
+        with_thumbnails: bool = True,
+        playlist_count: int = 0,
+    ):
         """
         Validate batch quota and raise error if would exceed.
 
         Args:
             video_count: Number of videos to upload
             with_thumbnails: Whether thumbnails will be uploaded
+            playlist_count: Number of videos that are added to a playlist
 
         Raises:
             BatchQuotaError: If batch would exceed quota limits
         """
-        if not self.check_batch_quota(video_count, with_thumbnails):
-            total_cost = self.calculate_batch_cost(video_count, with_thumbnails)
+        problems = self._shortfalls(video_count, with_thumbnails, playlist_count)
+        if problems:
             raise BatchQuotaError(
-                f"Batch upload would exceed quota limits. "
-                f"Required: {total_cost} units, Safe limit: 8000 units. "
-                f"Try uploading fewer videos."
+                "Batch upload would exceed quota limits: "
+                + "; ".join(problems)
+                + ". Try uploading fewer videos."
             )
 
     def validate_all_metadata(self, config: BatchUploadConfig) -> list[str]:
@@ -313,6 +378,13 @@ class BatchUploader:
 
         return errors
 
+    @staticmethod
+    def _playlist_id(video: "VideoConfig") -> str | None:
+        """The playlist the uploader adds this video to, if any."""
+        if video.metadata is None:
+            return None
+        return (video.metadata.youtube_metadata or {}).get("playlist_id")
+
     def upload_batch(
         self,
         config: BatchUploadConfig,
@@ -355,7 +427,8 @@ class BatchUploader:
 
         # Check quota before starting
         has_thumbnails = any(v.thumbnail_path is not None for v in config.videos)
-        self.validate_batch_quota(total_videos, has_thumbnails)
+        playlist_count = sum(1 for v in config.videos if self._playlist_id(v))
+        self.validate_batch_quota(total_videos, has_thumbnails, playlist_count)
 
         if config.dry_run:
             print(f"🔍 DRY RUN - Validating {total_videos} videos")
@@ -391,9 +464,12 @@ class BatchUploader:
                     raise RuntimeError("Upload returned no video ID")
 
                 # Calculate quota used
-                quota_used = self.UPLOAD_QUOTA_COST
+                # (default-pool units only; the insert has its own bucket)
+                quota_used = 0
                 if video.thumbnail_path:
-                    quota_used += self.THUMBNAIL_QUOTA_COST
+                    quota_used += self.quota.estimate_cost("thumbnails.set")
+                if self._playlist_id(video):
+                    quota_used += self.quota.estimate_cost("playlistItems.insert")
 
                 # Record success
                 video_result = VideoUploadResult(

@@ -16,7 +16,8 @@ from seo_manager.youtube.batch_uploader import (
 
 
 @pytest.fixture
-def batch(tmp_path):
+def batch(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEO_MANAGER_DATA_HOME", str(tmp_path / "data-home"))
     video = tmp_path / "video.mp4"
     video.write_bytes(b"synthetic fixture")
     metadata = SEOMetadata(
