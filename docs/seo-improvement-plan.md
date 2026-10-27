@@ -299,9 +299,14 @@ be authored concurrently; shared files and consumer contracts determine stacking
 Code changes include their matching documentation in the same change.
 
 Status, 2026-10-27 (America/New_York): merged are S0a (#71, #78), S0b (#69), S0c
-(#72, #73, #74, #76, #77, #80, #81, #82), S1b (#70) and S1a part 1 (#75). S1a
-part 2, S2, S3a and S3b are in progress. The baseline text in this document is
-otherwise unchanged and describes the code as of the plan revision.
+(#72, #73, #74, #76, #77, #80, #81, #82), S1b (#70), S1a (#75, #83), S3a (#85),
+S3b (#86) and S4a (#89). S2 has reach ingestion only (#84): ctr is stored with an
+unverified rate unit until the redacted report replay, and title attribution is
+not started. S3a still needs its read-only live smoke. S8a has `collect run`
+(#88) and `collect report` (#90); recovery outcomes are not reported because
+source health keeps only the latest state, and nothing schedules either command
+yet. S4b, S5, S6, S7 and S8b are not started. The baseline text in this document
+is otherwise unchanged and describes the code as of the plan revision.
 
 Waypost owns evidence interpretation and policy; Framegrade/other consumers
 execute and display decisions; site repositories own templates and deployment.
