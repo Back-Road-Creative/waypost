@@ -10,6 +10,15 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- `seo-manager collect run` and `collect report` read the YouTube token from a
+  SOPS file with `--youtube-credentials-sops` (#96)
+- The reach probe prints a redacted sample and the ctr range of the chosen report
+  with `--redacted-sample` (#97)
+- `python -m seo_manager.site_audit` audits a built site for broken links,
+  noindex, canonical, sitemap, robots and schema problems, offline (#98)
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

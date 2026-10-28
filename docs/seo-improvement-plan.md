@@ -298,16 +298,25 @@ as one or more reviewable PRs under the 1000-line sum cap. Independent units can
 be authored concurrently; shared files and consumer contracts determine stacking.
 Code changes include their matching documentation in the same change.
 
-Status, 2026-10-27 (America/New_York): merged are S0a (#71, #78), S0b (#69), S0c
+Status, 2026-10-28 (America/New_York): merged are S0a (#71, #78), S0b (#69), S0c
 (#72, #73, #74, #76, #77, #80, #81, #82), S1b (#70), S1a (#75, #83), S3a (#85),
-S3b (#86), S4a (#89) and the first S4b rule (#92). S2 has reach ingestion only
-(#84): ctr is stored with an unverified rate unit until the redacted report
-replay, and title attribution is not started. S3a still needs its read-only live
-smoke. S8a has `collect run` (#88) and `collect report` (#90); recovery outcomes
-are not reported because source health keeps only the latest state, and nothing
-schedules either command yet. S4b has its Search Console rule (#92); reach rules
-wait on the S2 rate-unit proof and website/technical rules on S6. S5, S6, S7 and
-S8b are not started. The baseline text in this document is otherwise unchanged
+S3b (#86), S4a (#89) and the first S4b rule (#92). The live check behind #76
+passed: playlist reads return private videos with their real title and
+description. S3a's read-only live smoke passed: one `collect run` collected
+search terms and reach rows, and skipped Search Console with no site configured.
+S2 has reach ingestion (#84) and a redacted report sample (#97): ctr is stored
+with an unverified rate unit until that sample is run against the live token, and
+title attribution is not started. S8a has `collect run` (#88), `collect report`
+(#90) and SOPS-backed credentials for both (#96); recovery outcomes are not
+reported because source health keeps only the latest state, and nothing
+schedules either command yet. S6 has an offline audit of a built site (#98); live
+checks and store ingestion are not started. S4b has its Search Console rule
+(#92); reach rules wait on the S2 rate-unit proof and website/technical rules on
+S6 ingestion. S5's first action class is decided: Waypost emits the reviewed
+title payload as a Framegrade retitle worklist with a fingerprint, Framegrade's
+existing retitle tool applies it after a human reviews its dry run, and Waypost
+records Framegrade's audit log and revert file; it is not built yet. S7 and S8b
+are not started. The baseline text in this document is otherwise unchanged
 and describes the code as of the plan revision.
 
 Waypost owns evidence interpretation and policy; Framegrade/other consumers
