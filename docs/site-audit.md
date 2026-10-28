@@ -48,7 +48,18 @@ directory) skips pages under that prefix on purpose; they are counted as
 - No schema vocabulary validation: only valid JSON, `@type` and `@context` presence.
 - No rendered or JavaScript DOM: only the static HTML as built.
 
-Later S6 parts add bounded live checks, store ingestion and the S4b technical rules.
+Later S6 parts add bounded live checks and the S4b technical rules.
+
+## Store ingestion
+
+`seo-manager collect run --tenant T --site-build-dir DIR --site-base-url URL
+[--site-exclude PREFIX ...]` runs this audit as the `site_audit` source (stream
+`build`) and writes the result to the collection store. It needs no YouTube
+credentials; with only the site flags, the three Google sources are listed as
+`not run`. `--site-build-dir` without `--site-base-url` (or the reverse) is
+`not_configured:site_build_dir` / `not_configured:site_base_url`. The ingest reads
+files and writes only through the cycle. See
+[collection-store.md](collection-store.md#site-audit-source) for the metrics.
 
 ## Exit codes
 

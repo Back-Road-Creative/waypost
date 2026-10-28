@@ -119,7 +119,8 @@ through `CollectionStore.list_health(tenant)` (tenant-scoped, read-only).
 ## Running a cycle
 
 `seo-manager collect run --tenant T [--db PATH] [--youtube-credentials PATH |
---youtube-credentials-sops PATH] [--video-mapping PATH] [--search-console-site URL] [--json]` runs `run_cycle` once
+--youtube-credentials-sops PATH] [--video-mapping PATH] [--search-console-site URL] [--site-build-dir DIR --site-base-url URL
+[--site-exclude PREFIX]...] [--json]` runs `run_cycle` once
 with `now` set to the current UTC time. It is the daily entry point; scheduling it
 stays with the caller's existing scheduler, and this repo ships no schedule artifact.
 The database is created only through `CollectionStore.init()`, which is safe on an
@@ -140,11 +141,12 @@ the exception type, never token text. `collect report` takes the same flag.
 | `youtube_analytics_search_terms` | credentials and a non-empty video mapping |
 | `youtube_reach` | credentials |
 | `search_console` | credentials and `--search-console-site` |
+| `site_audit` | `--site-build-dir` and `--site-base-url` (no credentials) |
 
 A source that cannot run is printed as `<source>  not run: <reason>` and is never
 written to the store or shown as a success. The reason is
 `not_configured:<input>` (`youtube_credentials`, `video_mapping`,
-`video_mapping_empty`, `search_console_site`) or `client_build_failed:<ExceptionType>`
+`video_mapping_empty`, `search_console_site`, `site_build_dir`, `site_base_url`) or `client_build_failed:<ExceptionType>`
 (only the type is shown, never a message or token content). Built adapters print one
 line each: source, status, outcome, `added`, `error`.
 
@@ -152,6 +154,23 @@ Exit codes: 0 when at least one source ran and none failed; 1 when any source fa
 (the others still ran); 2 when no source is configured, or on a store error. `--json`
 prints the same rows as a list of objects (`status: "not_run"` with a `reason` for a
 source not run).
+
+### Site audit source
+
+`site_audit` / stream `build` ingests the offline [site audit](site-audit.md) of a
+built directory. Window: the audit instant, `[now, now + 1s]`. Subject `site` holds
+`findings_<check>` for **every** check the audit knows, `0` included, plus `pages`,
+`pages_excluded` and `external_links`. A completed audit's zero is a measurement
+(unlike an API that omits rows), so the zero is stored, not left unknown. Subject
+`page:<page>[|<target>]` (hashed as `page:sha256:<32 hex>` over 200 characters, the
+full subject kept in provenance) holds one row per finding group: metric = the check,
+value = the number of findings sharing that page and target (normally 1), provenance
+`severity=<s>;detail=<text>` truncated to the provenance limit. The checkpoint cursor
+is a SHA-256 over file names, sizes, the bytes of `.html`/`.xml`/`.txt` files and the
+base URL and excludes (not mtime, so a byte-identical rebuild is unchanged); an
+unchanged build returns `EMPTY` and keeps its checkpoint. A missing or unreadable
+build directory fails the source (`invalid_request`) and advances nothing. `collect
+report` and the opportunity rules do not read this source yet.
 
 ## Daily report
 
@@ -164,5 +183,5 @@ database exits 2. See [opportunities.md](opportunities.md#daily-report). As with
 ## Not here yet
 
 A schedule for `collect run` (the caller's scheduler owns it), and adapters beyond
-YouTube Analytics search terms, YouTube reach and Search Console. The JSONL event
+YouTube Analytics search terms, YouTube reach, Search Console and the site audit. The JSONL event
 store (`storage/event_store.py`) is separate.

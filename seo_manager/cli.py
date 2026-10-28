@@ -434,6 +434,9 @@ def _cmd_collect_run(args: argparse.Namespace, creds: Path | None) -> int:
         youtube_credentials=creds,
         video_mapping=path(args.video_mapping),
         search_console_site=args.search_console_site,
+        site_build_dir=path(args.site_build_dir),
+        site_base_url=args.site_base_url,
+        site_exclude=args.site_exclude,
     )
     runs = []
     if adapters:
@@ -572,6 +575,15 @@ def _add_collect_parser(sub) -> None:
     _add_credentials(run, "authorized-user token JSON file")
     run.add_argument("--video-mapping", help="JSON object: video_id -> content_id")
     run.add_argument("--search-console-site", help="Search Console property URL")
+    run.add_argument("--site-build-dir", help="built site directory to audit offline")
+    run.add_argument("--site-base-url", help="public base URL of the built site")
+    run.add_argument(
+        "--site-exclude",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="skip pages under this build-relative prefix (repeatable)",
+    )
     run.add_argument("--json", action="store_true", help="machine-readable output")
     run.set_defaults(func=_with_credentials("run", _cmd_collect_run))
     rep = act.add_parser(
