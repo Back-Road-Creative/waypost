@@ -10,7 +10,12 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
 ### Added
+
+- The YouTube Reporting API is probed for reach reports (#61)
+- Which Meta Page earnings metrics the token can read is probed (#62)
 
 - Versioned collection contracts and a transactional SQLite store with migrations,
   quarantine of corrupt state and replayable projections (#75)
@@ -32,15 +37,20 @@ tagged is listed under Unreleased.
   evidence and the next evaluation, read-only (#90)
 - Pages that rank just off the first page of Google for a query are reported as
   Search Console opportunities, and the daily report limits each rule separately (#92)
+- A security policy is published (#66)
 
 ### Changed
 
 - SEO plan for opportunities and automatic recovery, with refined evidence and
   implementation sequence (#67, #68)
 - OAuth scope, rollback and reach-data claims are corrected in the docs (#69)
+- The docs name the Page-role refusal the Meta earnings probe can hit (#63)
+- CI runs the test suite on Windows too (#65)
 
 ### Fixed
 
+- Metricool keeps reported zero rows and skips only all-blank rows (#60)
+- The reach probe creates a job for every reach report type (#64)
 - Event store rewrites are crash-safe (#70)
 - The daemon records whether the stored title length is measured or the style
   default (#78)
@@ -50,6 +60,8 @@ tagged is listed under Unreleased.
   and settled upload journal records are pruned after 30 days (#81)
 - The uploader's session quota total counts default-pool units, not 1600 per
   insert (#82)
+- The final-text review accepts a region-only drive with no place to name, and
+  refuses a surface that drops the region (#94)
 
 ## [0.3.0] - 2026-10-25
 
@@ -177,7 +189,8 @@ These modules have no compatibility shim in 0.2:
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.3.0...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.4.0...main
+[0.4.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.1.0...v0.2.0
