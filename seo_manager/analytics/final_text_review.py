@@ -22,9 +22,12 @@ the retained footage spends at a place; a place held for at least
 and a long-form title, must name every required place, or name a region
 whose ``region_claims`` item contains them all with full GPS coverage, no
 gaps and no samples outside it, or has a matching pinned bounded-route proof
-for coverage and gaps. Observed samples outside always refuse. A segment
-surface (a Short's burned text),
-and a Short's title, must name its own ``segment_places`` the same way.
+for coverage and gaps. Observed samples outside always refuse. A route with
+no place held long enough to name may be empty only when it carries region
+claims; each such claim then contains no place, and every whole-video surface
+and the title must name one of those regions that holds the drive by the same
+measurements (else ``region_dropped``). A segment surface (a Short's burned
+text), and a Short's title, must name its own ``segment_places`` the same way.
 The reverse holds too: every name a surface shows needs a claim. Once its
 cited names are taken out, a word outside ``FinalTextPolicy.filler_words``
 is refused as a name nothing backs, and a cited location must be on the
@@ -422,7 +425,13 @@ def _route(
     reasons: _Reasons,
 ) -> tuple[RoutePlace, ...]:
     raw = approved.get("route_places")
-    if not isinstance(raw, (list, tuple)) or not raw:
+    claims = approved.get("region_claims")
+    if not isinstance(raw, (list, tuple)) or not (
+        raw or (isinstance(claims, (list, tuple)) and claims)
+    ):
+        # Empty only when no place was held long enough to name and the drive
+        # is claimed by region instead; every surface must then name a sound
+        # region (``_check_names``).
         reasons.refuse("missing_field:route_places")
         return ()
     route: list[RoutePlace] = []
@@ -559,7 +568,8 @@ def _regions(
         gaps = _gaps(item.get("gaps"))
         outside = item.get("samples_outside")
         if (
-            not contains
+            # A region contains no place only when the route has none.
+            (not contains and route_ids)
             or not (_number(coverage) and 0 <= coverage <= 1)
             or gaps is None
             or not (_number(outside) and isinstance(outside, int) and outside >= 0)
@@ -623,12 +633,16 @@ def _check_names(
     regions: Sequence[RegionClaim],
     policy: FinalTextPolicy,
     reasons: _Reasons,
+    region_only: bool = False,
 ) -> None:
-    """Refuse ``surface`` unless it names every ``needed`` place or a sound region."""
+    """Refuse ``surface`` unless it names every ``needed`` place or a sound region.
+
+    ``region_only`` (a route with no place to name) needs a sound region.
+    """
     text = surface.text.casefold()
     named = {i.evidence_id for i in surface.evidence if i.value.casefold() in text}
     missing = [place for place in needed if place not in named]
-    if not missing:
+    if not missing and not region_only:
         return
     bases = [c for c in regions if c.evidence_id in named]
     faults = [(c, _region_faults(c, needed, policy)) for c in bases]
@@ -639,6 +653,8 @@ def _check_names(
             reasons.refuse(f"{fault}:{claim.evidence_id}")
     for place in missing:
         reasons.refuse(f"{dropped}:{surface.surface}:{place}")
+    if region_only:
+        reasons.refuse(f"region_dropped:{surface.surface}")
     if (
         dropped == "place_dropped"
         and len(needed) >= 2
@@ -914,6 +930,7 @@ def review_final_text(
     route_ids = [p.evidence_id for p in route]
     required = [p.evidence_id for p in route if p.required]
     regions = _regions(approved, recording_date, route_ids, by_id, ambiguous, reasons)
+    region_only = not route_ids and bool(regions)
 
     surfaces: list[SurfaceReview] = []
     visible = approved.get("visible")
@@ -983,7 +1000,13 @@ def review_final_text(
                 review_surface, route_ids, "place_not_on_route", policy, reasons
             )
             _check_names(
-                review_surface, required, "place_dropped", regions, policy, reasons
+                review_surface,
+                required,
+                "place_dropped",
+                regions,
+                policy,
+                reasons,
+                region_only,
             )
             continue
         _check_backing(
@@ -1035,7 +1058,15 @@ def review_final_text(
         )
     else:
         _check_backing(title_surface, route_ids, "place_not_on_route", policy, reasons)
-        _check_names(title_surface, required, "place_dropped", regions, policy, reasons)
+        _check_names(
+            title_surface,
+            required,
+            "place_dropped",
+            regions,
+            policy,
+            reasons,
+            region_only,
+        )
     surfaces.append(title_surface)
 
     date_id = _text(approved.get("date_evidence_id"))

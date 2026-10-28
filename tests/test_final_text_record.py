@@ -208,6 +208,91 @@ def test_an_empty_route_is_refused():
     assert "missing_field:route_places" in _review(_record(route_places=[])).reasons
 
 
+# --- a region-only route (no town held long enough to name) ----------------
+
+REGION_TITLE = f"{REGION} in 4K"
+
+
+def _region_only(text=REGION, ids=("r-1",), **claim):
+    return _record(
+        text=text,
+        ids=ids,
+        title=REGION_TITLE,
+        route_places=[],
+        region_claims=[_region(contains=[], **claim)],
+    )
+
+
+def _region_decision():
+    facts = TitleFacts(
+        format="longform",
+        baseline_title=REGION_TITLE,
+        region=Place(REGION, "r-1"),
+    )
+    snap = EvidenceSnapshot(as_of="2026-03-20T00:00:00")
+    return record_to_dict(select_title(facts, snap, DEFAULT_POLICY))
+
+
+def test_an_empty_route_inside_a_sound_region_agrees():
+    review = _review(_region_only(), _region_decision())
+    assert review.verdict == AGREE, review.reasons
+    assert review.route_places == ()
+    _verify(
+        review,
+        final_title=REGION_TITLE,
+        visible={"ost": REGION, "thumbnail": REGION},
+    )
+
+
+def test_an_empty_route_inside_a_proven_gapped_region_agrees():
+    record = _region_only(
+        coverage=0.93,
+        gaps=[{"start_s": 410.0, "end_s": 446.0}],
+        boundary_proof=_bounded_proof(),
+    )
+    review = _review(record, _region_decision())
+    assert review.verdict == AGREE, review.reasons
+
+
+@pytest.mark.parametrize(
+    ("claim", "fault"),
+    [
+        ({"coverage": 0.93}, "region_coverage"),
+        ({"gaps": [{"start_s": 410.0, "end_s": 446.0}]}, "region_gaps"),
+        ({"samples_outside": 3}, "region_outside"),
+    ],
+)
+def test_an_empty_route_needs_its_region_to_hold_the_drive(claim, fault):
+    review = _review(_region_only(**claim), _region_decision())
+    assert review.verdict == REFUSED
+    assert f"{fault}:r-1" in review.reasons
+    assert "region_dropped:ost" in review.reasons
+    assert "region_dropped:title" in review.reasons
+
+
+def test_an_empty_route_surface_naming_no_region_is_refused():
+    road = {"evidence_id": "rd-1", "kind": "road", "value": "Old Mill Road"}
+    evidence = [*EVIDENCE, {**road, "source": "gps"}]
+    record = _region_only(text="Old Mill Road", ids=("rd-1",))
+    review = review_final_text(record, _region_decision(), evidence)
+    assert review.verdict == REFUSED
+    assert "region_dropped:ost" in review.reasons
+    assert "region_dropped:thumbnail" in review.reasons
+    assert "region_dropped:title" not in review.reasons
+
+
+def test_an_empty_route_without_a_region_claim_is_refused():
+    record = _region_only()
+    record["region_claims"] = []
+    reasons = _review(record, _region_decision()).reasons
+    assert "missing_field:route_places" in reasons
+
+
+def test_a_region_claim_containing_nothing_on_a_real_route_is_malformed():
+    record = _record(text=REGION, ids=("r-1",), region_claims=[_region(contains=[])])
+    assert "region_claim_malformed:r-1" in _review(record).reasons
+
+
 # --- region fallback -------------------------------------------------------
 
 

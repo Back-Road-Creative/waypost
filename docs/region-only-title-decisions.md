@@ -20,3 +20,8 @@ passing facts here, then checks Waypost's chosen title again before rendering.
 Waypost's final-text review binds the chosen title and visible text to the
 same route. A region claim with gaps needs the separate bounded-boundary proof
 contract; the title selector never treats a geographic label as proof.
+
+When no town is held long enough to name, the route itself is empty and the
+region claims carry the whole drive. The final-text review then requires every
+whole-video surface and the title to name a region that holds the drive; see
+[final-text-review.md](final-text-review.md).
