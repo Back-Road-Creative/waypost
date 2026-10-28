@@ -1,6 +1,10 @@
 """Opportunity rules: pure functions from observations to reviewable findings."""
 
 from seo_manager.opportunities.contracts import EvidenceRef, Opportunity, VideoText
+from seo_manager.opportunities.search_console import (
+    SearchConsolePolicy,
+    find_search_console_opportunities,
+)
 from seo_manager.opportunities.youtube_search import (
     DEFAULT_POLICY,
     RULE,
@@ -13,7 +17,9 @@ __all__ = [
     "RULE",
     "EvidenceRef",
     "Opportunity",
+    "SearchConsolePolicy",
     "SearchDemandPolicy",
     "VideoText",
+    "find_search_console_opportunities",
     "find_search_demand_opportunities",
 ]

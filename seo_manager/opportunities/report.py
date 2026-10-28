@@ -57,7 +57,10 @@ def build_report(
     limit: int = DEFAULT_LIMIT,
     video_text: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the report. ``opportunities`` keep the order the rule gave them."""
+    """Build the report. ``opportunities`` keep the order the rules gave them.
+
+    ``limit`` applies per rule, so one rule's priorities never crowd out another's.
+    """
     if limit < 1:
         raise ValueError("limit must be >= 1")
     rows = {h.source: h for h in health}
@@ -69,6 +72,14 @@ def build_report(
     ]
     opps = list(opportunities)
     open_ = [o for o in opps if o.status == "open"]
+    # Priorities from different rules are not comparable: each rule gets its
+    # own top ``limit``; the input order is kept.
+    totals: dict[str, int] = {}
+    shown = []
+    for o in open_:
+        totals[o.rule] = totals.get(o.rule, 0) + 1
+        if totals[o.rule] <= limit:
+            shown.append(o)
     needs = [o for o in opps if o.status == "needs_evidence"]
     evaluations = [o.next_evaluation for o in opps]
     return {
@@ -79,8 +90,9 @@ def build_report(
         # no trace, so this report cannot list recoveries.
         "recovery_history": "not_recorded",
         "video_text": video_text or {"state": "unknown", "error_class": None},
-        "open": [o.as_dict() for o in open_[:limit]],
+        "open": [o.as_dict() for o in shown],
         "open_total": len(open_),
+        "open_total_by_rule": totals,
         "needs_evidence": [o.as_dict() for o in needs],
         "next_evaluation": _iso(min(evaluations)) if evaluations else None,
     }
@@ -115,9 +127,16 @@ def render_text(report: dict[str, Any]) -> str:
     )
     vt = report["video_text"]
     out.append(f"  video text: {vt['state']}" + _err(vt.get("error_class")))
+    by_rule = report["open_total_by_rule"]
     out += [
         "",
-        f"Open opportunities (top {len(report['open'])} of {report['open_total']})",
+        f"Open opportunities (top {len(report['open'])} of {report['open_total']}"
+        + (
+            "; per rule: " + ", ".join(f"{r} {n}" for r, n in by_rule.items())
+            if len(by_rule) > 1
+            else ""
+        )
+        + ")",
     ]
     if not report["open"]:
         out.append("  none")
