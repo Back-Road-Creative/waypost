@@ -17,6 +17,10 @@ instead of a guess, and names the step that stops it:
                            traffic source is preferred over a newer one without
     api-error              the API refused; status and message are printed
 
+``--redacted-sample N`` also prints the first N rows of the chosen report with
+every cell outside SAMPLE_VERBATIM replaced by ``h:<sha256[:12]>``, plus the
+range of the ctr column: the proof of whether it is a fraction or a percent.
+
 Read-only unless ``--create-job``. The token is the authorized-user JSON,
 either decrypted here from the SOPS file or piped in; it is never printed.
 
@@ -28,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import subprocess
@@ -40,6 +45,18 @@ from googleapiclient.errors import HttpError
 REACH_METRICS = ("video_thumbnail_impressions", "video_thumbnail_impressions_ctr")
 TRAFFIC_SOURCE_COLUMN = "traffic_source_type"
 JOB_NAME = "waypost-reach-probe"
+IMPRESSIONS_COLUMN = REACH_METRICS[0]
+CTR_COLUMN = REACH_METRICS[1]
+# Cells printed verbatim in a redacted sample; every other column is hashed.
+SAMPLE_VERBATIM = (
+    "date",
+    "traffic_source_type",
+    "operating_system",
+    "device_type",
+    IMPRESSIONS_COLUMN,
+    CTR_COLUMN,
+)
+MAX_SAMPLE_ROWS = 50
 
 
 def _pages(request: Callable[..., Any], key: str, **kwargs: Any) -> list[dict]:
@@ -53,8 +70,37 @@ def _pages(request: Callable[..., Any], key: str, **kwargs: Any) -> list[dict]:
             return items
 
 
+def _redact(column: str, cell: str) -> str:
+    if column in SAMPLE_VERBATIM or not cell:
+        return cell
+    return "h:" + hashlib.sha256(cell.encode()).hexdigest()[:12]
+
+
+def _summarise(body: list[list[str]], columns: list[str], column: str) -> dict:
+    """Count, range and non-numeric tally of one column over every body row."""
+    i = columns.index(column)
+    values: list[float] = []
+    non_numeric = 0
+    for row in body:
+        try:
+            values.append(float(row[i]))
+        except (IndexError, ValueError):
+            non_numeric += 1
+    return {
+        "count": len(values),
+        "min": min(values, default=None),
+        "max": max(values, default=None),
+        "over_1": sum(v > 1 for v in values),
+        "non_numeric": non_numeric,
+    }
+
+
 def probe(
-    reporting: Any, download: Callable[[str], str], *, create_job: bool = False
+    reporting: Any,
+    download: Callable[[str], str],
+    *,
+    create_job: bool = False,
+    sample_rows: int = 0,
 ) -> dict:
     """Walk report types -> jobs -> newest report -> its columns."""
     types = _pages(
@@ -130,6 +176,17 @@ def probe(
     result["verdict"] = (
         "reach-available" if result["has_reach_metrics"] else "reach-columns-missing"
     )
+    if result["verdict"] == "reach-available" and sample_rows > 0:
+        result["sample_header"] = columns
+        result["sample"] = [
+            [_redact(columns[i], cell) for i, cell in enumerate(row[: len(columns)])]
+            for row in body[:sample_rows]
+        ]
+        result["ctr_summary"] = _summarise(body, columns, CTR_COLUMN)
+        impressions = _summarise(body, columns, IMPRESSIONS_COLUMN)
+        result["impressions_summary"] = {
+            k: impressions[k] for k in ("count", "min", "max")
+        }
     return result
 
 
@@ -139,6 +196,16 @@ def format_lines(result: dict) -> list[str]:
     for key, value in result.items():
         if key == "verdict":
             continue
+        if key == "sample":
+            lines.extend(
+                f"REACH_PROBE sample[{n}]={','.join(row)}"
+                for n, row in enumerate(value)
+            )
+            continue
+        if isinstance(value, dict):
+            value = ",".join(
+                f"{k}={'-' if v is None else format(v, 'g')}" for k, v in value.items()
+            )
         if isinstance(value, list):
             value = ",".join(str(v) for v in value) or "-"
         lines.append(f"REACH_PROBE {key}={value}")
@@ -194,7 +261,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="create a reporting job for each reach type that has none",
     )
+    parser.add_argument(
+        "--redacted-sample",
+        type=int,
+        default=0,
+        metavar="N",
+        help=f"print N (0..{MAX_SAMPLE_ROWS}) hashed rows of the chosen report and "
+        "the ctr range; read-only, not with --create-job",
+    )
     args = parser.parse_args(argv)
+    if not 0 <= args.redacted_sample <= MAX_SAMPLE_ROWS or (
+        args.redacted_sample and args.create_job
+    ):
+        print(
+            f"REACH_PROBE verdict=usage: --redacted-sample takes 0..{MAX_SAMPLE_ROWS} "
+            "and cannot be combined with --create-job",
+            file=sys.stderr,
+        )
+        return 64
     if args.sops_file:
         info, error = _sops_token(args.sops_file)
         if info is None:
@@ -210,7 +294,12 @@ def main(argv: list[str] | None = None) -> int:
         return 64
     reporting, download = _build(info)
     try:
-        result = probe(reporting, download, create_job=args.create_job)
+        result = probe(
+            reporting,
+            download,
+            create_job=args.create_job,
+            sample_rows=args.redacted_sample,
+        )
     except HttpError as e:
         status = getattr(e.resp, "status", "?")
         print(f"REACH_PROBE verdict=api-error status={status}")
