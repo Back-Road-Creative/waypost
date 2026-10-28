@@ -7,6 +7,7 @@ and a decrypt failure stops the command before any source is built. No network.
 from __future__ import annotations
 
 import json
+import os
 import stat
 
 import pytest
@@ -43,8 +44,9 @@ def test_sops_file_is_decrypted_to_a_private_file_removed_after(tmp_path, monkey
     enc = tmp_path / "t.json.enc"
     with credentials.youtube_credentials(None, str(enc)) as path:
         assert json.loads(path.read_text()) == TOKEN
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        if os.name == "posix":  # Windows has no POSIX permission bits
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
+            assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
         kept = path
     assert decrypt.calls == [str(enc)]
     assert not kept.exists() and not kept.parent.exists()
