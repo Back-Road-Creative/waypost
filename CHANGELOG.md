@@ -30,6 +30,8 @@ tagged is listed under Unreleased.
   description are reported as opportunities (#89)
 - `seo-manager collect report` shows source health, open opportunities, missing
   evidence and the next evaluation, read-only (#90)
+- Pages that rank just off the first page of Google for a query are reported as
+  Search Console opportunities, and the daily report limits each rule separately (#92)
 
 ### Changed
 
