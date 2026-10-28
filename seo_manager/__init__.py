@@ -5,7 +5,7 @@ A library for generating, validating, and optimizing SEO metadata
 across multiple platforms.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # Core components
 from .core.manager import SEOManager
