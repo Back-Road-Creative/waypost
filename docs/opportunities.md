@@ -104,8 +104,55 @@ off the first page for a query.
 `window_days` (28), `max_per_page` (5) and `reevaluate_after` (28 days).
 Changing any number means a new `version`.
 
+## Rule `site_technical_defect`
+
+`find_site_technical_opportunities(observations, *, tenant, now,
+policy=DEFAULT_POLICY)`; source: `site_audit` (`docs/site-audit.md`). The finding
+is about a page (`asset` = page path) with a defect the offline audit of the
+built site found.
+
+1. `now` must be timezone-aware. Only the given tenant's observations of that
+   source are read; another tenant's observation raises `ValueError`. Other
+   sources are ignored. Superseded revisions are dropped as in the rules above.
+2. Only the newest audit is read: its instant is the latest `window_start` of the
+   source, and every row with an older one is ignored. A finding absent from the
+   newest audit is fixed and produces nothing. No `site_audit` rows give nothing.
+   If the newest audit's site-level `pages` is missing, unknown or 0, nothing was
+   audited and nothing is produced.
+3. One opportunity per finding row (subject `page:<page>[|<target>]`) whose
+   provenance `severity=` is in `policy.severities` (`error`, `warning`).
+   Info-level checks (`not_in_sitemap`, `canonical_mismatch`) never produce one.
+   A check not in the audit's severity table, or a row whose severity cannot be
+   read, is skipped, never guessed.
+4. `asset` is the page path from the subject. A hashed subject
+   (`page:sha256:<32 hex>`) is recovered from the provenance `subject=` raw value
+   when `sha256(raw)[:32]` matches; a raw value cut at 200 characters is used
+   as given and `observed` says it was truncated. With no usable raw value the
+   hashed subject itself is the asset. No page is ever invented.
+5. `observed` names the check, severity, page, target (if any), count, detail
+   and the audit instant. `proposed_change` is one sentence per check family
+   (link, noindex, canonical, sitemap, schema, robots; a generic one otherwise)
+   that says to fix it in the site's source repository and rebuild; it never
+   claims a ranking effect. `evidence` is the finding row plus the site-level
+   `findings_<check>` row of the same audit when present.
+6. `priority` is an ordering key only: error 2.0, warning 1.0; the reasons say
+   "ordering key, not an impact estimate". At most `policy.max_per_check` per
+   check are listed, highest priority then id first; when some were dropped the
+   reasons give the dropped count and point to the site-level count.
+7. `id` = `opp_` + first 16 hex of sha256 over tenant, rule, check and subject
+   (unit separator joined), so a defect that persists across audits keeps its id.
+   `automation` is `manual_review_only`; `validation` is to rebuild, run
+   `collect run --site-build-dir` again and confirm the finding is gone from the
+   next audit. `next_evaluation` = `now` + `policy.reevaluate_after`. Order:
+   priority descending, then id.
+
+`SiteTechnicalPolicy` holds `version` (`site-technical-1`), `severities`
+(`error`, `warning`), `max_per_check` (20) and `reevaluate_after` (7 days).
+Changing any value means a new `version`.
+
 Not yet: reach rules wait on the redacted-report proof of the ctr rate unit
-(`docs/youtube-reach-ingestion.md`); website and technical rules wait on S6.
+(`docs/youtube-reach-ingestion.md`). Website and technical defects of the built
+site are covered by the rule above; live-site checks are S6 part 2b.
 
 ## Daily report
 
@@ -114,7 +161,8 @@ Not yet: reach rules wait on the redacted-report proof of the ctr rate unit
 it; a missing database exits 2) and prints:
 
 - **Source health**: exactly one entry per expected source
-  (`youtube_analytics_search_terms`, `youtube_reach`, `search_console`), plus any
+  (`youtube_analytics_search_terms`, `youtube_reach`, `search_console`,
+  `site_audit`), plus any
   other source found in health. A source with no health row is `never_ran` ("no
   run recorded: never run or not configured": the store cannot tell the two
   apart). Otherwise the last outcome (`fresh`, `partial`, `failed`, `empty`,
@@ -127,7 +175,8 @@ it; a missing database exits 2) and prints:
   first-appearance order and each rule's own order kept, because priorities from
   different rules are not comparable. `open_total` is the full count and
   `open_total_by_rule` the count per rule. `priority` is an ordering key, not a
-  confidence. Search-term opportunities come first, then Search Console ones.
+  confidence. Search-term opportunities come first, then Search Console ones, then site
+  technical ones.
 - **Needs evidence**: every `needs_evidence` opportunity with its
   `missing_evidence` reasons.
 - **Next evaluation**: the earliest `next_evaluation`, or none.

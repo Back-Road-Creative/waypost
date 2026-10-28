@@ -170,7 +170,7 @@ is a SHA-256 over file names, sizes, the bytes of `.html`/`.xml`/`.txt` files an
 base URL and excludes (not mtime, so a byte-identical rebuild is unchanged); an
 unchanged build returns `EMPTY` and keeps its checkpoint. A missing or unreadable
 build directory fails the source (`invalid_request`) and advances nothing. `collect
-report` and the opportunity rules do not read this source yet.
+report` reads it through the `site_technical_defect` rule (`docs/opportunities.md`).
 
 ## Daily report
 
