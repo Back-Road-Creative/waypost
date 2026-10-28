@@ -118,8 +118,8 @@ through `CollectionStore.list_health(tenant)` (tenant-scoped, read-only).
 
 ## Running a cycle
 
-`seo-manager collect run --tenant T [--db PATH] [--youtube-credentials PATH]
-[--video-mapping PATH] [--search-console-site URL] [--json]` runs `run_cycle` once
+`seo-manager collect run --tenant T [--db PATH] [--youtube-credentials PATH |
+--youtube-credentials-sops PATH] [--video-mapping PATH] [--search-console-site URL] [--json]` runs `run_cycle` once
 with `now` set to the current UTC time. It is the daily entry point; scheduling it
 stays with the caller's existing scheduler, and this repo ships no schedule artifact.
 The database is created only through `CollectionStore.init()`, which is safe on an
@@ -127,6 +127,13 @@ existing file.
 
 `--youtube-credentials` is an authorized-user token JSON file; `--video-mapping` is
 the daemon's `video_id -> content_id` JSON (the video ids are its sorted keys).
+
+`--youtube-credentials-sops` takes the same token as a SOPS-encrypted file instead
+(the two flags are exclusive), so a scheduled run never keeps a plaintext token on
+disk. It is decrypted with `sops -d` (the reach probe's helper) into a private temp
+directory (0700, file 0600) that is removed when the command ends, even on error. A
+decrypt failure exits 2 before any source is built and prints sops' exit status or
+the exception type, never token text. `collect report` takes the same flag.
 
 | Source | Needs |
 |---|---|
@@ -148,8 +155,8 @@ source not run).
 
 ## Daily report
 
-`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH]
-[--limit N] [--json]` is the read-only daily report: top opportunities, source
+`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH |
+--youtube-credentials-sops PATH] [--limit N] [--json]` is the read-only daily report: top opportunities, source
 health and missing evidence. It never creates or writes the store; a missing
 database exits 2. See [opportunities.md](opportunities.md#daily-report). As with
 `collect run`, scheduling it stays with the caller's existing scheduler.

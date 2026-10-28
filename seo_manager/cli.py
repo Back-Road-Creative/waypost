@@ -404,7 +404,24 @@ def _cmd_collect_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_collect_run(args: argparse.Namespace) -> int:
+def _with_credentials(name: str, body):
+    """Run ``body(args, creds)`` with the plain or SOPS token resolved."""
+    from seo_manager.collection.credentials import CredentialsError, youtube_credentials
+
+    def handler(args: argparse.Namespace) -> int:
+        try:
+            with youtube_credentials(
+                args.youtube_credentials, args.youtube_credentials_sops
+            ) as creds:
+                return body(args, creds)
+        except CredentialsError as exc:
+            print(f"seo-manager collect {name}: {exc}", file=sys.stderr)
+            return 2
+
+    return handler
+
+
+def _cmd_collect_run(args: argparse.Namespace, creds: Path | None) -> int:
     from seo_manager.collection.cycle import run_cycle
     from seo_manager.collection.sources import build_adapters
     from seo_manager.collection.store import CollectionStore, CollectionStoreError
@@ -414,7 +431,7 @@ def _cmd_collect_run(args: argparse.Namespace) -> int:
         return Path(value) if value else None
 
     adapters, skipped = build_adapters(
-        youtube_credentials=path(args.youtube_credentials),
+        youtube_credentials=creds,
         video_mapping=path(args.video_mapping),
         search_console_site=args.search_console_site,
     )
@@ -463,7 +480,7 @@ def _youtube_data_client(credentials: Path):
     return GoogleClients().analytics(credentials).youtube_data
 
 
-def _cmd_collect_report(args: argparse.Namespace) -> int:
+def _cmd_collect_report(args: argparse.Namespace, creds: Path | None) -> int:
     from seo_manager.collection.search_console import SearchConsoleAdapter
     from seo_manager.collection.store import CollectionStore, CollectionStoreError
     from seo_manager.collection.youtube_reach import YouTubeReachAdapter
@@ -496,9 +513,9 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
     video_ids = sorted({o.subject.split("|", 1)[0] for o in observations})
     texts: dict = {}
     video_text = {"state": "not_configured", "error_class": None}
-    if args.youtube_credentials and video_ids:
+    if creds and video_ids:
         try:
-            client = _youtube_data_client(Path(args.youtube_credentials))
+            client = _youtube_data_client(creds)
         except Exception as exc:  # the type only: a message could echo a token
             video_text = {
                 "state": "error",
@@ -508,7 +525,7 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
             fetched = fetch_video_text(client, video_ids)
             texts = fetched.texts
             video_text = {"state": fetched.state, "error_class": fetched.error_class}
-    elif args.youtube_credentials:
+    elif creds:
         video_text = {"state": "not_needed", "error_class": None}
     opportunities = find_search_demand_opportunities(
         observations, texts, tenant=args.tenant, now=now
@@ -528,6 +545,15 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_credentials(parser, help_text: str) -> None:
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--youtube-credentials", help=help_text)
+    group.add_argument(
+        "--youtube-credentials-sops",
+        help="the same token as a SOPS-encrypted file, decrypted for this run only",
+    )
+
+
 def _add_collect_parser(sub) -> None:
     sp = sub.add_parser("collect", help="collection store: status, run, report")
     act = sp.add_subparsers(dest="action", required=True)
@@ -543,11 +569,11 @@ def _add_collect_parser(sub) -> None:
     run.add_argument(
         "--db", help="default: $SEO_COLLECTION_DB or <data home>/collection.sqlite3"
     )
-    run.add_argument("--youtube-credentials", help="authorized-user token JSON file")
+    _add_credentials(run, "authorized-user token JSON file")
     run.add_argument("--video-mapping", help="JSON object: video_id -> content_id")
     run.add_argument("--search-console-site", help="Search Console property URL")
     run.add_argument("--json", action="store_true", help="machine-readable output")
-    run.set_defaults(func=_cmd_collect_run)
+    run.set_defaults(func=_with_credentials("run", _cmd_collect_run))
     rep = act.add_parser(
         "report", help="read-only daily report: opportunities and source health"
     )
@@ -555,13 +581,12 @@ def _add_collect_parser(sub) -> None:
     rep.add_argument(
         "--db", help="default: $SEO_COLLECTION_DB or <data home>/collection.sqlite3"
     )
-    rep.add_argument(
-        "--youtube-credentials",
-        help="authorized-user token JSON file; reads video titles and descriptions",
+    _add_credentials(
+        rep, "authorized-user token JSON file; reads video titles and descriptions"
     )
     rep.add_argument("--limit", type=int, default=10, help="open opportunities shown")
     rep.add_argument("--json", action="store_true", help="machine-readable output")
-    rep.set_defaults(func=_cmd_collect_report)
+    rep.set_defaults(func=_with_credentials("report", _cmd_collect_report))
 
 
 def build_parser() -> argparse.ArgumentParser:

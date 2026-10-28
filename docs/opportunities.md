@@ -109,8 +109,8 @@ Not yet: reach rules wait on the redacted-report proof of the ctr rate unit
 
 ## Daily report
 
-`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH]
-[--limit N] [--json]` reads the collection store (never writes it, never creates
+`seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH |
+--youtube-credentials-sops PATH] [--limit N] [--json]` reads the collection store (never writes it, never creates
 it; a missing database exits 2) and prints:
 
 - **Source health**: exactly one entry per expected source
@@ -132,7 +132,8 @@ it; a missing database exits 2) and prints:
   `missing_evidence` reasons.
 - **Next evaluation**: the earliest `next_evaluation`, or none.
 
-Video titles and descriptions are read only when `--youtube-credentials` is given
+Video titles and descriptions are read only when `--youtube-credentials` (or
+`--youtube-credentials-sops`, see [collection-store.md](collection-store.md#running-a-cycle)) is given
 (YouTube Data `videos.list`, up to 50 ids per call, read-only, bounded retry; each
 call costs quota units). Without it nothing is fetched, `video_text.state` is
 `not_configured`, and each video's opportunity is `needs_evidence` with
