@@ -36,6 +36,24 @@ which is a step only JP can run. Until then every ctr observation carries
 `rate_unit=unverified;report=<id>;type=<type>` in provenance. Do not normalise
 or compare it with other rates by magnitude.
 
+To produce the proof, run one read-only command and paste its output:
+
+    python -m seo_manager.analytics.youtube_reach_probe --sops-file <dir>/youtube_upload_token.json.enc --redacted-sample 20
+
+It prints the chosen report's column names, the first 20 rows, and a
+`ctr_summary` over every row (count, min, max, `over_1`, `non_numeric`) plus an
+`impressions_summary`. Only the date, traffic-source type, operating system,
+device type, impressions and ctr cells are shown as reported. Every other cell
+(video and channel ids, traffic-source detail, any column added later) is
+replaced by `h:` and the first 12 hex digits of its SHA-256, so the output
+carries nothing that identifies a video, and equal ids still match each other.
+The option takes 0 to 50 and cannot be combined with `--create-job`.
+
+Reading it: a `max` of 1 or less with values like 0.04 points to a fraction;
+values like 4.2, or `over_1` above 0, point to a percent. The output is
+evidence for that call, not the call itself; the adapter keeps
+`rate_unit=unverified` until someone records it.
+
 ## Read-only, no job creation
 
 The adapter never creates a reporting job; that stays the probe's

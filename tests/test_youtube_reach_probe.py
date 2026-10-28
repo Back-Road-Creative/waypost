@@ -296,3 +296,119 @@ def test_a_newer_report_without_traffic_source_does_not_hide_one_with_it():
     assert result["newest_report"] == "combined"
     assert result["has_traffic_source"] is True
     assert result["reports"] == 2
+
+
+# --- redacted sample (rate-unit proof) ---------------------------------------
+
+SAMPLE_CSV = (
+    "date,channel_id,video_id,traffic_source_type,traffic_source_detail,"
+    "video_thumbnail_impressions,video_thumbnail_impressions_ctr\n"
+    "20261024,UCsecret1,vidsecret1,3,query words,120,0.05\n"
+    "20261024,UCsecret1,vidsecret2,9,,80,\n"
+    "20261024,UCsecret1,vidsecret3,9,other,n/a,4.2\n"
+    "20261024,UCsecret1\n"
+)
+
+
+def _sample_probe(csv_text, sample_rows):
+    job = {"id": "j1", "reportTypeId": "channel_reach_combined_a1"}
+    reports = {
+        "j1": [{"id": "r", "createTime": "2026-10-25T00:00:00Z", "downloadUrl": "u"}]
+    }
+    reporting = FakeReporting([REACH], [job], reports)
+    return probe(reporting, lambda url: csv_text, sample_rows=sample_rows)
+
+
+def _h(cell):
+    import hashlib
+
+    return "h:" + hashlib.sha256(cell.encode()).hexdigest()[:12]
+
+
+def test_sample_hashes_identifiers_and_keeps_allowlisted_cells():
+    result = _sample_probe(SAMPLE_CSV, 2)
+    assert result["sample_header"] == SAMPLE_CSV.splitlines()[0].split(",")
+    assert result["sample"][0] == [
+        "20261024",
+        _h("UCsecret1"),
+        _h("vidsecret1"),
+        "3",
+        _h("query words"),
+        "120",
+        "0.05",
+    ]
+    assert result["sample"][1][4] == ""
+    assert result["sample"][1][6] == ""
+
+
+def test_sample_never_leaks_raw_ids_in_any_formatted_line():
+    result = _sample_probe(SAMPLE_CSV, 50)
+    out = "\n".join(format_lines(result))
+    for raw in ("UCsecret1", "vidsecret1", "vidsecret2", "query words"):
+        assert raw not in out
+    assert "REACH_PROBE sample_header=date,channel_id,video_id" in out
+    assert f"REACH_PROBE sample[0]=20261024,{_h('UCsecret1')}," in out
+    assert result["videos"] == 3
+
+
+def test_sample_redacts_what_exists_in_a_short_row():
+    result = _sample_probe(SAMPLE_CSV, 50)
+    assert result["sample"][3] == ["20261024", _h("UCsecret1")]
+
+
+def test_sample_size_is_capped():
+    assert len(_sample_probe(SAMPLE_CSV, 2)["sample"]) == 2
+
+
+def test_ctr_and_impressions_summary():
+    result = _sample_probe(SAMPLE_CSV, 1)
+    assert result["ctr_summary"] == {
+        "count": 2,
+        "min": 0.05,
+        "max": 4.2,
+        "over_1": 1,
+        "non_numeric": 2,
+    }
+    assert result["impressions_summary"] == {"count": 2, "min": 80.0, "max": 120.0}
+    out = "\n".join(format_lines(result))
+    assert (
+        "REACH_PROBE ctr_summary=count=2,min=0.05,max=4.2,over_1=1,non_numeric=2" in out
+    )
+    assert "REACH_PROBE impressions_summary=count=2,min=80,max=120" in out
+
+
+def test_no_sample_keys_and_unchanged_output_by_default():
+    result = _sample_probe(SAMPLE_CSV, 0)
+    for key in ("sample", "sample_header", "ctr_summary", "impressions_summary"):
+        assert key not in result
+    assert not any("sample" in line for line in format_lines(result))
+
+
+def test_sample_not_added_when_verdict_is_not_reach_available():
+    result = _sample_probe("date,video_id\n20261024,v1\n", 5)
+    assert result["verdict"] == "reach-columns-missing"
+    assert "sample" not in result and "ctr_summary" not in result
+
+
+def test_main_rejects_out_of_range_sample_size():
+    assert probe_mod.main(["--token-stdin", "--redacted-sample", "51"]) == 64
+    assert probe_mod.main(["--token-stdin", "--redacted-sample", "-1"]) == 64
+
+
+def test_main_rejects_sample_with_create_job():
+    argv = ["--token-stdin", "--redacted-sample", "5", "--create-job"]
+    assert probe_mod.main(argv) == 64
+
+
+def test_main_passes_sample_size_through(monkeypatch):
+    monkeypatch.setattr(probe_mod, "_build", lambda info: (object(), _no_download))
+    seen = {}
+
+    def fake_probe(reporting, download, *, create_job=False, sample_rows=0):
+        seen["n"] = sample_rows
+        return {"verdict": "no-job"}
+
+    monkeypatch.setattr(probe_mod, "probe", fake_probe)
+    monkeypatch.setattr("sys.stdin", io.StringIO("{}"))
+    assert probe_mod.main(["--token-stdin", "--redacted-sample", "20"]) == 0
+    assert seen["n"] == 20
