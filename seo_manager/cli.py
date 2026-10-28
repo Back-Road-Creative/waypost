@@ -485,6 +485,7 @@ def _youtube_data_client(credentials: Path):
 
 def _cmd_collect_report(args: argparse.Namespace, creds: Path | None) -> int:
     from seo_manager.collection.search_console import SearchConsoleAdapter
+    from seo_manager.collection.site_audit import SiteAuditAdapter
     from seo_manager.collection.store import CollectionStore, CollectionStoreError
     from seo_manager.collection.youtube_reach import YouTubeReachAdapter
     from seo_manager.collection.youtube_search_terms import (
@@ -493,6 +494,9 @@ def _cmd_collect_report(args: argparse.Namespace, creds: Path | None) -> int:
     from seo_manager.opportunities.report import build_report, render_text
     from seo_manager.opportunities.search_console import (
         find_search_console_opportunities,
+    )
+    from seo_manager.opportunities.site_technical import (
+        find_site_technical_opportunities,
     )
     from seo_manager.opportunities.video_text import fetch_video_text
     from seo_manager.opportunities.youtube_search import (
@@ -509,6 +513,7 @@ def _cmd_collect_report(args: argparse.Namespace, creds: Path | None) -> int:
         health = store.list_health(args.tenant)
         observations = store.latest(args.tenant, source=TERMS_SOURCE)
         sc_observations = store.latest(args.tenant, source=SearchConsoleAdapter.source)
+        site_observations = store.latest(args.tenant, source=SiteAuditAdapter.source)
     except CollectionStoreError as exc:
         print(f"seo-manager collect report: {exc}", file=sys.stderr)
         return 2
@@ -533,9 +538,17 @@ def _cmd_collect_report(args: argparse.Namespace, creds: Path | None) -> int:
     opportunities = find_search_demand_opportunities(
         observations, texts, tenant=args.tenant, now=now
     ) + find_search_console_opportunities(sc_observations, tenant=args.tenant, now=now)
+    opportunities += find_site_technical_opportunities(
+        site_observations, tenant=args.tenant, now=now
+    )
     report = build_report(
         health,
-        (TERMS_SOURCE, YouTubeReachAdapter.source, SearchConsoleAdapter.source),
+        (
+            TERMS_SOURCE,
+            YouTubeReachAdapter.source,
+            SearchConsoleAdapter.source,
+            SiteAuditAdapter.source,
+        ),
         opportunities,
         tenant=args.tenant,
         now=now,

@@ -185,7 +185,8 @@ def test_collection_to_report_acceptance(tmp_path, capsys, monkeypatch):
     assert 'searching "covered word"' not in json.dumps(data["open"])
     states = {s["source"]: s["state"] for s in data["sources"]}
     assert states[TERMS] == "fresh"
-    assert list(states.values()).count("never_ran") == 2
+    assert list(states.values()).count("never_ran") == 3
+    assert states["site_audit"] == "never_ran"
     assert data["next_evaluation"] is not None
     # human text form carries the same facts
     _, text, _ = report(
@@ -261,3 +262,35 @@ def test_both_sources_both_rules_present(tmp_path, capsys, monkeypatch):
         "search_console_striking_distance",
     ]
     assert yt.calls and yt.calls[0]["id"] == "v1"
+
+
+def site_db(tmp_path):
+    db = tmp_path / "c.db"
+    store = CollectionStore(db)
+    store.init()
+    store.write_batch(
+        "gms",
+        [
+            Observation(
+                "gms", "site_audit", subj, metric, NOW, NOW + timedelta(seconds=1),
+                value, NOW, prov,
+            )
+            for subj, metric, value, prov in (
+                ("site", "pages", 4, None),
+                ("site", "findings_noindex", 1, None),
+                ("page:a.html", "noindex", 1, "severity=warning;detail=d"),
+            )
+        ],
+    )  # fmt: skip
+    return db
+
+
+def test_site_audit_rows_give_site_technical_opportunity(tmp_path, capsys):
+    db = site_db(tmp_path)
+    _, out, _ = report(capsys, "--tenant", "gms", "--db", str(db), "--json")
+    data = json.loads(out)
+    assert data["open_total_by_rule"] == {"site_technical_defect": 1}
+    assert data["open"][0]["asset"] == "a.html"
+    states = {s["source"]: s["state"] for s in data["sources"]}
+    assert states["site_audit"] == "never_ran"  # rows written without a health row
+    assert len(states) == 4
