@@ -4,10 +4,12 @@ collection-to-report acceptance path. No network."""
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from seo_manager import cli
+from seo_manager.collection.contracts import Observation
 from seo_manager.collection.cycle import run_cycle
+from seo_manager.collection.search_console import SOURCE as SC
 from seo_manager.collection.store import CollectionStore
 from seo_manager.collection.youtube_search_terms import (
     SOURCE as TERMS,
@@ -139,6 +141,7 @@ def test_json_shape(tmp_path, capsys):
         "video_text",
         "open",
         "open_total",
+        "open_total_by_rule",
         "needs_evidence",
         "next_evaluation",
     }
@@ -189,3 +192,72 @@ def test_collection_to_report_acceptance(tmp_path, capsys, monkeypatch):
         capsys, "--tenant", "gms", "--db", str(db), "--youtube-credentials", "c"
     )
     assert "lava tube hike" in text and TERMS in text
+
+
+def sc_db(tmp_path, *, with_terms=False):
+    db = collected_db(tmp_path) if with_terms else tmp_path / "c.db"
+    store = CollectionStore(db)
+    store.init()
+    start = datetime(2026, 10, 1, 7, tzinfo=UTC)
+    prov = "type=web;dataState=final;dims=date,query,page"
+    obs = [
+        Observation(
+            "gms",
+            SC,
+            "web|qp|lava tubes|https://x.test/a",
+            metric,
+            start,
+            start + timedelta(days=1),
+            value,
+            NOW,
+            prov,
+        )
+        for metric, value in (("impressions", 150), ("position", 11.0))
+    ]
+    store.write_batch("gms", obs)
+    return db
+
+
+def test_search_console_rows_alone_give_their_opportunity(tmp_path, capsys):
+    db = sc_db(tmp_path)
+    _, out, _ = report(capsys, "--tenant", "gms", "--db", str(db), "--json")
+    data = json.loads(out)
+    assert [o["rule"] for o in data["open"]] == ["search_console_striking_distance"]
+    assert data["open"][0]["asset"] == "https://x.test/a"
+    assert data["open_total_by_rule"] == {"search_console_striking_distance": 1}
+
+
+def test_search_terms_rows_alone_are_unchanged(tmp_path, capsys):
+    db = collected_db(tmp_path)
+    _, out, _ = report(capsys, "--tenant", "gms", "--db", str(db), "--json")
+    data = json.loads(out)
+    assert data["open_total"] == 0 and data["open_total_by_rule"] == {}
+    assert all(
+        o["rule"] == "search_demand_not_in_metadata" for o in data["needs_evidence"]
+    )
+
+
+def test_both_sources_both_rules_present(tmp_path, capsys, monkeypatch):
+    db = sc_db(tmp_path, with_terms=True)
+    yt = FakeYouTube({"v1": ("Covered word guide", "a walk")})
+    monkeypatch.setattr(cli, "_youtube_data_client", lambda path: yt)
+    _, out, _ = report(
+        capsys,
+        "--tenant",
+        "gms",
+        "--db",
+        str(db),
+        "--youtube-credentials",
+        "c",
+        "--json",
+    )
+    data = json.loads(out)
+    assert data["open_total_by_rule"] == {
+        "search_demand_not_in_metadata": 1,
+        "search_console_striking_distance": 1,
+    }
+    assert [o["rule"] for o in data["open"]] == [
+        "search_demand_not_in_metadata",
+        "search_console_striking_distance",
+    ]
+    assert yt.calls and yt.calls[0]["id"] == "v1"

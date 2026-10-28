@@ -471,6 +471,9 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
         SOURCE as TERMS_SOURCE,
     )
     from seo_manager.opportunities.report import build_report, render_text
+    from seo_manager.opportunities.search_console import (
+        find_search_console_opportunities,
+    )
     from seo_manager.opportunities.video_text import fetch_video_text
     from seo_manager.opportunities.youtube_search import (
         find_search_demand_opportunities,
@@ -485,6 +488,7 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
     try:
         health = store.list_health(args.tenant)
         observations = store.latest(args.tenant, source=TERMS_SOURCE)
+        sc_observations = store.latest(args.tenant, source=SearchConsoleAdapter.source)
     except CollectionStoreError as exc:
         print(f"seo-manager collect report: {exc}", file=sys.stderr)
         return 2
@@ -508,7 +512,7 @@ def _cmd_collect_report(args: argparse.Namespace) -> int:
         video_text = {"state": "not_needed", "error_class": None}
     opportunities = find_search_demand_opportunities(
         observations, texts, tenant=args.tenant, now=now
-    )
+    ) + find_search_console_opportunities(sc_observations, tenant=args.tenant, now=now)
     report = build_report(
         health,
         (TERMS_SOURCE, YouTubeReachAdapter.source, SearchConsoleAdapter.source),

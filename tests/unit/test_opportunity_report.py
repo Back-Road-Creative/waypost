@@ -135,3 +135,22 @@ def test_json_safe_and_text_has_no_percent_or_confidence():
     text = render_text(rep)
     assert "%" not in text and "confidence" not in text.lower()
     assert "src_a" in text and "opp_1" in text and "opp_2" in text
+
+
+def test_limit_applies_per_rule_and_totals_by_rule():
+    from dataclasses import replace
+
+    a = [replace(opp(f"a{i}", priority=1000 - i), rule="ra") for i in range(3)]
+    b = [replace(opp(f"b{i}", priority=5 - i), rule="rb") for i in range(3)]
+    rep = report(opps=a + b, limit=2)
+    assert [o["id"] for o in rep["open"]] == ["opp_a0", "opp_a1", "opp_b0", "opp_b1"]
+    assert rep["open_total"] == 6
+    assert rep["open_total_by_rule"] == {"ra": 3, "rb": 3}
+    assert "per rule: ra 3, rb 3" in render_text(rep)
+
+
+def test_single_rule_output_is_plain_top_limit():
+    rep = report(opps=[opp(i) for i in range(4)], limit=3)
+    assert len(rep["open"]) == 3 and rep["open_total"] == 4
+    assert rep["open_total_by_rule"] == {"r": 4}
+    assert "per rule" not in render_text(rep)

@@ -56,6 +56,57 @@ policy=DEFAULT_POLICY)`; source: `youtube_analytics_search_terms`
 10. `next_evaluation` = `now` + `policy.reevaluate_after`. Output order is
     priority descending (`None` last) then id, independent of input order.
 
+## Rule `search_console_striking_distance`
+
+`find_search_console_opportunities(observations, *, tenant, now,
+policy=DEFAULT_POLICY)`; source: `search_console` (`docs/search-console.md`).
+The finding is about a page (`asset` = page URL) that already ranks a little
+off the first page for a query.
+
+1. `now` must be timezone-aware. Only the given tenant's observations of that
+   source are read; another tenant's observation raises `ValueError`. Other
+   sources are ignored. Superseded revisions are dropped as in the rule above.
+2. Eligible rows: provenance `type=` equals `policy.search_type` and `dims=` is
+   `date` plus exactly `query` and `page` (either order). Any other dimension
+   set is ignored and never added to these rows. Rows flagged
+   `incomplete=true` are excluded: only settled data is used.
+3. Subjects must hold exactly two values after the tag; a `|` inside a query
+   or page skips the row. A hashed subject is recovered from the provenance
+   `keys=` tail (everything after `;keys=`, which may contain `;`) only when
+   `sha256(raw)[:32]` equals the digest; a truncated or mismatched tail skips
+   the row.
+4. Span: days with `window_end` within `policy.window_days` of the newest
+   settled day. Per (query, page): impressions are the sum of known daily
+   values (unknown days add nothing and are never zero-filled); position is the
+   impression-weighted mean over days with known impressions above 0 and a known
+   position; clicks are the sum of known values, with the number of days whose
+   clicks are unknown stated. Nothing is produced below `min_impressions` or
+   when no day has a usable position. A finding is open when
+   `min_position <= position <= max_position` (both edges inclusive).
+5. At most `policy.max_per_page` per page, highest impressions first.
+6. `observed` names the query, page, impressions, days reported out of
+   `window_days`, the span dates, average position (1 decimal) and clicks.
+   `proposed_change` asks for a review of whether the page answers the query
+   in its title, heading and opening text, changing wording only where the
+   page content already supports it and never inserting the query verbatim.
+   `evidence` holds every impressions and position observation used. `ctr` is
+   never read.
+7. `priority` = impressions over the span. Reasons give impressions and span,
+   days reported, "only top rows were collected; totals are lower bounds" when
+   any used row has `page_cap_hit=true` (the API returns top rows only; an
+   absent row is not zero), and the count of incomplete days excluded.
+8. `id` = `opp_` + first 16 hex of sha256 over tenant, rule, search type, query
+   and page (unit separator joined). `next_evaluation` = `now` +
+   `policy.reevaluate_after`. Order: priority descending, then id.
+
+`SearchConsolePolicy` holds `version` (`sc-striking-1`), `search_type` (`web`),
+`min_impressions` (100), `min_position` (8.0), `max_position` (20.0),
+`window_days` (28), `max_per_page` (5) and `reevaluate_after` (28 days).
+Changing any number means a new `version`.
+
+Not yet: reach rules wait on the redacted-report proof of the ctr rate unit
+(`docs/youtube-reach-ingestion.md`); website and technical rules wait on S6.
+
 ## Daily report
 
 `seo-manager collect report --tenant T [--db PATH] [--youtube-credentials PATH]
@@ -72,8 +123,11 @@ it; a missing database exits 2) and prints:
 - **Recovery history is not recorded.** Health keeps only the latest state, so an
   incident that recovered leaves no trace; the report says so
   (`recovery_history: "not_recorded"`) rather than listing recoveries.
-- **Open opportunities**: the top `--limit` (default 10) in the rule's order, with
-  `open_total` for the full count. `priority` is an ordering key, not a confidence.
+- **Open opportunities**: the top `--limit` (default 10) **per rule**, rules in
+  first-appearance order and each rule's own order kept, because priorities from
+  different rules are not comparable. `open_total` is the full count and
+  `open_total_by_rule` the count per rule. `priority` is an ordering key, not a
+  confidence. Search-term opportunities come first, then Search Console ones.
 - **Needs evidence**: every `needs_evidence` opportunity with its
   `missing_evidence` reasons.
 - **Next evaluation**: the earliest `next_evaluation`, or none.
