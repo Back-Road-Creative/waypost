@@ -9,17 +9,23 @@ read here beyond handing the file to the client builder, and never printed.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 from seo_manager.collection.cycle import SourceAdapter
 from seo_manager.collection.search_console import SearchConsoleAdapter
+from seo_manager.collection.site_audit import SiteAuditAdapter
 from seo_manager.collection.youtube_reach import YouTubeReachAdapter
 from seo_manager.collection.youtube_search_terms import YouTubeSearchTermsAdapter
 
 SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
+
+
+#: Marks a ``build_adapters`` caller that did not mention the site audit at all, so
+#: it is not listed as "not run"; ``collect run`` passes ``None`` for an unset flag.
+_OMITTED: Any = object()
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,9 @@ def build_adapters(
     video_mapping: Path | None,
     search_console_site: str | None,
     clients: ClientFactory | None = None,
+    site_build_dir: Path | None = _OMITTED,
+    site_base_url: str | None = _OMITTED,
+    site_exclude: Sequence[str] = (),
 ) -> tuple[list[SourceAdapter], list[SourceNotRun]]:
     """Return (adapters that could be built, sources not run with a reason)."""
     factory = clients or GoogleClients()
@@ -135,7 +144,30 @@ def build_adapters(
                 factory.search_console(creds), search_console_site
             ),
         )
+
+    if site_build_dir is not _OMITTED or site_base_url is not _OMITTED:
+        site_src = SiteAuditAdapter.source
+        if not site_build_dir or site_build_dir is _OMITTED:
+            skipped.append(SourceNotRun(site_src, "not_configured:site_build_dir"))
+        elif not site_base_url or site_base_url is _OMITTED:
+            skipped.append(SourceNotRun(site_src, "not_configured:site_base_url"))
+        else:
+            attempt(
+                site_src,
+                lambda: _site_adapter(site_build_dir, site_base_url, site_exclude),
+            )
     return adapters, skipped
+
+
+def _site_adapter(
+    build_dir: Path, base_url: str, exclude: Sequence[str]
+) -> SiteAuditAdapter:
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(base_url)  # the audit's own check, so a bad URL fails here
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("site_base_url must be http(s) with a host")
+    return SiteAuditAdapter(build_dir, base_url, exclude)
 
 
 class _Empty(Exception):
