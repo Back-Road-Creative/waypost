@@ -142,9 +142,10 @@ Every slot decision lives here; callers only ask and execute.
   `ready_depth` minus audited drives waiting.
 - A row for footage with no GPS of its own may name a whole-day track, `day_gpx`, and
   `camera_utc_offset_hours`, the hours the camera clock runs from UTC (US Eastern summer is
-  `-4`). The two are set together or not at all, because a track sliced on the wrong clock
-  lands hours off with no error; the offset is a number from -14 to 14. `backlog-next`
-  prints both (`""` and `null` when unset).
+  `-4`). The offset needs a track; a track without an offset leaves the drive to measure it
+  from each recording's `creation_time` (framegrade 0.3.26 and later, which also refuses a
+  set offset that disagrees). The offset is a number from -14 to 14. `backlog-next` prints
+  both (`""` and `null` when unset).
 - CLI adds `report [--now]`, `next --region R [--after]`, `backlog-next --manifest M --region R`
   (the next row to audit as JSON, or `{"row": null}`; an audit job reads it, then
   `register --status auditing`, then `set-status ready`) and `import-ledger <json>`: the

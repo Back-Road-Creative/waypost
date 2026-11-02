@@ -32,7 +32,8 @@ class BacklogRow:
     lf_mode: str
     notes: str = ""
     # A whole-day track for footage with no GPS of its own, and the hours the camera clock
-    # runs from UTC (US Eastern summer = -4); the drive slices the track per file with both.
+    # runs from UTC (US Eastern summer = -4). Unset, the drive measures the offset from
+    # each recording's creation_time and refuses a set one that disagrees.
     day_gpx: str = ""
     camera_utc_offset_hours: float | None = None
 
@@ -70,15 +71,13 @@ def load(path: Path | str) -> list[BacklogRow]:
 
 
 def _day_gpx(r: dict, where: str) -> tuple[str, float | None]:
-    """``(day_gpx, camera_utc_offset_hours)``: both or neither, since a track sliced on the
-    wrong clock lands hours off without any error."""
+    """``(day_gpx, camera_utc_offset_hours)``: an offset needs a track; a track may leave
+    the offset unset for the drive to measure."""
     gpx, off = str(r.get("day_gpx") or ""), r.get("camera_utc_offset_hours")
-    if bool(gpx) != (off is not None):
-        raise ValueError(
-            f"{where}: day_gpx and camera_utc_offset_hours must be set together"
-        )
+    if off is not None and not gpx:
+        raise ValueError(f"{where}: camera_utc_offset_hours needs day_gpx")
     if off is None:
-        return "", None
+        return gpx, None
     if isinstance(off, bool) or not isinstance(off, (int, float)):
         raise ValueError(
             f"{where}: camera_utc_offset_hours must be a number, got {off!r}"

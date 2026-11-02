@@ -19,6 +19,12 @@ tagged is listed under Unreleased.
 - `python -m seo_manager.site_audit` audits a built site for broken links,
   noindex, canonical, sitemap, robots and schema problems, offline (#98)
 
+### Changed
+
+- A drive backlog row may set `day_gpx` without `camera_utc_offset_hours`; the
+  drive then measures the camera clock from `creation_time`. An offset without
+  `day_gpx` is still refused
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
