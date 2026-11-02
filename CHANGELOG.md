@@ -12,6 +12,9 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- `seo-manager schedule retire-published <project> --receipts youtube_uploads.json`
+  retires a drive already published outside a claim, booking its upload receipts
+  and marking it complete
 - `seo-manager collect run` and `collect report` read the YouTube token from a
   SOPS file with `--youtube-credentials-sops` (#96)
 - The reach probe prints a redacted sample and the ctr range of the chosen report

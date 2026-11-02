@@ -277,3 +277,118 @@ def test_modes_column_is_added_to_an_older_database(tmp_path):
     s = ScheduleStore(path, EST, ["north", "south"])
     s.register_ready("m", "north", 1, lf_mode="full_drive", now=ANCHOR)
     assert s.drive("m").lf_mode == "full_drive"
+
+
+# -- retire_published ------------------------------------------------------
+def _receipts(n=1, day="2026-10-27"):
+    return {
+        i: (f"vid{i}", at(day, "20:00") + timedelta(days=7 * (i - 1)))
+        for i in range(1, n + 1)
+    }
+
+
+@pytest.mark.parametrize("start", ["ready", "auditing", "failed"])
+def test_retire_published_completes_and_books_the_receipts(store, start):
+    _ready(store, lf_count=2)
+    if start != "ready":
+        store.set_status("d1", start)
+    assert store.retire_published("d1", _receipts(2), now=ANCHOR) == "complete"
+    assert store.drive("d1").status == "complete"
+    rows = store.bookings()
+    assert [(b.lf_index, b.video_id, b.region) for b in rows] == [
+        (1, "vid1", "north"),
+        (2, "vid2", "north"),
+    ]
+    assert rows[0].slot_at == at("2026-10-27", "20:00")
+    assert rows[0].booked_at == ANCHOR
+
+
+def test_retire_published_unknown_project_raises(store):
+    store.init()
+    with pytest.raises(KeyError):
+        store.retire_published("nope", _receipts())
+
+
+def test_retire_published_missing_lf_receipt_writes_nothing(store):
+    _ready(store, lf_count=2)
+    with pytest.raises(ValueError, match="2"):
+        store.retire_published("d1", _receipts(1))
+    assert store.drive("d1").status == "ready"
+    assert store.bookings() == []
+
+
+def test_retire_published_empty_video_id_counts_as_missing(store):
+    _ready(store)
+    with pytest.raises(ValueError, match="1"):
+        store.retire_published("d1", {1: ("", at("2026-10-27"))})
+    assert store.drive("d1").status == "ready"
+
+
+def test_retire_published_refuses_a_conflicting_video_id(store):
+    _ready(store, lf_count=2)
+    store.book("d1", 2, "north", at("2026-11-03", "20:00"), video_id="other")
+    with pytest.raises(ValueError, match="other"):
+        store.retire_published("d1", _receipts(2))
+    assert store.drive("d1").status == "ready"
+    assert [(b.lf_index, b.video_id) for b in store.bookings()] == [(2, "other")]
+
+
+def test_retire_published_confirms_an_unconfirmed_booking(store):
+    _ready(store)
+    store.book("d1", 1, "north", at("2026-10-20"), video_id=None)
+    store.retire_published("d1", _receipts(1))
+    (b,) = store.bookings()
+    assert (b.video_id, b.slot_at) == ("vid1", at("2026-10-27", "20:00"))
+
+
+def test_retire_published_refuses_a_claimed_drive(store):
+    _ready(store)
+    store.claim_drive("d1", [at("2026-06-14")], "c1", now=ANCHOR)
+    with pytest.raises(ValueError, match="claimed"):
+        store.retire_published("d1", _receipts())
+    assert store.drive("d1").status == "claimed"
+    assert store.bookings()[0].video_id is None
+
+
+def test_retire_published_is_idempotent_on_complete(store):
+    _ready(store)
+    store.retire_published("d1", _receipts())
+    assert store.retire_published("d1", _receipts()) == "complete"
+    assert len(store.bookings()) == 1
+
+
+def test_retire_published_complete_with_other_ids_raises(store):
+    _ready(store)
+    store.retire_published("d1", _receipts())
+    with pytest.raises(ValueError, match="vid1"):
+        store.retire_published("d1", {1: ("different", at("2026-10-27", "20:00"))})
+    assert store.bookings()[0].video_id == "vid1"
+
+
+def test_retire_published_slot_clash_with_another_project_is_atomic(store):
+    _ready(store, lf_count=2)
+    store.book("q", 1, "north", at("2026-11-03", "14:00"), video_id="qv")
+    with pytest.raises(SlotTaken, match="2026-11-03"):
+        store.retire_published("d1", _receipts(2))  # LF2 lands on 11-03
+    assert store.drive("d1").status == "ready"
+    assert [(b.project, b.lf_index) for b in store.bookings()] == [("q", 1)]
+
+
+def test_retire_published_adopts_the_same_upload_booked_under_a_stray_name(store):
+    # The upload pass booked it under its run directory's name ("src"), not the drive's.
+    _ready(store)
+    store.book("src", 1, "north", at("2026-10-27", "16:00"), video_id="vid1")
+    assert store.retire_published("d1", _receipts(1)) == "complete"
+    assert [(b.project, b.lf_index, b.video_id) for b in store.bookings()] == [
+        ("d1", 1, "vid1")
+    ]
+
+
+def test_retire_published_never_adopts_a_registered_drives_booking(store):
+    _ready(store)
+    store.register_ready("d2", "north", 1)
+    store.book("d2", 1, "north", at("2026-10-27", "16:00"), video_id="vid1")
+    with pytest.raises(ValueError, match="d2"):
+        store.retire_published("d1", _receipts(1))
+    assert store.drive("d1").status == "ready"
+    assert [b.project for b in store.bookings()] == ["d2"]

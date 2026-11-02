@@ -59,7 +59,7 @@ Every slot decision lives here; callers only ask and execute.
   pass must run the same: a full_drive LF fails the best_moments duration cap),
   `set_status` (only `auditing`<->`ready` and `auditing`/`ready`->`failed`; `claimed` and
   `complete` are entered and left only through `claim_drive` / `finish_claim`, which book and
-  free the slots in the same transaction), `init()`, `ready_depth(region)`, `release_unconfirmed(project)`. Reads on a missing
+  free the slots in the same transaction), `init()`, `ready_depth(region)`, `release_unconfirmed(project)`. `retire_published(project, receipts)` (CLI `schedule retire-published <project> --receipts youtube_uploads.json`) closes a drive uploaded outside a claim: it books each LF at its receipt's `publish_at` and video id and sets `complete` in one transaction; `claimed` refuses, an id or date conflict refuses and writes nothing. Reads on a missing
   database return empty and create nothing.
 - `scheduling/claim.py` `claim(store, cadence, region, now=, lead_hours=, expect_sha=,
   dry_run=)`: oldest `ready` drive of the region; books one weekly series: the
