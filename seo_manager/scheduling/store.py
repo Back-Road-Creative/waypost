@@ -500,7 +500,9 @@ class ScheduleStore:
         (``{lf_index: (video_id, publish_at)}``), in one transaction: every LF
         ``1..lf_count`` needs a receipt with a video id; each is booked at its
         ``publish_at`` with that id (a booking already holding another id, or a date
-        another row holds, refuses and writes nothing); then the drive is ``complete``.
+        another row holds, refuses and writes nothing); a booking of the same video id
+        under a name that is no registered drive (the upload pass's run directory) is the
+        same upload and is adopted; then the drive is ``complete``.
         ``claimed`` refuses (``finish_claim`` owns claims); ``complete`` is a no-op when
         every receipt id matches the booked one, else it raises."""
         stamp = self._local(now or datetime.now(self.tz)).isoformat()
@@ -545,6 +547,24 @@ class ScheduleStore:
                         f"{project} LF{i} is already booked as {booked[i]!r}; "
                         f"receipt says {vid!r}"
                     )
+                for other in c.execute(
+                    "SELECT b.project FROM lf_bookings b WHERE b.video_id = ?"
+                    " AND b.project != ?",
+                    (vid, project),
+                ).fetchall():
+                    if c.execute(
+                        "SELECT 1 FROM ready_drives WHERE project = ?",
+                        (other["project"],),
+                    ).fetchone():
+                        raise ValueError(
+                            f"{vid!r} is booked by drive {other['project']!r}; "
+                            f"refusing to move it to {project}"
+                        )
+                # the same upload booked under a stray name (e.g. its run dir): adopt it
+                c.execute(
+                    "DELETE FROM lf_bookings WHERE video_id = ? AND project != ?",
+                    (vid, project),
+                )
                 slot = self._local(publish_at)
                 self._check_free(c, project, i, d.region, slot, False)
                 c.execute(

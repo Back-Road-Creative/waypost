@@ -372,3 +372,23 @@ def test_retire_published_slot_clash_with_another_project_is_atomic(store):
         store.retire_published("d1", _receipts(2))  # LF2 lands on 11-03
     assert store.drive("d1").status == "ready"
     assert [(b.project, b.lf_index) for b in store.bookings()] == [("q", 1)]
+
+
+def test_retire_published_adopts_the_same_upload_booked_under_a_stray_name(store):
+    # The upload pass booked it under its run directory's name ("src"), not the drive's.
+    _ready(store)
+    store.book("src", 1, "north", at("2026-10-27", "16:00"), video_id="vid1")
+    assert store.retire_published("d1", _receipts(1)) == "complete"
+    assert [(b.project, b.lf_index, b.video_id) for b in store.bookings()] == [
+        ("d1", 1, "vid1")
+    ]
+
+
+def test_retire_published_never_adopts_a_registered_drives_booking(store):
+    _ready(store)
+    store.register_ready("d2", "north", 1)
+    store.book("d2", 1, "north", at("2026-10-27", "16:00"), video_id="vid1")
+    with pytest.raises(ValueError, match="d2"):
+        store.retire_published("d1", _receipts(1))
+    assert store.drive("d1").status == "ready"
+    assert [b.project for b in store.bookings()] == ["d2"]
