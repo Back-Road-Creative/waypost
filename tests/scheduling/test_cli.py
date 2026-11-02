@@ -462,3 +462,43 @@ def test_claim_without_registered_modes_reports_null(run):
 
 def test_register_unknown_lf_mode_exits_2(run):
     run(*REG, "--lf-mode", "whole", expect=2)
+
+
+def test_retire_published_roundtrip_from_a_upload_receipt(run, tmp_path):
+    run(*REG)
+    receipts = tmp_path / "youtube_uploads.json"
+    receipts.write_text(
+        json.dumps(
+            {
+                "1": {
+                    "video_id": "XIT4Fa9aUUU",
+                    "publish_at": "2026-10-27T20:00:00+00:00",
+                    "title": "t",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert run("retire-published", "p", "--receipts", str(receipts)) == {
+        "project": "p",
+        "status": "complete",
+    }
+    assert run("ready-depth", "--region", "north")["depth"] == 0
+    assert (
+        run("retire-published", "p", "--receipts", str(receipts))["status"]
+        == "complete"
+    )
+    rep = run("report", "--now", NOW)
+    assert "XIT4Fa9aUUU" in json.dumps(rep)
+
+
+def test_retire_published_errors_exit_2(run, tmp_path):
+    run(*REG)
+    bad = tmp_path / "empty.json"
+    bad.write_text("{}", encoding="utf-8")
+    run("retire-published", "p", "--receipts", str(bad), expect=2)  # missing LF1
+    run("retire-published", "nope", "--receipts", str(bad), expect=2)
+    run("retire-published", "p", "--receipts", str(tmp_path / "absent.json"), expect=2)
+    notjson = tmp_path / "x.json"
+    notjson.write_text("[1]", encoding="utf-8")
+    run("retire-published", "p", "--receipts", str(notjson), expect=2)

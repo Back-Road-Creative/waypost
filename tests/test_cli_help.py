@@ -46,6 +46,7 @@ def test_discovery_found_subcommands():
         "claim",
         "complete",
         "fail",
+        "retire-published",
         "set-status",
         "ready-depth",
         "register",

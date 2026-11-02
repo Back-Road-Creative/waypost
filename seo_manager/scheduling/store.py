@@ -490,6 +490,73 @@ class ScheduleStore:
             )
         return want
 
+    def retire_published(
+        self,
+        project: str,
+        receipts: dict[int, tuple[str, datetime]],
+        now: datetime | None = None,
+    ) -> str:
+        """Close a drive that was uploaded outside a claim, from its upload receipts
+        (``{lf_index: (video_id, publish_at)}``), in one transaction: every LF
+        ``1..lf_count`` needs a receipt with a video id; each is booked at its
+        ``publish_at`` with that id (a booking already holding another id, or a date
+        another row holds, refuses and writes nothing); then the drive is ``complete``.
+        ``claimed`` refuses (``finish_claim`` owns claims); ``complete`` is a no-op when
+        every receipt id matches the booked one, else it raises."""
+        stamp = self._local(now or datetime.now(self.tz)).isoformat()
+        with self._conn(write=True) as c:
+            d = self._drive(
+                c.execute(
+                    "SELECT * FROM ready_drives WHERE project = ?", (project,)
+                ).fetchone()
+            )
+            if d is None:
+                raise KeyError(project)
+            if d.status == "claimed":
+                raise ValueError(
+                    f"{project} is claimed; only finish_claim closes a claim"
+                )
+            booked = {
+                r["lf_index"]: r["video_id"]
+                for r in c.execute(
+                    "SELECT lf_index, video_id FROM lf_bookings WHERE project = ?",
+                    (project,),
+                )
+            }
+            if d.status == "complete":
+                for i, (vid, _) in sorted(receipts.items()):
+                    if booked.get(i) != vid:
+                        raise ValueError(
+                            f"{project} is complete; LF{i} is booked as "
+                            f"{booked.get(i)!r}, receipt says {vid!r}"
+                        )
+                return "complete"
+            missing = [
+                i
+                for i in range(1, d.lf_count + 1)
+                if i not in receipts or not receipts[i][0]
+            ]
+            if missing:
+                raise ValueError(f"{project} needs a receipt video id for LF {missing}")
+            for i in range(1, d.lf_count + 1):
+                vid, publish_at = receipts[i]
+                if booked.get(i) not in (None, vid):
+                    raise ValueError(
+                        f"{project} LF{i} is already booked as {booked[i]!r}; "
+                        f"receipt says {vid!r}"
+                    )
+                slot = self._local(publish_at)
+                self._check_free(c, project, i, d.region, slot, False)
+                c.execute(
+                    "INSERT OR REPLACE INTO lf_bookings VALUES (?,?,?,?,?,?)",
+                    (project, i, d.region, slot.isoformat(), vid, stamp),
+                )
+            c.execute(
+                "UPDATE ready_drives SET status = 'complete' WHERE project = ?",
+                (project,),
+            )
+        return "complete"
+
     # -- alerts -----------------------------------------------------------
     def mark_alert(self, kind: str, key: str, now: datetime | None = None) -> bool:
         """True when ``(kind, key)`` was not sent in the last 24 h -- and records it."""

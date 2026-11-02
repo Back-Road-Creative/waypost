@@ -165,6 +165,23 @@ def _import_ledger(store, path: Path, now) -> dict:
     }
 
 
+def _read_receipts(path: Path) -> dict[int, tuple[str, datetime]]:
+    """Parse a framegrade ``youtube_uploads.json`` (``{"<lf_index>": {video_id,
+    publish_at, ...}}``) into ``{lf_index: (video_id, publish_at)}``."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected an object keyed by LF index")
+    out: dict[int, tuple[str, datetime]] = {}
+    for key, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path}: LF {key} entry is not an object")
+        out[int(key)] = (
+            str(entry.get("video_id") or ""),
+            datetime.fromisoformat(entry["publish_at"]),
+        )
+    return out
+
+
 def _cmd_schedule(args: argparse.Namespace) -> int:
     """Every slot decision is made here; callers (scheduled jobs) only ask and execute."""
     from seo_manager.scheduling import backlog, report, slots
@@ -199,6 +216,13 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
         elif act in ("complete", "fail"):
             status = store.finish_claim(args.claim_id, ok=act == "complete")
             out = {"claim_id": args.claim_id, "status": status}
+        elif act == "retire-published":
+            status = store.retire_published(
+                args.project,
+                _read_receipts(Path(args.receipts)),
+                now=_when(args.now, cadence),
+            )
+            out = {"project": args.project, "status": status}
         elif act == "ready-depth":
             depth = store.ready_depth(args.region)
             out = {
@@ -314,6 +338,13 @@ def _add_schedule_parser(sub) -> None:
     )
     add("complete", "publish pass succeeded", ("claim_id", {}))
     add("fail", "publish pass failed; free unconfirmed slots", ("claim_id", {}))
+    add(
+        "retire-published",
+        "close a drive already published outside a claim, from its upload receipt",
+        ("project", {}),
+        ("--receipts", {"required": True, "help": "path to youtube_uploads.json"}),
+        now,
+    )
     add(
         "set-status",
         "retire or reset a drive (e.g. a stale-sha drive -> failed)",
