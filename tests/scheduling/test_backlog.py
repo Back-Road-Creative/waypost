@@ -132,12 +132,18 @@ def test_rows_without_a_day_gpx_have_none(tmp_path):
     assert row.day_gpx == "" and row.camera_utc_offset_hours is None
 
 
+def test_a_day_gpx_row_may_leave_the_offset_to_the_drive(tmp_path):
+    # The drive measures the camera clock from each recording's creation_time.
+    text = GPX_ROW.replace("  camera_utc_offset_hours: -4\n", "")
+    (row,) = _load(tmp_path, text)
+    assert row.day_gpx == "D:/day12.gpx" and row.camera_utc_offset_hours is None
+
+
 @pytest.mark.parametrize(
     "edit,match",
     [
-        # A track with no offset would be sliced on the wrong clock: hours off, no error.
-        (lambda t: t.replace("  camera_utc_offset_hours: -4\n", ""), "set together"),
-        (lambda t: t.replace("  day_gpx: D:/day12.gpx\n", ""), "set together"),
+        # An offset with no track has nothing to slice.
+        (lambda t: t.replace("  day_gpx: D:/day12.gpx\n", ""), "needs day_gpx"),
         (lambda t: t.replace("-4\n", "minus four\n"), "a number"),
         (lambda t: t.replace("-4\n", "true\n"), "a number"),
         (lambda t: t.replace("-4\n", "-15\n"), "-14 and 14"),
