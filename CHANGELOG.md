@@ -21,6 +21,9 @@ tagged is listed under Unreleased.
   with `--redacted-sample` (#97)
 - `python -m seo_manager.site_audit` audits a built site for broken links,
   noindex, canonical, sitemap, robots and schema problems, offline (#98)
+- A drive backlog row may set `placeless_label`, on-screen text for footage with
+  no GPS and no track; it is never blank and never beside `day_gpx`, and
+  `backlog-next` prints it
 
 ### Changed
 

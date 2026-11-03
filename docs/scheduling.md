@@ -146,6 +146,10 @@ Every slot decision lives here; callers only ask and execute.
   from each recording's `creation_time` (framegrade 0.3.26 and later, which also refuses a
   set offset that disagrees). The offset is a number from -14 to 14. `backlog-next` prints
   both (`""` and `null` when unset).
+- A row for footage with no GPS at all and no track may set `placeless_label`, the
+  on-screen text for a drive whose place cannot be proven. It is never blank and never
+  sits beside `day_gpx` (a tracked drive names its places); the drive refuses a label that
+  names a place. `backlog-next` prints it (`""` when unset).
 - CLI adds `report [--now]`, `next --region R [--after]`, `backlog-next --manifest M --region R`
   (the next row to audit as JSON, or `{"row": null}`; an audit job reads it, then
   `register --status auditing`, then `set-status ready`) and `import-ledger <json>`: the

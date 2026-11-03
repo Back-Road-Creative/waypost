@@ -152,3 +152,40 @@ def test_a_day_gpx_row_may_leave_the_offset_to_the_drive(tmp_path):
 def test_day_gpx_and_offset_are_validated_together(tmp_path, edit, match):
     with pytest.raises(ValueError, match=match):
         _load(tmp_path, edit(GPX_ROW))
+
+
+PLACELESS_ROW = """\
+- project: rec0063
+  region: south
+  sources: ["D:/v.mp4"]
+  ingest_mode: generic
+  lf_mode: full_drive
+  placeless_label: Somewhere Between
+"""
+
+
+def test_placeless_label_row_carries_the_label(tmp_path):
+    # Footage with no GPS at all: the drive burns this text, which names no place.
+    (row,) = _load(tmp_path, PLACELESS_ROW)
+    assert row.placeless_label == "Somewhere Between"
+
+
+def test_rows_without_a_placeless_label_have_none(tmp_path):
+    assert _load(tmp_path)[0].placeless_label == ""
+
+
+@pytest.mark.parametrize(
+    "edit,match",
+    [
+        # A tracked row's place is provable; a placeless label would throw it away.
+        (
+            lambda t: t + "  day_gpx: D:/day12.gpx\n",
+            "placeless_label and day_gpx",
+        ),
+        (lambda t: t.replace("Somewhere Between", "'   '"), "placeless_label"),
+        (lambda t: t.replace("Somewhere Between", "42"), "must be text"),
+    ],
+)
+def test_placeless_label_is_validated(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        _load(tmp_path, edit(PLACELESS_ROW))

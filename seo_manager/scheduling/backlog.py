@@ -17,9 +17,9 @@ from seo_manager.scheduling.store import ScheduleStore
 
 _FIELDS = {
     "project", "region", "sources", "ingest_mode", "lf_mode", "notes",
-    "day_gpx", "camera_utc_offset_hours",
+    "day_gpx", "camera_utc_offset_hours", "placeless_label",
 }  # fmt: skip
-_REQUIRED = _FIELDS - {"notes", "day_gpx", "camera_utc_offset_hours"}
+_REQUIRED = _FIELDS - {"notes", "day_gpx", "camera_utc_offset_hours", "placeless_label"}
 _MAX_UTC_OFFSET_H = 14
 
 
@@ -36,6 +36,9 @@ class BacklogRow:
     # each recording's creation_time and refuses a set one that disagrees.
     day_gpx: str = ""
     camera_utc_offset_hours: float | None = None
+    # On-screen text for footage with no GPS at all and no track to slice: a label that
+    # names no place (the drive refuses one that does).
+    placeless_label: str = ""
 
 
 def load(path: Path | str) -> list[BacklogRow]:
@@ -62,6 +65,7 @@ def load(path: Path | str) -> list[BacklogRow]:
                 r["lf_mode"],
                 r.get("notes") or "",
                 *_day_gpx(r, where),
+                _placeless_label(r, where),
             )
         )
     names = [r.project for r in rows]
@@ -87,6 +91,23 @@ def _day_gpx(r: dict, where: str) -> tuple[str, float | None]:
             f"{where}: camera_utc_offset_hours must be between -14 and 14, got {off}"
         )
     return gpx, float(off)
+
+
+def _placeless_label(r: dict, where: str) -> str:
+    """The row's ``placeless_label``: text, never blank, never beside a ``day_gpx``."""
+    if "placeless_label" not in r:
+        return ""
+    label = r["placeless_label"]
+    if not isinstance(label, str):
+        raise ValueError(f"{where}: placeless_label must be text, got {label!r}")
+    if not label.strip():
+        raise ValueError(f"{where}: placeless_label is blank")
+    if r.get("day_gpx"):
+        raise ValueError(
+            f"{where}: placeless_label and day_gpx are exclusive; a tracked drive "
+            "names its places"
+        )
+    return label.strip()
 
 
 def next_row(
