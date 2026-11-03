@@ -247,6 +247,7 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
                     "notes": row.notes,
                     "day_gpx": row.day_gpx,
                     "camera_utc_offset_hours": row.camera_utc_offset_hours,
+                    "placeless_label": row.placeless_label,
                 }
                 if row
                 else {"row": None}
