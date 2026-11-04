@@ -24,6 +24,11 @@ tagged is listed under Unreleased.
 - A drive backlog row may set `placeless_label`, on-screen text for footage with
   no GPS and no track; it is never blank and never beside `day_gpx`, and
   `backlog-next` prints it
+- The final-text review accepts an Irish county boundary proof made from Tailte
+  Éireann's pinned 2026 statutory county map (CC BY 4.0, © Tailte Éireann) for
+  a recording from 2026 or earlier, when the producer kept every fix at least
+  250 m inside the boundary; `BOUNDARY_PROOF_VERSION` is
+  `tiger2026-tailte2026-bounded-v2` (#105)
 
 ### Changed
 

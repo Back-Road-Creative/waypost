@@ -12,6 +12,7 @@ import pytest
 
 from seo_manager.analytics.final_text_review import (
     AGREE,
+    BOUNDARY_PROOF_VERSION,
     DEFAULT_TEXT_POLICY,
     RECORD_VERSION,
     REFUSED,
@@ -399,6 +400,68 @@ def test_bounded_proof_compares_gap_lengths_at_millisecond_precision():
     )
     assert not _validate_bounded_proof(
         proof, region=REGION, recording_date=DATE, gaps=((941.129, 941.129 + 36.001),)
+    )
+
+
+IE_DATE = "2025-09-15"
+
+
+def _tailte_proof(**changes):
+    proof = {
+        "verified": True,
+        "basis": "pinned_tailte_polygon_bounded_speed_error_and_margin",
+        "source": "TAILTE2026/COUNTIES/counties-national-statutory-boundaries-ungeneralised-2026.geojson",
+        "sha256": "8b422a75fcac8e21f1eef2fe2480b925e7bed06e9aeed3e5daa73cfec45df881",  # pragma: allowlist secret
+        "region": "County Cork",
+        "country": "IE",
+        "recording_date": IE_DATE,
+        "max_speed_m_s": 70.0,
+        "gps_error_m": 100.0,
+        "margin_m": 250.0,
+        "max_gap_s": 17.0,
+    }
+    proof.update(changes)
+    return proof
+
+
+def test_tailte_proof_accepts_an_earlier_recording_with_an_inward_margin():
+    # The 2026 statutory map is newer than a 2025 drive; the 250 m inward
+    # margin is what stands in for the boundary edits between the two dates.
+    gaps = ((410.0, 427.0),)
+    assert BOUNDARY_PROOF_VERSION == "tiger2026-tailte2026-bounded-v2"
+    assert _validate_bounded_proof(
+        _tailte_proof(), region="County Cork", recording_date=IE_DATE, gaps=gaps
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"margin_m": 249.0},
+        {"margin_m": None},
+        {"country": "GB"},
+        {"country": None},
+        {"basis": "pinned_tiger_polygon_bounded_speed_and_error"},
+        {"sha256": "0" * 64},
+        {"recording_date": "2027-01-04"},
+        {"region": "County Kerry"},
+        {"max_gap_s": 16.0},
+    ],
+)
+def test_weakened_tailte_proof_is_refused(change):
+    proof = _tailte_proof(**change)
+    assert not _validate_bounded_proof(
+        proof,
+        region="County Cork",
+        recording_date=proof["recording_date"],
+        gaps=((410.0, 427.0),),
+    )
+
+
+def test_tiger_proof_still_needs_a_2026_recording():
+    proof = _bounded_proof(recording_date="2025-03-02")
+    assert not _validate_bounded_proof(
+        proof, region=REGION, recording_date="2025-03-02", gaps=()
     )
 
 

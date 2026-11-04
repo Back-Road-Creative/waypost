@@ -82,7 +82,7 @@ from .final_text_surfaces import (
 
 REVIEW_VERSION = "final-text-review-6"
 RECORD_VERSION = "final-text-record-2"
-BOUNDARY_PROOF_VERSION = "tiger2026-bounded-v1"
+BOUNDARY_PROOF_VERSION = "tiger2026-tailte2026-bounded-v2"
 _BOUNDARY_SOURCES = {
     "county": (
         "TIGER2026/COUNTY/tl_2026_us_county.zip",
@@ -93,6 +93,14 @@ _BOUNDARY_SOURCES = {
         "2e17ea40dff3e00163eec87a26efa0b0ff7e8fe364a191bf1a7754dcb49ea326",  # pragma: allowlist secret
     ),
 }
+# Tailte Eireann's 2026 statutory county map (CC BY 4.0, "(c) Tailte
+# Eireann") for an Irish county claim. It may postdate the recording, so the
+# producer must also keep every fix an inward margin away from the boundary.
+_TAILTE_COUNTIES = (
+    "TAILTE2026/COUNTIES/counties-national-statutory-boundaries-ungeneralised-2026.geojson",
+    "8b422a75fcac8e21f1eef2fe2480b925e7bed06e9aeed3e5daa73cfec45df881",  # pragma: allowlist secret
+)
+_TAILTE_MIN_MARGIN_M = 250.0
 # Canonical TIGER state name -> (postal abbreviation, STATEFP). The state
 # source's full name may appear as its postal abbreviation in GMS titles.
 _US_STATES = {
@@ -495,6 +503,9 @@ def _bounded_proof(
     match = next(
         (item for item in _BOUNDARY_SOURCES.values() if item[0] == source), None
     )
+    tailte = source == _TAILTE_COUNTIES[0]
+    if tailte:
+        match = _TAILTE_COUNTIES
     if match is None or raw.get("sha256") != match[1]:
         return False
     if raw.get("recording_date") != recording_date:
@@ -503,15 +514,33 @@ def _bounded_proof(
         recorded_on = date.fromisoformat(recording_date)
     except ValueError:
         return False
-    if recorded_on.year != 2026 or raw.get("verified") is not True:
+    if raw.get("verified") is not True:
+        return False
+    proof_region = raw.get("region")
+    if not isinstance(proof_region, str):
+        return False
+    if tailte:
+        try:
+            margin = float(raw.get("margin_m"))
+        except (OverflowError, TypeError, ValueError):
+            return False
+        if (
+            recorded_on.year > 2026
+            or raw.get("basis")
+            != "pinned_tailte_polygon_bounded_speed_error_and_margin"
+            or raw.get("country") != "IE"
+            or not math.isfinite(margin)
+            or margin < _TAILTE_MIN_MARGIN_M
+            or proof_region != region
+        ):
+            return False
+        return _bounded_uncertainty(raw, gaps)
+    if recorded_on.year != 2026:
         return False
     if raw.get("basis") != "pinned_tiger_polygon_bounded_speed_and_error":
         return False
     statefp = raw.get("statefp")
     if not isinstance(statefp, str) or not re.fullmatch(r"\d{2}", statefp):
-        return False
-    proof_region = raw.get("region")
-    if not isinstance(proof_region, str):
         return False
     if source == _BOUNDARY_SOURCES["state"][0]:
         state = _US_STATES.get(proof_region)
@@ -523,6 +552,12 @@ def _bounded_proof(
             return False
     elif proof_region != region:
         return False
+    return _bounded_uncertainty(raw, gaps)
+
+
+def _bounded_uncertainty(
+    raw: Mapping[str, Any], gaps: tuple[tuple[float, float], ...]
+) -> bool:
     try:
         speed = float(raw.get("max_speed_m_s"))
         error = float(raw.get("gps_error_m"))
