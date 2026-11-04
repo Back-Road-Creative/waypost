@@ -10,31 +10,35 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
 ### Added
 
 - `seo-manager schedule retire-published <project> --receipts youtube_uploads.json`
   retires a drive already published outside a claim, booking its upload receipts
-  and marking it complete
+  and marking it complete (#103)
 - `seo-manager collect run` and `collect report` read the YouTube token from a
   SOPS file with `--youtube-credentials-sops` (#96)
 - The reach probe prints a redacted sample and the ctr range of the chosen report
   with `--redacted-sample` (#97)
 - `python -m seo_manager.site_audit` audits a built site for broken links,
   noindex, canonical, sitemap, robots and schema problems, offline (#98)
+- `seo-manager collect run` ingests the offline site audit (#100)
+- Site technical defects from the offline audit become opportunities (#101)
 - A drive backlog row may set `placeless_label`, on-screen text for footage with
   no GPS and no track; it is never blank and never beside `day_gpx`, and
-  `backlog-next` prints it
+  `backlog-next` prints it (#104)
 - The final-text review accepts an Irish county boundary proof made from Tailte
   Éireann's pinned 2026 statutory county map (CC BY 4.0, © Tailte Éireann) for
   a recording from 2026 or earlier, when the producer kept every fix at least
   250 m inside the boundary; `BOUNDARY_PROOF_VERSION` is
-  `tiger2026-tailte2026-bounded-v2` (#105)
+  `tiger2026-tailte2026-bounded-v2` (#105, #106)
 
 ### Changed
 
 - A drive backlog row may set `day_gpx` without `camera_utc_offset_hours`; the
   drive then measures the camera clock from `creation_time`. An offset without
-  `day_gpx` is still refused
+  `day_gpx` is still refused (#102)
 
 ## [0.4.0] - 2026-10-28
 
@@ -215,7 +219,8 @@ These modules have no compatibility shim in 0.2:
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.4.0...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.5.0...main
+[0.5.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.0...v0.2.1
