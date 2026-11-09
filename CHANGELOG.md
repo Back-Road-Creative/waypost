@@ -16,6 +16,10 @@ tagged is listed under Unreleased.
   `per_lf_locations` (1-based LF index to on-screen text) and `location` (the
   whole drive); each is text and never blank, both are exclusive with
   `placeless_label`, and `backlog-next` prints them
+- A drive backlog row may name the two files whose GPS fixes bracket GPS-less
+  footage, `bracket_gpx: [before, after]`, for the drive's `--bracket-gpx`, which
+  computes the label; exactly two non-blank files, exclusive with every typed
+  label and with `day_gpx`, and `backlog-next` prints it
 
 ## [0.5.0] - 2026-11-04
 

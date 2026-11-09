@@ -18,11 +18,11 @@ from seo_manager.scheduling.store import ScheduleStore
 _FIELDS = {
     "project", "region", "sources", "ingest_mode", "lf_mode", "notes",
     "day_gpx", "camera_utc_offset_hours", "placeless_label",
-    "per_lf_locations", "location",
+    "per_lf_locations", "location", "bracket_gpx",
 }  # fmt: skip
 _REQUIRED = _FIELDS - {
     "notes", "day_gpx", "camera_utc_offset_hours", "placeless_label",
-    "per_lf_locations", "location",
+    "per_lf_locations", "location", "bracket_gpx",
 }  # fmt: skip
 _MAX_UTC_OFFSET_H = 14
 
@@ -49,6 +49,12 @@ class BacklogRow:
     # grammar rules judge the wording, this reader only the shape.
     per_lf_locations: tuple[tuple[int, str], ...] = ()
     location: str = ""
+    # The two files whose GPS fixes bracket footage that recorded none of its own: the
+    # last fix of the first and the first fix of the second (each a GPX or a GoPro
+    # recording). The launcher hands them to the drive as ``--bracket-gpx BEFORE AFTER``,
+    # which COMPUTES the label from them (framegrade 0.3.61 and later); no wording is
+    # typed here, so the pair never sits beside a typed label or a day track.
+    bracket_gpx: tuple[str, str] | tuple[()] = ()
 
 
 def load(path: Path | str) -> list[BacklogRow]:
@@ -78,6 +84,7 @@ def load(path: Path | str) -> list[BacklogRow]:
                 _placeless_label(r, where),
                 _per_lf_locations(r, where),
                 _text(r, where, "location"),
+                _bracket_gpx(r, where),
             )
         )
     names = [r.project for r in rows]
@@ -164,6 +171,39 @@ def _per_lf_locations(r: dict, where: str) -> tuple[tuple[int, str], ...]:
             raise ValueError(f"{where}: per_lf_locations[{idx}] is blank")
         pairs.append((idx, label.strip()))
     return tuple(sorted(pairs))
+
+
+def _bracket_gpx(r: dict, where: str) -> tuple[str, str] | tuple[()]:
+    """``bracket_gpx`` as ``(before, after)``: exactly two non-blank file names, never
+    beside a typed label (``placeless_label``, ``per_lf_locations``, ``location``) or a
+    ``day_gpx`` (the drive computes the label from the pair; either would contradict it)."""
+    if "bracket_gpx" not in r:
+        return ()
+    raw = r["bracket_gpx"]
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"{where}: bracket_gpx must be a list of two files [before, after]"
+        )
+    if len(raw) != 2:
+        raise ValueError(
+            f"{where}: bracket_gpx needs exactly two files, got {len(raw)}"
+        )
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError(f"{where}: bracket_gpx entries must be text, got {item!r}")
+        if not item.strip():
+            raise ValueError(f"{where}: bracket_gpx entry is blank")
+    clash = [
+        k
+        for k in ("placeless_label", "per_lf_locations", "location", "day_gpx")
+        if r.get(k)
+    ]
+    if clash:
+        raise ValueError(
+            f"{where}: bracket_gpx is exclusive with {clash}; the drive computes the label "
+            "from the bracketing fixes"
+        )
+    return (raw[0].strip(), raw[1].strip())
 
 
 def next_row(

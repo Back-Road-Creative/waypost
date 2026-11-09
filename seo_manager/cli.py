@@ -252,6 +252,7 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
                         str(i): lbl for i, lbl in row.per_lf_locations
                     },
                     "location": row.location,
+                    "bracket_gpx": list(row.bracket_gpx),
                 }
                 if row
                 else {"row": None}

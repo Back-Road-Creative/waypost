@@ -157,6 +157,14 @@ Every slot decision lives here; callers only ask and execute.
   them to the drive as `--per-lf-location i=label` / `--location`, whose grammar rules
   judge the wording; this reader checks only the shape. `backlog-next` prints them (`{}`
   with string keys, and `""`, when unset).
+- A row for footage with no GPS of its own may instead name the two files whose fixes
+  bracket it, `bracket_gpx: [before, after]` (each a GPX or a GoPro recording). The
+  launcher hands them to the drive as `--bracket-gpx BEFORE AFTER` (framegrade 0.3.61
+  and later), which computes the on-screen label from the last fix of the first and the
+  first fix of the second and refuses a pair that does not bracket the footage; nothing
+  in the row is typed wording. Exactly two non-blank file names, never beside
+  `placeless_label`, `per_lf_locations`, `location` or `day_gpx` (each would contradict
+  the computed label). `backlog-next` prints it (`[]` when unset).
 - CLI adds `report [--now]`, `next --region R [--after]`, `backlog-next --manifest M --region R`
   (the next row to audit as JSON, or `{"row": null}`; an audit job reads it, then
   `register --status auditing`, then `set-status ready`) and `import-ledger <json>`: the

@@ -257,3 +257,56 @@ def test_a_row_may_name_only_the_drive_wide_location(tmp_path):
 def test_location_fields_are_validated(tmp_path, edit, match):
     with pytest.raises(ValueError, match=match):
         _load(tmp_path, edit(LABELED_ROW))
+
+
+BRACKET_ROW = """\
+- project: kerry-to-cork
+  region: ireland
+  sources: ["D:/v.mp4"]
+  ingest_mode: generic
+  lf_mode: full_drive
+  bracket_gpx: ["D:/gpx/day3.gpx", "D:/gpx/day5.gpx"]
+"""
+
+
+def test_bracket_gpx_row_carries_the_pair_in_order(tmp_path):
+    # Footage with no GPS of its own: the fixes recorded just before and after it. The
+    # launcher hands them to the drive as ``--bracket-gpx BEFORE AFTER``, which COMPUTES
+    # the label from them; nothing in this row is typed wording.
+    (row,) = _load(tmp_path, BRACKET_ROW)
+    assert row.bracket_gpx == ("D:/gpx/day3.gpx", "D:/gpx/day5.gpx")
+
+
+def test_rows_without_a_bracket_have_none(tmp_path):
+    assert _load(tmp_path)[0].bracket_gpx == ()
+
+
+@pytest.mark.parametrize(
+    "edit,match",
+    [
+        # Exactly two files, both text, both non-blank.
+        (lambda t: t.replace(', "D:/gpx/day5.gpx"', ""), "exactly two"),
+        (
+            lambda t: t.replace(
+                '"D:/gpx/day5.gpx"', '"D:/gpx/day5.gpx", "D:/gpx/day6.gpx"'
+            ),
+            "exactly two",
+        ),
+        (
+            lambda t: t.replace(
+                '["D:/gpx/day3.gpx", "D:/gpx/day5.gpx"]', "D:/gpx/day3.gpx"
+            ),
+            "list",
+        ),
+        (lambda t: t.replace('"D:/gpx/day5.gpx"', "5"), "must be text"),
+        (lambda t: t.replace('"D:/gpx/day5.gpx"', "'  '"), "blank"),
+        # A bracket computes the label; a typed label or a day track would contradict it.
+        (lambda t: t + "  placeless_label: Somewhere Between\n", "bracket_gpx"),
+        (lambda t: t + "  day_gpx: D:/day12.gpx\n", "bracket_gpx"),
+        (lambda t: t + "  location: The Whole Drive\n", "bracket_gpx"),
+        (lambda t: t + "  per_lf_locations:\n    1: First Stretch\n", "bracket_gpx"),
+    ],
+)
+def test_bracket_gpx_is_validated(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        _load(tmp_path, edit(BRACKET_ROW))
