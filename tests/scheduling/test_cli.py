@@ -397,6 +397,7 @@ def test_backlog_next_names_the_first_row_not_ready_failed_or_complete(run, tmp_
     assert got["region"] == "south" and got["ingest_mode"] == "copy"
     assert got["day_gpx"] == "" and got["camera_utc_offset_hours"] is None
     assert got["placeless_label"] == ""
+    assert got["per_lf_locations"] == {} and got["location"] == ""
     run("register", "--project", "routea", "--region", "south", "--lf-count", "1",
         "--mirror-sha", "s")  # fmt: skip
     assert run("backlog-next", "--manifest", str(m), "--region", "south")[
@@ -503,3 +504,20 @@ def test_retire_published_errors_exit_2(run, tmp_path):
     notjson = tmp_path / "x.json"
     notjson.write_text("[1]", encoding="utf-8")
     run("retire-published", "p", "--receipts", str(notjson), expect=2)
+
+
+def test_backlog_next_prints_the_row_labels_by_lf_index(run, tmp_path):
+    m = tmp_path / "drive_backlog.yaml"
+    m.write_text(
+        BACKLOG.replace(
+            "  lf_mode: regular\n- project: routeb",
+            "  lf_mode: regular\n  per_lf_locations:\n    1: First Stretch\n"
+            "  location: The Whole Drive\n- project: routeb",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    got = run("backlog-next", "--manifest", str(m), "--region", "south")
+    assert got["project"] == "routea"
+    assert got["per_lf_locations"] == {"1": "First Stretch"}
+    assert got["location"] == "The Whole Drive"

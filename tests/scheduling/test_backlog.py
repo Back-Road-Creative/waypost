@@ -189,3 +189,71 @@ def test_rows_without_a_placeless_label_have_none(tmp_path):
 def test_placeless_label_is_validated(tmp_path, edit, match):
     with pytest.raises(ValueError, match=match):
         _load(tmp_path, edit(PLACELESS_ROW))
+
+
+LABELED_ROW = """\
+- project: rec0063
+  region: south
+  sources: ["D:/v.mp4"]
+  ingest_mode: generic
+  lf_mode: full_drive
+  per_lf_locations:
+    2: Second Stretch
+    1: First Stretch
+  location: The Whole Drive
+"""
+
+
+def test_per_lf_locations_row_carries_each_label_by_lf_index(tmp_path):
+    # Footage with no GPS: the operator names each LF in the row, so the launcher can
+    # hand the drive ``--per-lf-location`` and nothing is typed at launch time.
+    (row,) = _load(tmp_path, LABELED_ROW)
+    assert row.per_lf_locations == ((1, "First Stretch"), (2, "Second Stretch"))
+    assert row.location == "The Whole Drive"
+
+
+def test_rows_without_location_fields_have_none(tmp_path):
+    row = _load(tmp_path)[0]
+    assert row.per_lf_locations == () and row.location == ""
+
+
+def test_a_row_may_name_only_the_drive_wide_location(tmp_path):
+    text = LABELED_ROW.replace(
+        "  per_lf_locations:\n    2: Second Stretch\n    1: First Stretch\n", ""
+    )
+    (row,) = _load(tmp_path, text)
+    assert row.per_lf_locations == () and row.location == "The Whole Drive"
+
+
+@pytest.mark.parametrize(
+    "edit,match",
+    [
+        # Typed labels name places; a placeless label promises the drive names none.
+        (lambda t: t + "  placeless_label: Somewhere Between\n", "placeless_label"),
+        (
+            lambda t: t.replace("    2: Second Stretch\n", "    0: Second Stretch\n"),
+            "LF index",
+        ),
+        (
+            lambda t: t.replace("    2: Second Stretch\n", "    two: Second Stretch\n"),
+            "LF index",
+        ),
+        (
+            lambda t: t.replace("    2: Second Stretch\n", "    2: '  '\n"),
+            "per_lf_locations",
+        ),
+        (lambda t: t.replace("    2: Second Stretch\n", "    2: 42\n"), "must be text"),
+        (
+            lambda t: t.replace(
+                "  per_lf_locations:\n    2: Second Stretch\n    1: First Stretch\n",
+                "  per_lf_locations: First Stretch\n",
+            ),
+            "mapping",
+        ),
+        (lambda t: t.replace("The Whole Drive", "'   '"), "location"),
+        (lambda t: t.replace("The Whole Drive", "7"), "must be text"),
+    ],
+)
+def test_location_fields_are_validated(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        _load(tmp_path, edit(LABELED_ROW))
