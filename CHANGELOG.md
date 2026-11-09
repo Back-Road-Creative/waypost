@@ -10,6 +10,13 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- A drive backlog row may carry the operator's labels for GPS-less footage:
+  `per_lf_locations` (1-based LF index to on-screen text) and `location` (the
+  whole drive); each is text and never blank, both are exclusive with
+  `placeless_label`, and `backlog-next` prints them
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

@@ -248,6 +248,10 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
                     "day_gpx": row.day_gpx,
                     "camera_utc_offset_hours": row.camera_utc_offset_hours,
                     "placeless_label": row.placeless_label,
+                    "per_lf_locations": {
+                        str(i): lbl for i, lbl in row.per_lf_locations
+                    },
+                    "location": row.location,
                 }
                 if row
                 else {"row": None}

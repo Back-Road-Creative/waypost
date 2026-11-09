@@ -150,6 +150,13 @@ Every slot decision lives here; callers only ask and execute.
   on-screen text for a drive whose place cannot be proven. It is never blank and never
   sits beside `day_gpx` (a tracked drive names its places); the drive refuses a label that
   names a place. `backlog-next` prints it (`""` when unset).
+- A row for footage whose place the camera never recorded may instead carry the
+  operator's labels: `per_lf_locations`, a mapping of 1-based LF index to on-screen text,
+  and `location`, one label for the whole drive. Each label is text and never blank; both
+  are exclusive with `placeless_label` (a typed label names a place). The launcher hands
+  them to the drive as `--per-lf-location i=label` / `--location`, whose grammar rules
+  judge the wording; this reader checks only the shape. `backlog-next` prints them (`{}`
+  with string keys, and `""`, when unset).
 - CLI adds `report [--now]`, `next --region R [--after]`, `backlog-next --manifest M --region R`
   (the next row to audit as JSON, or `{"row": null}`; an audit job reads it, then
   `register --status auditing`, then `set-status ready`) and `import-ledger <json>`: the
