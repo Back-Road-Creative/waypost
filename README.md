@@ -379,11 +379,11 @@ A release is a git tag on `main`; there is no publish workflow. The tag is
 request first, then tag the merge commit once `ci.yml` has passed on it:
 
 ```bash
-git fetch origin && git tag -a v0.5.0 origin/main -m "seo-manager 0.5.0"
-git push origin v0.5.0
+git fetch origin && git tag -a v0.6.0 origin/main -m "seo-manager 0.6.0"
+git push origin v0.6.0
 ```
 
-Once the tag exists, consumers can pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.5.0`)
+Once the tag exists, consumers can pin the tag (`seo-manager @ git+https://github.com/Back-Road-Creative/waypost@v0.6.0`)
 or use an exact reviewed commit SHA. Updating a consumer pin and deploying it
 are separate changes; a Waypost tag does not update running consumers.
 
@@ -405,5 +405,5 @@ account data and credentials outside the repository.
 
 ---
 
-**Version**: 0.5.0
+**Version**: 0.6.0
 **Status**: Alpha - Implementation in progress

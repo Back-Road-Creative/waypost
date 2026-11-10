@@ -10,16 +10,18 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-10
+
 ### Added
 
 - A drive backlog row may carry the operator's labels for GPS-less footage:
   `per_lf_locations` (1-based LF index to on-screen text) and `location` (the
   whole drive); each is text and never blank, both are exclusive with
-  `placeless_label`, and `backlog-next` prints them
+  `placeless_label`, and `backlog-next` prints them (#108)
 - A drive backlog row may name the two files whose GPS fixes bracket GPS-less
   footage, `bracket_gpx: [before, after]`, for the drive's `--bracket-gpx`, which
   computes the label; exactly two non-blank files, exclusive with every typed
-  label and with `day_gpx`, and `backlog-next` prints it
+  label and with `day_gpx`, and `backlog-next` prints it (#109)
 
 ## [0.5.0] - 2026-11-04
 
@@ -230,7 +232,8 @@ These modules have no compatibility shim in 0.2:
 - Upload refuses a body with no description; tag order is tested (#13)
 - Bounded-proof gap lengths compare at millisecond precision (#20)
 
-[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.5.0...main
+[Unreleased]: https://github.com/Back-Road-Creative/waypost/compare/v0.6.0...main
+[0.6.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Back-Road-Creative/waypost/compare/v0.2.1...v0.3.0
