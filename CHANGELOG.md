@@ -10,6 +10,13 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- Account-scoped content timing suggestions with measured-hour ranking, exact
+  UTC proposals, evidence provenance, and explicit unavailable reasons; mixed
+  account/format/metric evidence, stale data and ambiguous DST slots fail closed.
+  See [the producer contract](docs/content-timing.md).
+
 ## [0.6.0] - 2026-11-10
 
 ### Added
