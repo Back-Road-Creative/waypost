@@ -10,6 +10,12 @@ tagged is listed under Unreleased.
 
 ## [Unreleased]
 
+### Changed
+
+- `SEOEventStore.upsert_events` saves a batch of events with one rewrite and one index
+  rebuild; `upsert_event` now delegates to it (a 1,100-video analytics sync no longer
+  rebuilds the index once per video).
+
 ### Added
 
 - Account-scoped content timing suggestions with measured-hour ranking, exact
