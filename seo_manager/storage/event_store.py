@@ -10,7 +10,7 @@ Provides append-only storage for SEO events with:
 
 Durability contract
 -------------------
-- Every rewrite of ``events.jsonl`` (``upsert_event``, recovery) writes the
+- Every rewrite of ``events.jsonl`` (``upsert_event``/``upsert_events``, recovery) writes the
   full new JSONL to a temp file in the same directory, fsyncs it, and moves
   it over the original with ``os.replace`` (then fsyncs the directory where
   the platform allows). A reader or a crash sees the old file or the new
@@ -36,6 +36,7 @@ import os
 import sys
 import time
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -196,9 +197,8 @@ class SEOEventStore:
         """
         Insert or update an event by event_id (thread-safe, crash-safe).
 
-        If an event with the same event_id already exists, replaces it
-        in-place (updates data and timestamp). Otherwise appends as new.
-        The file is replaced atomically (temp file + ``os.replace``).
+        Replaces an existing event with the same event_id in place, else
+        appends. Delegates to :meth:`upsert_events`.
 
         Args:
             event: SEOEvent to insert or update
@@ -206,26 +206,53 @@ class SEOEventStore:
         Returns:
             event_id for tracking
         """
+        return self.upsert_events([event])[0]
+
+    def upsert_events(self, events: Iterable[SEOEvent]) -> list[str]:
+        """
+        Insert or update a batch of events with one rewrite and one index rebuild.
+
+        Same semantics as calling :meth:`upsert_event` for each event in
+        order: an existing event_id is replaced in place (file position
+        kept), new ids append in input order, and an id repeated within the
+        batch appears once with the last value. The lock is taken once, the
+        file is read once, replaced atomically once (temp file +
+        ``os.replace``) and the indexes are rebuilt once. An empty batch
+        touches nothing.
+
+        Args:
+            events: SEOEvents to insert or update
+
+        Returns:
+            event_ids in input order
+        """
+        batch = list(events)
+        if not batch:
+            return []
+        latest = {e.event_id: e for e in batch}
+
         with _group_writable_filelock(self.lock_file):
             entries = self._recover_locked()
 
             lines = []
-            replaced = False
+            seen = set()
             for existing, raw in entries:
-                if existing.event_id == event.event_id:
-                    lines.append(event.to_jsonl())
-                    replaced = True
+                replacement = latest.get(existing.event_id)
+                if replacement is not None:
+                    lines.append(replacement.to_jsonl())
+                    seen.add(existing.event_id)
                 else:
                     lines.append(raw)
-            if not replaced:
-                lines.append(event.to_jsonl())
+            for event_id, event in latest.items():
+                if event_id not in seen:
+                    lines.append(event.to_jsonl())
 
             self._indexes_dirty = True
             _atomic_write_lines(self.events_file, lines)
             self._rebuild_indexes()
             self._indexes_dirty = False
 
-        return event.event_id
+        return [e.event_id for e in batch]
 
     def query_by_site(
         self,
