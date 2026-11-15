@@ -7,6 +7,7 @@ import pytest
 from seo_manager.analytics.caption_ranking import (
     BELOW_REFERENCE,
     DEFAULT_POLICY,
+    FACEBOOK_REEL_INITIAL_PLAYS_DAY7,
     FACEBOOK_REEL_REACH_DAY7,
     INSTAGRAM_REEL_REACH_DAY7,
     INSUFFICIENT_EVIDENCE,
@@ -35,7 +36,7 @@ def _obs(
     median,
     n=20,
     platform="facebook",
-    source=FACEBOOK_REEL_REACH_DAY7,
+    source=FACEBOOK_REEL_INITIAL_PLAYS_DAY7,
     start=None,
     end=None,
 ):
@@ -111,6 +112,21 @@ def test_evidence_for_another_platform_is_ignored():
         next(e for e in r.entries if e.template_id == "a").excluded_reason
         == NO_EVIDENCE
     )
+
+
+def test_facebook_is_judged_on_initial_plays_until_reel_reach_answers():
+    # Graph returns no per-Reel reach for the live Page (every measured Reel
+    # stores reach=null), so day-7 initial plays are Facebook's metric.
+    assert (
+        DEFAULT_POLICY.metric_by_platform["facebook"]
+        == FACEBOOK_REEL_INITIAL_PLAYS_DAY7
+    )
+    r = _rank(
+        _obs("a", 5000, source=FACEBOOK_REEL_REACH_DAY7), _obs("b", 100), _obs("c", 900)
+    )
+    assert r.metric_source == FACEBOOK_REEL_INITIAL_PLAYS_DAY7
+    assert r.entries[0].excluded_reason == METRIC_NOT_CAPTION_EVIDENCE
+    assert r.order[0] == "c"
 
 
 def test_instagram_is_judged_on_instagram_reach():

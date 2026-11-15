@@ -13,9 +13,10 @@ every other opener (including all unmeasured ones, which still need data) keeps
 its place. Inside each tier the generator's own order holds. The result is always
 a permutation of ``rotation``.
 
-Evidence is the median day-7 reach of an opener's settled posts on one platform
-(``CaptionObservation``), tagged with the metric it measures. Only the metric the
-policy assigns the platform counts.
+Evidence is the median day-7 value of an opener's settled posts on one platform
+(``CaptionObservation``): Instagram reach, Facebook initial plays. Each value is
+tagged with the metric it measures, and only the metric the policy assigns the
+platform counts.
 
 Pure module: no clock (``as_of`` comes from the evidence), no randomness, no I/O,
 no LLM. Same inputs, in any observation order, give the same record.
@@ -32,6 +33,9 @@ from .evidence import parse_ts
 PLATFORMS = ("facebook", "instagram")
 
 # Metric provenance. A value with any other tag is never caption evidence.
+# Facebook is judged on day-7 initial plays (play starts): Graph answers no
+# per-Reel reach for the live Page, so reach cannot be the metric yet.
+FACEBOOK_REEL_INITIAL_PLAYS_DAY7 = "facebook_reel_initial_plays_day7"
 FACEBOOK_REEL_REACH_DAY7 = "facebook_reel_reach_day7"
 INSTAGRAM_REEL_REACH_DAY7 = "instagram_reel_reach_day7"
 
@@ -93,7 +97,7 @@ class CaptionPolicy:
     version: str = "caption-policy-1"
     metric_by_platform: Mapping[str, str] = field(
         default_factory=lambda: {
-            "facebook": FACEBOOK_REEL_REACH_DAY7,
+            "facebook": FACEBOOK_REEL_INITIAL_PLAYS_DAY7,
             "instagram": INSTAGRAM_REEL_REACH_DAY7,
         }
     )

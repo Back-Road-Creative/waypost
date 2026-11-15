@@ -19,7 +19,7 @@ tagged is listed under Unreleased.
 ### Added
 
 - `analytics.caption_ranking.rank_captions` re-orders a caption generator's opener
-  rotation from Facebook or Instagram day-7 reach: openers clearly above the pool median
+  rotation from Instagram day-7 reach or Facebook day-7 initial plays: openers clearly above the pool median
   come first, those clearly below come last, the rest keep their place. Pure and
   replayable, like title selection. See [the contract](docs/caption-ranking.md).
 - Account-scoped content timing suggestions with measured-hour ranking, exact

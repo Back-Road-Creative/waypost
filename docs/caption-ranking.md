@@ -24,11 +24,16 @@ instead: proven openers are picked first, proven losers last.
   settled posts, and the window those posts' day-7 measurements fall in.
   Duplicates, negative values and windows ending after `as_of` are refused.
 - **`CaptionPolicy`**: the metric each platform is judged on
-  (`facebook_reel_reach_day7`, `instagram_reel_reach_day7`), the minimum `n`
+  (`facebook_reel_initial_plays_day7`, `instagram_reel_reach_day7`), the minimum `n`
   (10 posts), the maximum evidence age (120 days), the margin around the pool
   median (10%) and how many measured openers a ranking needs (2). A changed
   number is a new `version`; the defaults are proposed values, not measured
   ones.
+
+Facebook is judged on day-7 initial plays (Reel play starts, repeat viewers
+included), not reach: Graph answers no per-Reel reach for the live Page (every
+measured Reel stores `reach: null`). `facebook_reel_reach_day7` stays defined,
+so moving Facebook to reach once it answers is a policy version change.
 
 ## Ranking
 
