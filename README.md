@@ -310,6 +310,7 @@ configured" and the code says which variable or option to set:
 - **Scheduling and slot booking**: [docs/scheduling.md](docs/scheduling.md)
 - **Cadence and volume decisions**: [docs/cadence-decisions.md](docs/cadence-decisions.md)
 - **Title selection**: [docs/title-selection.md](docs/title-selection.md)
+- **Caption ranking** (Meta opener order): [docs/caption-ranking.md](docs/caption-ranking.md)
 - **Viewer-facing locality names**: [docs/viewer-locality-names.md](docs/viewer-locality-names.md)
 - **Continuous optimization daemon**: [docs/continuous-optimization-daemon.md](docs/continuous-optimization-daemon.md)
 - **Anomaly statistics kernel**: [docs/anomaly-statistics-kernel.md](docs/anomaly-statistics-kernel.md)
