@@ -2,7 +2,7 @@
 
 How Waypost refuses an upload whose on-screen text, title, description or tags were not reviewed. For the bounded-region rules see [bounded-region-review.md](bounded-region-review.md); for titles that name one verified region see [region-only-title-decisions.md](region-only-title-decisions.md).
 
-Versions in force: review `final-text-review-6`, text policy `final-text-policy-4`, template set `drive-templates-4`, title policy `title-policy-2`. A test keeps these in step with the code.
+Versions in force: review `final-text-review-6`, text policy `final-text-policy-4`, template set `drive-templates-4`, title policy `title-policy-3`. A test keeps these in step with the code.
 
 `analytics.final_text_review.review_final_text` puts the approved on-screen, thumbnail and Shorts text, the final `select_title` title, and the location/date evidence behind each into one fingerprinted record; it refuses on missing or ambiguous evidence, reports `disagree` when the title changed after approval, and never approves (`human_gate_required` is always true).
 

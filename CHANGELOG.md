@@ -18,6 +18,12 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- `select_title` explores (`title-policy-3`). When a long-form's decision would
+  keep the baseline for want of evidence, 1 upload in 4 ships its least-measured
+  alternative instead, with reason `exploration`, so alternatives can earn the
+  evidence a lift decision needs. The caller opts in by passing a stable
+  `TitleFacts.explore_key`, and Shorts never explore. See
+  [the contract](docs/title-selection.md#exploration).
 - `analytics.title_evidence.title_evidence` builds the `EvidenceSnapshot` that
   `select_title` reads from collected `youtube_reach_combined` rows: clicks are
   `round(ctr * impressions)` per row, rates are summed per template, format and
