@@ -59,3 +59,24 @@ The decision `reason` is one of:
 The record also carries the policy version, the format, the traffic source,
 the snapshot's `as_of`, and each candidate's score, `n`, metric source and
 evidence window.
+
+## Building the evidence
+
+`seo_manager.analytics.title_evidence.title_evidence(observations, attribution, as_of)`
+turns collected `youtube_reach_combined` rows into the `EvidenceSnapshot` above.
+`attribution` maps a video id to a `TitleAttribution(template_id, format)`.
+`title_evidence_from_store` reads the rows from a `CollectionStore`;
+`snapshot_to_dict` and `snapshot_from_dict` give the JSON form.
+
+- Impressions and click-through rows are paired by subject and day; a pair with
+  either value missing is unknown and skipped, never counted as zero.
+- `video_thumbnail_impressions_ctr` is a fraction of that row's impressions. A
+  row's clicks are `round(ctr * impressions)`, and a group's rate is
+  `sum(clicks) / sum(impressions)`. A ctr is never clamped; a group whose rate is
+  still above 1 is dropped and counted in `groups_dropped_rate_over_1`.
+- Only `traffic_source_type` 5 (YouTube search, `search`) and 3 (Browse features,
+  `browse`) are evidence. Code 24 (Shorts feed, no thumbnails) and every other code
+  are ignored and counted in `rows_other_traffic`.
+- Rows with an unattributed video, a digested (unparseable) subject, or a day
+  ending outside the evidence age or after `as_of` are skipped and counted on the
+  result.

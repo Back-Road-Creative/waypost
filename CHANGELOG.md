@@ -18,6 +18,11 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- `analytics.title_evidence.title_evidence` builds the `EvidenceSnapshot` that
+  `select_title` reads from collected `youtube_reach_combined` rows: clicks are
+  `round(ctr * impressions)` per row, rates are summed per template, format and
+  traffic source, and only YouTube search (code 5) and browse (code 3) traffic count.
+  See [the contract](docs/title-selection.md#building-the-evidence).
 - `analytics.caption_ranking.rank_captions` re-orders a caption generator's opener
   rotation from Instagram day-7 reach or Facebook day-7 initial plays: openers clearly above the pool median
   come first, those clearly below come last, the rest keep their place. Pure and
