@@ -18,10 +18,18 @@ and the traffic source the policy assigns that format, and it beats the
 baseline by the policy's margin. Anything less keeps the baseline. A card click
 rate or an unlabelled rate is never title evidence (``metric_source``).
 
+Only the chosen title ever earns evidence, so while the baseline always ships
+no alternative can reach ``min_n``. A long-form that would keep its baseline
+for want of evidence therefore ships its least-measured renderable alternative
+on 1 upload in ``TitlePolicy.explore_one_in``, chosen by a hash of the caller's
+stable ``TitleFacts.explore_key`` (``explores``). Measured evidence always wins
+over exploration, and an upload with no key never explores.
+
 Pure module: no clock (``as_of`` comes from the snapshot), no randomness, no
 I/O, no LLM. Same inputs, in any observation order, give the same record.
 """
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
@@ -77,6 +85,7 @@ N_BELOW_MIN = "n_below_min"
 INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 BASELINE_NOT_BEATEN = "baseline_not_beaten"
 LIFT_OVER_BASELINE = "lift_over_baseline"
+EXPLORATION = "exploration"
 
 
 class TitleSelectionRefused(ValueError):
@@ -106,6 +115,9 @@ class TitleFacts:
     highlight: Place | None = None
     suffix: str = ""
     place: Place | None = None
+    # A stable id for this upload (the same on every re-render and resume);
+    # empty means the upload never explores.
+    explore_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -138,7 +150,7 @@ class TitlePolicy:
     The defaults are proposed values, not measured ones.
     """
 
-    version: str = "title-policy-2"
+    version: str = "title-policy-3"
     traffic_by_format: Mapping[str, str] = field(
         default_factory=lambda: {"short": "browse", "longform": "search"}
     )
@@ -146,6 +158,8 @@ class TitlePolicy:
     max_evidence_age_days: int = 28
     min_relative_lift: float = 0.10
     max_title_chars: int = 100
+    # format -> explore on 1 upload in N; a missing format or 0 never explores.
+    explore_one_in: Mapping[str, int] = field(default_factory=lambda: {"longform": 4})
 
 
 DEFAULT_POLICY = TitlePolicy()
@@ -174,6 +188,19 @@ class TitleDecision:
     chosen_title: str
     reason: str
     candidates: tuple[Candidate, ...]
+
+
+def explores(explore_key: str, one_in: int) -> bool:
+    """Whether the upload keyed ``explore_key`` is one of the 1 in ``one_in``
+    that explore. Stable for a key; an empty key or ``one_in`` < 1 never does."""
+    if not explore_key or one_in < 1:
+        return False
+    digest = hashlib.sha256(explore_key.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % one_in == 0
+
+
+# An alternative that rendered a title but lacks evidence; only these explore.
+_UNMEASURED = (NO_EVIDENCE, METRIC_NOT_TITLE_EVIDENCE, STALE, N_BELOW_MIN)
 
 
 def record_to_dict(decision: TitleDecision) -> dict[str, Any]:
@@ -346,6 +373,17 @@ def select_title(
             chosen, reason = best, LIFT_OVER_BASELINE
         else:
             reason = BASELINE_NOT_BEATEN
+    unmeasured = [
+        c for c in candidates[1:] if c.title and c.excluded_reason in _UNMEASURED
+    ]
+    if (
+        reason == INSUFFICIENT_EVIDENCE
+        and unmeasured
+        and explores(facts.explore_key, policy.explore_one_in.get(facts.format, 0))
+    ):
+        # Least measured first; equal counts go to the lower index.
+        chosen = min(unmeasured, key=lambda c: (c.n or 0, c.index))
+        reason = EXPLORATION
 
     return TitleDecision(
         policy_version=policy.version,

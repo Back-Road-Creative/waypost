@@ -23,6 +23,10 @@ same record (`record_to_dict` gives its JSON form).
   `n`, the maximum evidence age, the lift a candidate needs over the baseline
   and the title length cap. A changed number is a new `version`; the defaults
   (`DEFAULT_POLICY`) are proposed values, not measured ones.
+  `explore_one_in` maps a format to how often it explores (see below);
+  `title-policy-3` explores 1 long-form in 4 and no Shorts.
+- **`TitleFacts.explore_key`**: a stable id for the upload, the same on every
+  re-render and resume. Empty (the default) means the upload never explores.
 
 ## Candidates
 
@@ -55,6 +59,27 @@ The decision `reason` is one of:
   baseline's rate by the policy's relative lift. The baseline is kept.
 - `lift_over_baseline`: the highest-scoring eligible candidate (equal scores
   go to the lower index) is chosen.
+- `exploration`: the decision would have been `insufficient_evidence`, and
+  this upload is one that explores (below). Its least-measured alternative is
+  chosen.
+
+## Exploration
+
+Only the chosen title earns evidence. If the baseline always shipped, no
+alternative could ever reach the minimum `n`, and the decision would stay
+`insufficient_evidence` forever. So when the decision would be
+`insufficient_evidence`, an upload whose `explore_key` falls in the 1 in
+`explore_one_in[format]` that explore ships an alternative instead.
+`explores(explore_key, one_in)` decides from the first 8 bytes of the key's
+SHA-256, so the same upload always gets the same answer and there is no
+randomness.
+
+The alternative must have a title (not `missing_fact` or `too_long`) and lack
+evidence (`no_evidence`, `metric_not_title_evidence`, `stale` or
+`n_below_min`). The one with the smallest `n` wins (no evidence counts as 0),
+and equal counts go to the lower index. If none qualifies, the baseline is kept.
+Exploration never overrides measured evidence: `lift_over_baseline` and
+`baseline_not_beaten` decisions are unchanged.
 
 The record also carries the policy version, the format, the traffic source,
 the snapshot's `as_of`, and each candidate's score, `n`, metric source and

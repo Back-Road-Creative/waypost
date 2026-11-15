@@ -23,6 +23,7 @@ from seo_manager.analytics.title_selection import (
     TemplateObservation,
     TitleFacts,
     TitleSelectionRefused,
+    explores,
     record_to_dict,
     select_title,
 )
@@ -373,3 +374,132 @@ def test_a_single_place_without_evidence_is_refused():
     facts = replace(_short(), place=Place("Fenwold County", ""))
     with pytest.raises(TitleSelectionRefused, match="evidence"):
         select_title(facts, _snapshot(), DEFAULT_POLICY)
+
+
+# --- exploration ---------------------------------------------------------------
+# Only the chosen title ever earns evidence, so an alternative can never reach
+# min_n while the baseline always ships. A long-form whose decision would keep
+# the baseline for want of evidence ships its least-measured renderable
+# alternative instead on 1 upload in ``explore_one_in``, picked by a hash of the
+# caller's stable ``explore_key``: no clock, no randomness.
+
+
+def _keys(explore: bool, count: int = 3, one_in: int = 4):
+    found = [
+        k for k in (f"upload-{i}" for i in range(400)) if explores(k, one_in) is explore
+    ]
+    return found[:count]
+
+
+def test_the_policy_explores_one_longform_in_four_and_no_shorts():
+    assert DEFAULT_POLICY.version == "title-policy-3"
+    assert dict(DEFAULT_POLICY.explore_one_in) == {"longform": 4}
+
+
+def test_about_one_key_in_four_explores():
+    hits = sum(explores(f"upload-{i}", 4) for i in range(4000))
+    assert 900 <= hits <= 1100
+    assert not any(explores(f"upload-{i}", 0) for i in range(100))
+    assert not explores("", 4)
+
+
+def test_an_explore_key_is_stable():
+    assert explores("Brindlemoor to Quillhaven, Nordale in 4K", 4) is explores(
+        "Brindlemoor to Quillhaven, Nordale in 4K", 4
+    )
+    assert [explores(f"upload-{i}", 4) for i in range(8)] == [
+        explores(f"upload-{i}", 4) for i in range(8)
+    ]
+
+
+def test_without_an_explore_key_the_baseline_is_kept():
+    rec = select_title(_facts(highlight=False), _snapshot(), DEFAULT_POLICY)
+    assert rec.chosen_index == 0
+    assert rec.reason == "insufficient_evidence"
+
+
+def test_an_exploring_longform_ships_its_alternative_and_says_so():
+    for key in _keys(True):
+        facts = replace(_facts(highlight=False), explore_key=key)
+        rec = select_title(facts, _snapshot(), DEFAULT_POLICY)
+        chosen = rec.candidates[rec.chosen_index]
+        assert rec.reason == "exploration"
+        assert chosen.template_id == "region_route"
+        assert (
+            rec.chosen_title
+            == chosen.title
+            == ("Nordale Drive: Brindlemoor to Quillhaven in 4K")
+        )
+        assert chosen.excluded_reason == "no_evidence"
+
+
+def test_a_non_exploring_key_keeps_the_baseline():
+    for key in _keys(False):
+        facts = replace(_facts(highlight=False), explore_key=key)
+        rec = select_title(facts, _snapshot(), DEFAULT_POLICY)
+        assert rec.chosen_index == 0
+        assert rec.reason == "insufficient_evidence"
+
+
+def test_exploration_picks_the_least_measured_renderable_alternative():
+    key = _keys(True, 1)[0]
+    snap = _snapshot(
+        _obs(BASELINE, 0.04, n=900),
+        _obs("highlight_route", 0.05, n=300),
+        _obs("region_route", 0.05, n=120),
+        _obs("highlight_region", 0.05, n=250),
+    )
+    rec = select_title(replace(_facts(), explore_key=key), snap, DEFAULT_POLICY)
+    assert rec.reason == "exploration"
+    assert rec.candidates[rec.chosen_index].template_id == "region_route"
+    snap = _snapshot(_obs(BASELINE, 0.04, n=900), _obs("region_route", 0.05, n=120))
+    rec = select_title(replace(_facts(), explore_key=key), snap, DEFAULT_POLICY)
+    # highlight_route and highlight_region have no evidence; the lower index wins.
+    assert rec.candidates[rec.chosen_index].template_id == "highlight_route"
+
+
+def test_exploration_never_overrides_measured_evidence():
+    key = _keys(True, 1)[0]
+    rec = select_title(
+        replace(_facts(), explore_key=key), _winning_snapshot(), DEFAULT_POLICY
+    )
+    assert rec.reason == "lift_over_baseline"
+    snap = _snapshot(_obs(BASELINE, 0.040), _obs("highlight_route", 0.041))
+    rec = select_title(replace(_facts(), explore_key=key), snap, DEFAULT_POLICY)
+    assert rec.reason == "baseline_not_beaten"
+    assert rec.chosen_index == 0
+
+
+def test_exploration_skips_alternatives_that_cannot_be_rendered():
+    key = _keys(True, 1)[0]
+    tight = replace(DEFAULT_POLICY, max_title_chars=len(_facts().baseline_title))
+    rec = select_title(
+        replace(_facts(highlight=False), explore_key=key), _snapshot(), tight
+    )
+    assert rec.chosen_index == 0
+    assert rec.reason == "insufficient_evidence"
+
+
+def test_a_region_only_longform_explores_its_own_template():
+    key = _keys(True, 1)[0]
+    rec = select_title(
+        replace(_region_only(), explore_key=key), _snapshot(), DEFAULT_POLICY
+    )
+    assert rec.reason == "exploration"
+    assert rec.chosen_title == "Ash County, SC Drive in 4K"
+
+
+def test_shorts_never_explore():
+    key = _keys(True, 1)[0]
+    rec = select_title(replace(_short(), explore_key=key), _snapshot(), DEFAULT_POLICY)
+    assert rec.chosen_index == 0
+    assert rec.reason == "insufficient_evidence"
+
+
+def test_a_zero_rate_turns_exploration_off():
+    key = _keys(True, 1)[0]
+    off = replace(DEFAULT_POLICY, explore_one_in={"longform": 0})
+    rec = select_title(
+        replace(_facts(highlight=False), explore_key=key), _snapshot(), off
+    )
+    assert rec.reason == "insufficient_evidence"
