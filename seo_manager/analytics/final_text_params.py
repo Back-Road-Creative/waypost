@@ -18,6 +18,10 @@ the cited item to be of kind ``parent_video`` with an 11-character YouTube id
 as its value, and renders the link itself as ``https://youtu.be/<id>``. It is
 not a place: no route or name check applies to it. ``valid_value`` is False for
 it, so a raw URL in the slot is refused wherever a plain value is checked.
+Waypost cannot know whose video the id names: the client is responsible for
+the evidence being the parent upload id from its own upload record.
+The review also keeps the link to a Short, once, as its last description
+block (``param_parent_*``).
 """
 
 import hashlib

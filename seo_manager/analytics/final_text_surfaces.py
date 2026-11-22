@@ -8,10 +8,12 @@ surfaces, each checked its own way by ``review_final_text``:
 - ``template``: Waypost-owned boilerplate, accepted only when its
   ``template_id`` is registered and its bytes hash to the registered hash;
 - ``param_template``: a registered skeleton with typed slots (number, unit,
-  duration, enum, place, video_url), accepted only when the skeleton and slot specs hash
-  to the registered hash, every slot value is legal for its type, and the text
+  duration, enum, place, playlist_url, video_url), accepted only when the
+  skeleton and slot specs hash to the registered hash, every slot value is legal for its type, and the text
   is exactly the skeleton filled; a place slot names an evidence id and is
-  backed like a place line (``final_text_params``, ``drive_templates``);
+  backed like a place line (``final_text_params``, ``drive_templates``); a
+  ``video_url`` slot cites a ``parent_video`` item, which is evidence, not a
+  place, and the client alone vouches it is the parent upload's id;
 - ``chapter``: a chapter label, a segment surface over its own window
   (``segment_places``);
 - ``tag``: a place tag backed by evidence, or a tag from a registered tag

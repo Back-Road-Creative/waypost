@@ -771,6 +771,8 @@ def _param(
     template_id, text = entry.get("template_id"), _text(entry.get("text"))
     template = PARAMS.get(template_id) if isinstance(template_id, str) else None
     registered = dict(policy.drive_templates)
+    if template_id == SHORT_PARENT and not surface.startswith("description."):
+        reasons.refuse(f"param_parent_surface:{surface}")
     slots, ids = entry.get("slots"), entry.get("evidence_ids")
     if template is None or template_id not in registered:
         reasons.refuse(f"template_unknown:{surface}:{template_id}")
@@ -830,7 +832,25 @@ def _param(
         surface, " ".join(i.value for i in places), tuple(places), kind=PARAM_TEMPLATE
     )
     _check_backing(cited, route_ids, "place_not_on_route", policy, reasons)
-    return text, tuple(places)
+    # The stored surface keeps every cited item (a parent video included);
+    # only the places above went through the route check.
+    return text, tuple(items)
+
+
+def _parent_link(
+    surfaces: Sequence[SurfaceReview], decision: Mapping[str, Any], reasons: _Reasons
+) -> None:
+    """A parent-drive link is a Short's, once, and the last description block."""
+    parents = [s for s in surfaces if s.template_id == SHORT_PARENT]
+    if parents and decision.get("format") != "short":
+        for s in parents:
+            reasons.refuse(f"param_parent_not_short:{s.surface}")
+    for s in parents[1:]:
+        reasons.refuse(f"param_parent_repeat:{s.surface}")
+    described = [s for s in surfaces if is_description_surface(s)]
+    for s in parents:
+        if s.surface.startswith("description.") and s is not described[-1]:
+            reasons.refuse(f"param_parent_not_last:{s.surface}")
 
 
 def _year_backed(entry: Mapping[str, Any], recording_date: str | None) -> bool:
@@ -959,7 +979,10 @@ def review_final_text(
     ``description_layout`` names a registered layout to enforce.
     ``decision``: the dict form of a ``TitleDecision``. ``evidence``:
     ``{evidence_id, kind, value, source}`` items, ``kind`` being
-    ``location``, ``region`` or ``date``.
+    ``location``, ``region``, ``road``, ``date`` or ``parent_video``. A
+    ``parent_video`` item (an 11-character YouTube id) backs only a
+    ``video_url`` slot; Waypost cannot tell whose video it is, so the client
+    must send the parent upload id from its own upload record.
     """
     reasons = _Reasons()
     by_id, ambiguous = _index_evidence(evidence, reasons)
@@ -1082,6 +1105,8 @@ def review_final_text(
         _check_names(
             review_surface, needed, "segment_place_dropped", regions, policy, reasons
         )
+
+    _parent_link(surfaces, decision, reasons)
 
     layout = _text(approved.get("description_layout"))
     if layout is not None:
