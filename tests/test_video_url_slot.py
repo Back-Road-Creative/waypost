@@ -28,7 +28,7 @@ from seo_manager.analytics.final_text_review import (
 )
 from seo_manager.analytics.final_text_surfaces import (
     ParamBlock,
-    TemplateBlock,
+    PlaceLine,
     build_visible,
 )
 
@@ -126,19 +126,22 @@ def test_the_text_must_be_the_rendered_link():
     assert "param_text:description.short" in _short(entry).reasons
 
 
-def test_parent_video_evidence_is_not_a_place():
-    # Were the video item passed to the name backing, the words around its id
-    # (https, youtu, be) would count as unbacked names: the check discriminates, and the review never sends it.
-    item = EvidenceItem(**ITEM)
-    surface = SurfaceReview(
-        "description.short", f"https://youtu.be/{item.value}", (item,)
-    )
-    probe = _Reasons()
-    _check_backing(surface, [], "place_not_on_route", DEFAULT_TEXT_POLICY, probe)
-    assert any(r.startswith("name_unbacked") for r in probe.items)
+def test_parent_video_evidence_is_not_a_place(monkeypatch):
+    # Spy on the place backing during a real review: a parent_video item that
+    # reached it (as if it were a place) would be judged by name and route.
+    from seo_manager.analytics import final_text_review as review_module
+
+    seen = []
+    real = review_module._check_backing
+
+    def spy(surface, *args, **kwargs):
+        seen.extend(i.kind for i in surface.evidence)
+        return real(surface, *args, **kwargs)
+
+    monkeypatch.setattr(review_module, "_check_backing", spy)
     review = _short()
     assert review.verdict == AGREE
-    assert not [r for r in review.reasons if r.startswith("name_unbacked")]
+    assert PARENT_VIDEO not in seen
 
 
 def test_the_stored_surface_keeps_the_video_evidence():
@@ -166,12 +169,15 @@ def test_a_second_link_is_refused():
 
 
 def test_the_link_must_be_the_last_description_block():
-    first = _entry()
-    cta = build_visible([TemplateBlock("description.cta", "description.cta")])[0]
-    assert "param_parent_not_last:description.short" in _review([first, cta]).reasons
-    assert (
-        "param_parent_not_last:description.short" not in _review([cta, first]).reasons
-    )
+    link = _entry()
+    line = build_visible(
+        [PlaceLine("description.hook", "Brindlemoor to Quillhaven", ("p-1", "p-2"))]
+    )[0]
+    passing = _review([line, link])
+    assert passing.verdict == AGREE, passing.reasons
+    failing = _review([link, line])
+    assert "param_parent_not_last:description.short" in failing.reasons
+    assert "layout_required" not in _review([line, link]).reasons
 
 
 @pytest.mark.parametrize("surface", ["ost", "foo", "chapter.1"])
