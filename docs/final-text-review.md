@@ -2,7 +2,7 @@
 
 How Waypost refuses an upload whose on-screen text, title, description or tags were not reviewed. For the bounded-region rules see [bounded-region-review.md](bounded-region-review.md); for titles that name one verified region see [region-only-title-decisions.md](region-only-title-decisions.md).
 
-Versions in force: review `final-text-review-6`, text policy `final-text-policy-4`, template set `drive-templates-4`, title policy `title-policy-3`. A test keeps these in step with the code.
+Versions in force: review `final-text-review-6`, text policy `final-text-policy-4`, template set `drive-templates-5`, title policy `title-policy-3`. A test keeps these in step with the code.
 
 `analytics.final_text_review.review_final_text` puts the approved on-screen, thumbnail and Shorts text, the final `select_title` title, and the location/date evidence behind each into one fingerprinted record; it refuses on missing or ambiguous evidence, reports `disagree` when the title changed after approval, and never approves (`human_gate_required` is always true).
 
@@ -14,9 +14,11 @@ Every name on a surface needs a claim: once the cited names are taken out, any w
 
 Review v4 (record v2) types every visible surface (`analytics.final_text_surfaces`), so a description, its chapters and its tags are reviewed without any free prose: a `place_line` is checked as above, a `template` passes only when its `template_id` is registered in `TEMPLATES` and the SHA-256 of its exact bytes matches (`template_unknown`, `template_changed`), a `chapter` is a segment surface over its own `segment_places` (`chapter_without_window`), and a `tag` is backed by evidence or comes from a registered `tag.*` template; any other kind is refused (`surface_kind`).
 
-Review v5 adds a fifth kind, `param_template` (`analytics.final_text_params`, `analytics.drive_templates`): a registered skeleton with typed slots (`number`, `unit`, `duration`, `enum`, `place`; no free-string slot can be registered).
+Review v5 adds a fifth kind, `param_template` (`analytics.final_text_params`, `analytics.drive_templates`): a registered skeleton with typed slots (`number`, `unit`, `duration`, `enum`, `place`, `playlist_url`, `video_url`; no free-string slot can be registered).
 
 The hash covers the skeleton with its slot markers and the slot specs, not the filled text, so one changed byte is refused (`template_unknown`, `template_changed`); each slot value must be legal for its type (`param_slot`), a place slot cites an evidence id that must back like a `place_line` (`param_place`, `name_unbacked`, `place_not_on_route`), and the text must equal the skeleton filled (`param_text`).
+
+A `video_url` slot lets a Short's description link its parent drive (`description.short.parent`, `{label}: {url}`, label `Full drive` or `Highlights reel`). Its slot value is an evidence id, never a URL: the cited item must have kind `parent_video` (`PARENT_VIDEO`) and an 11-character YouTube id (`[A-Za-z0-9_-]{11}`) as its value, and the review renders `https://youtu.be/<id>` itself. A missing, ambiguous, wrong-kind or uncited item is refused (`param_video`, `evidence_ambiguous`), a malformed id is refused (`param_video_id`), and the cited ids must equal the evidence used (`param_evidence`). The video is evidence but not a place: no route, name or filler check applies to it, and the stored surface still lists it. Waypost does not check whose video the id names (it makes no channel call): the client is responsible for the evidence being the parent upload id from its own upload record. The block is a Short's only (`param_parent_not_short` unless the decision format is `short`), appears once (`param_parent_repeat`), is the last description surface (`param_parent_not_last`), and sits on a `description.*` surface (`param_parent_surface`). A Short has no layout, so the block needs none; a `gms-drive-1` description refuses it (`layout_free_line`). The template set moved to `drive-templates-5` because a template was added; no existing template hash changed.
 
 A record's `description_layout` (`gms-drive-1`) makes the description the ordered registered blocks only (`layout_unknown`, `layout_free_line`, `layout_order`, `layout_missing`) and keeps tags in the registered order (`tag_order`); non-place tags come only from the registered `tag.*` set.
 
@@ -24,7 +26,7 @@ A record's `description_layout` (`gms-drive-1`) makes the description the ordere
 
 The empty `description.gap` template is GMS's blank line after its body lines, and `LAYOUT_GAPS` makes it present exactly when a body line is (`layout_gap`).
 
-Templates are `drive-templates-4`; `REVIEW_VERSION` is `final-text-review-6` and the text policy is `final-text-policy-4`, so a record written under another template set is refused.
+Templates are `drive-templates-5`; `REVIEW_VERSION` is `final-text-review-6` and the text policy is `final-text-policy-4`, so a stored review written under another template set goes stale (`stale:text_policy`) and must be re-reviewed.
 
 `build_visible` emits these entries and takes template text only from the registry.
 
