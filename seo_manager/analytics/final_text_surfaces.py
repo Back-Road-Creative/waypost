@@ -8,7 +8,7 @@ surfaces, each checked its own way by ``review_final_text``:
 - ``template``: Waypost-owned boilerplate, accepted only when its
   ``template_id`` is registered and its bytes hash to the registered hash;
 - ``param_template``: a registered skeleton with typed slots (number, unit,
-  duration, enum, place), accepted only when the skeleton and slot specs hash
+  duration, enum, place, video_url), accepted only when the skeleton and slot specs hash
   to the registered hash, every slot value is legal for its type, and the text
   is exactly the skeleton filled; a place slot names an evidence id and is
   backed like a place line (``final_text_params``, ``drive_templates``);
@@ -34,7 +34,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from .drive_templates import DRIVE_TEXT, PARAMS
-from .final_text_params import render, render_value, valid_value
+from .final_text_params import (
+    render,
+    render_value,
+    valid_value,
+    valid_video_id,
+    video_url,
+)
 
 PLACE_LINE = "place_line"
 TEMPLATE = "template"
@@ -109,7 +115,8 @@ class ParamBlock:
     """A parameterized template with typed ``slots`` (``name -> value``).
 
     A ``place`` slot's value is an evidence id; ``places`` maps each such id to
-    the cited text. A value of the wrong type raises when the entry is built.
+    the cited text. A ``video_url`` slot's value is an evidence id too, and
+    ``places`` maps it to the 11-character video id. A value of the wrong type raises when the entry is built.
     """
 
     surface: str
@@ -139,6 +146,13 @@ def _param_entry(part: ParamBlock) -> dict[str, Any]:
                 raise ValueError(f"place_slot:{part.surface}:{slot.name}")
             ids.append(value)
             rendered[slot.name] = place_text(slot, part.places[value])
+        elif slot.type == "video_url":
+            # ``places`` maps the evidence id to the 11-character video id.
+            video = (part.places or {}).get(value) if isinstance(value, str) else None
+            if not valid_video_id(video):
+                raise ValueError(f"slot_value:{part.surface}:{slot.name}")
+            ids.append(value)
+            rendered[slot.name] = video_url(video)
         elif valid_value(slot, value):
             rendered[slot.name] = render_value(slot, value)
         else:

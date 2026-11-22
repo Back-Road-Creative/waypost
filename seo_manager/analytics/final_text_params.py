@@ -11,6 +11,13 @@ evidence id, whose cited value is backed by the review like a place line.
 ``playlist_url`` takes only a YouTube playlist URL, and the review also
 requires its list id to be on the policy's allowlist. A string-typed
 catch-all slot cannot be registered.
+
+``video_url`` (a Short linking its parent drive) is evidence-backed like
+``place``: its slot value is an evidence id, never a URL. The review requires
+the cited item to be of kind ``parent_video`` with an 11-character YouTube id
+as its value, and renders the link itself as ``https://youtu.be/<id>``. It is
+not a place: no route or name check applies to it. ``valid_value`` is False for
+it, so a raw URL in the slot is refused wherever a plain value is checked.
 """
 
 import hashlib
@@ -21,7 +28,16 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
-SLOT_TYPES = ("number", "unit", "duration", "enum", "place", "playlist_url")
+SLOT_TYPES = (
+    "number",
+    "unit",
+    "duration",
+    "enum",
+    "place",
+    "playlist_url",
+    "video_url",
+)
+VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _PLAYLIST = re.compile(
     r"https://www\.youtube\.com/playlist\?list=([A-Za-z0-9_-]{10,64})"
 )
@@ -80,12 +96,24 @@ def format_duration(seconds: float) -> str:
     return f"{minutes}m {secs}s"
 
 
+def valid_video_id(value: Any) -> bool:
+    """True for an 11-character YouTube video id."""
+    return isinstance(value, str) and VIDEO_ID.fullmatch(value) is not None
+
+
+def video_url(video_id: str) -> str:
+    """The one link form a ``video_url`` slot renders."""
+    return f"https://youtu.be/{video_id}"
+
+
 def valid_value(slot: Slot, value: Any, allowlist: Iterable[str] | None = None) -> bool:
     """True when ``value`` is a legal, non-place value for ``slot``.
 
     A ``playlist_url`` must be a YouTube playlist URL; given ``allowlist`` (the
     review always passes the policy's), its list id must also be on it.
     """
+    if slot.type == "video_url":
+        return False  # its value is an evidence id, resolved by the review
     if slot.type == "number":
         return (
             isinstance(value, (int, float))

@@ -60,10 +60,18 @@ from .drive_templates import (
     PARAMS,
     PLACE_TAG,
     REPEATABLE_TAGS,
+    SHORT_PARENT,
     TAG_ORDER,
     drive_hashes,
 )
-from .final_text_params import param_hash, render, render_value, valid_value
+from .final_text_params import (
+    param_hash,
+    render,
+    render_value,
+    valid_value,
+    valid_video_id,
+    video_url,
+)
 from .final_text_surfaces import (
     CHAPTER,
     PARAM_TEMPLATE,
@@ -165,6 +173,7 @@ LOCATION = "location"
 REGION = "region"
 DATE = "date"
 ROAD = "road"
+PARENT_VIDEO = "parent_video"
 _PLACE_KINDS = frozenset({LOCATION, REGION, ROAD})
 
 # Words a surface may carry besides its cited names: the connectors in
@@ -778,8 +787,22 @@ def _param(
         return None
     rendered: dict[str, str] = {}
     items: list[EvidenceItem] = []
+    places: list[EvidenceItem] = []  # a parent video is evidence, not a place
     for slot in template.slots:
         value = slots[slot.name]
+        if slot.type == "video_url":
+            cited = isinstance(value, str) and value in ids
+            if cited and value in ambiguous:
+                reasons.refuse(f"evidence_ambiguous:{value}")
+            item = by_id.get(value) if cited and value not in ambiguous else None
+            if item is None or item.kind != PARENT_VIDEO:
+                reasons.refuse(f"param_video:{surface}:{slot.name}")
+            elif not valid_video_id(item.value):
+                reasons.refuse(f"param_video_id:{surface}:{slot.name}")
+            else:
+                items.append(item)
+                rendered[slot.name] = video_url(item.value)
+            continue
         if slot.type != "place":
             if valid_value(slot, value, policy.playlist_allowlist):
                 rendered[slot.name] = render_value(slot, value)
@@ -795,6 +818,7 @@ def _param(
             reasons.refuse(f"param_place:{surface}:{slot.name}")
             continue
         items += found
+        places += found
         rendered[slot.name] = place_text(slot, found[0].value)
     if len(rendered) != len(template.slots):
         return None
@@ -803,10 +827,10 @@ def _param(
     if set(ids) != {i.evidence_id for i in items} or len(ids) != len(items):
         reasons.refuse(f"param_evidence:{surface}")
     cited = SurfaceReview(
-        surface, " ".join(i.value for i in items), tuple(items), kind=PARAM_TEMPLATE
+        surface, " ".join(i.value for i in places), tuple(places), kind=PARAM_TEMPLATE
     )
     _check_backing(cited, route_ids, "place_not_on_route", policy, reasons)
-    return text, tuple(items)
+    return text, tuple(places)
 
 
 def _year_backed(entry: Mapping[str, Any], recording_date: str | None) -> bool:
@@ -819,7 +843,8 @@ def _year_backed(entry: Mapping[str, Any], recording_date: str | None) -> bool:
 def _is_drive_surface(surface: "SurfaceReview") -> bool:
     """A parameterized block or a fixed drive ``description.*`` block."""
     if surface.kind == PARAM_TEMPLATE:
-        return True
+        # A Short's parent link is not a drive block: it needs no layout.
+        return surface.template_id != SHORT_PARENT
     tid = surface.template_id or ""
     return tid in DRIVE_TEXT and tid.startswith("description.")
 
