@@ -236,4 +236,4 @@ def test_existing_template_hashes_did_not_move():
     assert digest == EXISTING_DIGEST
 
 
-EXISTING_DIGEST = "ece318dbeaf58c74ae6fbe78984d8e94bcdafd7b1f32c81d03ff7044e3b96e81"
+EXISTING_DIGEST = "ece318dbeaf58c74ae6fbe78984d8e94bcdafd7b1f32c81d03ff7044e3b96e81"  # pragma: allowlist secret
