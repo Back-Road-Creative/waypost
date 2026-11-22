@@ -18,6 +18,11 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- `ScheduleStore.reopen_for_replace` reopens a `complete` drive (to `auditing`) so LFs that
+  are booked but not yet public can be re-rendered into their own slots. It refuses unless
+  the booked video ids match `expected` and each replaced slot is beyond a margin, never
+  touches `lf_bookings`, and logs each reopen in the new `drive_reopens` table. See
+  [the claim protocol](docs/scheduling.md#claim-protocol).
 - A Short's description may link its parent drive. New `video_url` slot type and
   template `description.short.parent` (`{label}: {url}`): the slot value is an
   evidence id of kind `parent_video` whose value is an 11-character YouTube id, and

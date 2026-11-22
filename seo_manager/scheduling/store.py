@@ -7,6 +7,7 @@ user) plus ``BEGIN IMMEDIATE``; ``claim_drive`` books every slot and flips the d
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import sqlite3
 from collections.abc import Iterable, Iterator
@@ -30,6 +31,9 @@ CREATE TABLE IF NOT EXISTS ready_drives (
   claimed_at TEXT, lf_mode TEXT, ingest_mode TEXT);
 CREATE TABLE IF NOT EXISTS alerts_sent (
   kind TEXT NOT NULL, key TEXT NOT NULL, sent_at TEXT NOT NULL, PRIMARY KEY (kind, key));
+CREATE TABLE IF NOT EXISTS drive_reopens (
+  project TEXT NOT NULL, reopened_at TEXT NOT NULL, plan_digest TEXT NOT NULL,
+  reason TEXT NOT NULL, prior_claim_id TEXT, expected_json TEXT NOT NULL);
 """
 DRIVE_STATUSES = ("auditing", "ready", "claimed", "complete", "failed")
 LF_MODES = ("best_moments", "full_drive")  # the drive CLI's --lf-mode choices
@@ -401,6 +405,86 @@ class ScheduleStore:
                 "UPDATE ready_drives SET status = ? WHERE project = ?",
                 (status, project),
             )
+
+    def reopen_for_replace(
+        self,
+        project: str,
+        *,
+        expected: dict[int, str],
+        replace: set[int],
+        plan_digest: str,
+        reason: str,
+        output_dir: str,
+        now: datetime,
+        margin_h: float = 6.0,
+        dry_run: bool = False,
+    ) -> str | None:
+        """Reopen a ``complete`` drive (``auditing``, claim cleared) so its not-yet-public LFs
+        can be re-rendered and rebooked in their own slots. Returns ``None`` on success (or
+        when ``dry_run`` would succeed), else a short refusal reason, writing nothing.
+        Refuses unless the drive is ``complete``; its bookings are exactly LF
+        ``1..lf_count``, each with a video id, equal to ``expected``; ``replace`` is a
+        non-empty subset of them, every slot more than ``margin_h`` hours after ``now``;
+        and ``reason``, ``plan_digest`` and a timezone-aware ``now`` are given. Never
+        touches ``lf_bookings`` or ``lf_count``; one audit row goes to ``drive_reopens``."""
+        if now.tzinfo is None:
+            return "now is not timezone-aware"
+        if not reason or not reason.strip():
+            return "reason is empty"
+        if not plan_digest or not plan_digest.strip():
+            return "plan_digest is empty"
+        if not replace:
+            return "replace is empty"
+        if dry_run and not self.path.exists():
+            return f"{project}: no schedule database"
+        with self._conn(write=not dry_run) as c:
+            row = c.execute(
+                "SELECT * FROM ready_drives WHERE project = ?", (project,)
+            ).fetchone()
+            if row is None:
+                return f"{project}: no such drive"
+            if row["status"] != "complete":
+                return f"{project} is {row['status']}, not complete"
+            booked = {
+                r["lf_index"]: r
+                for r in c.execute(
+                    "SELECT lf_index, slot_at, video_id FROM lf_bookings"
+                    " WHERE project = ?",
+                    (project,),
+                )
+            }
+            if set(booked) != set(range(1, row["lf_count"] + 1)):
+                return f"{project}: bookings are not exactly LF 1..{row['lf_count']}"
+            if not all(r["video_id"] for r in booked.values()):
+                return f"{project}: a booking has no video id"
+            if {k: v["video_id"] for k, v in booked.items()} != dict(expected):
+                return f"{project}: expected video ids differ from the booked ones"
+            if not replace <= set(booked):
+                return f"{project}: replace names an LF that is not booked"
+            cutoff = self._local(now) + timedelta(hours=margin_h)
+            for lf in sorted(replace):
+                slot = self._local(datetime.fromisoformat(booked[lf]["slot_at"]))
+                if slot <= cutoff:
+                    return f"{project} LF{lf} slot {slot.isoformat()} is within {margin_h} h"
+            if dry_run:
+                return None
+            c.execute(
+                "UPDATE ready_drives SET status='auditing', claim_id=NULL,"
+                " claimed_at=NULL, output_dir=? WHERE project=?",
+                (output_dir, project),
+            )
+            c.execute(
+                "INSERT INTO drive_reopens VALUES (?,?,?,?,?,?)",
+                (
+                    project,
+                    self._local(now).isoformat(),
+                    plan_digest,
+                    reason,
+                    row["claim_id"],
+                    json.dumps({str(k): v for k, v in sorted(expected.items())}),
+                ),
+            )
+        return None
 
     def claim_drive(
         self,
