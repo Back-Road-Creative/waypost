@@ -23,6 +23,12 @@ tagged is listed under Unreleased.
   the booked video ids match `expected` and each replaced slot is beyond a margin, never
   touches `lf_bookings`, and logs each reopen in the new `drive_reopens` table. See
   [the claim protocol](docs/scheduling.md#claim-protocol).
+- A Short's description may link its parent drive. New `video_url` slot type and
+  template `description.short.parent` (`{label}: {url}`): the slot value is an
+  evidence id of kind `parent_video` whose value is an 11-character YouTube id, and
+  the review renders `https://youtu.be/<id>`, so a typed URL is refused. The
+  template set is `drive-templates-5`; existing template hashes are unchanged.
+  See [the contract](docs/final-text-review.md).
 - `select_title` explores (`title-policy-3`). When a long-form's decision would
   keep the baseline for want of evidence, 1 upload in 4 ships its least-measured
   alternative instead, with reason `exploration`, so alternatives can earn the

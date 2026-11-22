@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from .final_text_params import ParamTemplate, Slot, param_hash
 
-DRIVE_TEMPLATES_VERSION = "drive-templates-4"
+DRIVE_TEMPLATES_VERSION = "drive-templates-5"
 LAYOUT = "gms-drive-1"
 RULE = "━" * 24
 
@@ -285,6 +285,17 @@ _param(
     "New {region} drive every {weekday}",
     Slot("region", "enum", values=REGIONS_DISPLAY),
     Slot("weekday", "enum", values=WEEKDAYS),
+)
+
+# A Short's description may link its parent drive. The url is a ``video_url``
+# slot: an evidence id of kind ``parent_video``, never a typed URL. The block
+# is not part of any layout (a Short has none), so a long-form layout refuses it.
+SHORT_PARENT = "description.short.parent"
+_param(
+    SHORT_PARENT,
+    "{label}: {url}",
+    Slot("label", "enum", values=("Full drive", "Highlights reel")),
+    Slot("url", "video_url"),
 )
 
 # Ordered blocks of the layout: (block name, required). ``chapter`` is the
