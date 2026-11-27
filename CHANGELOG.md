@@ -18,6 +18,11 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- An Irish county proof may measure the reach to every other county on the Tailte map, not
+  the county's own edge, so a coastal drive is no longer refused for the sea
+  (basis `pinned_tailte_other_counties_bounded_speed_error_and_margin`, proof version
+  `tiger2026-tailte2026-bounded-v3`). Refused when the region names a county on the
+  Northern Ireland border. See [the contract](docs/bounded-region-review.md).
 - `ScheduleStore.reopen_for_replace` reopens a `complete` drive (to `auditing`) so LFs that
   are booked but not yet public can be re-rendered into their own slots. It refuses unless
   the booked video ids match `expected` and each replaced slot is beyond a margin, never

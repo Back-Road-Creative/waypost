@@ -428,7 +428,7 @@ def test_tailte_proof_accepts_an_earlier_recording_with_an_inward_margin():
     # The 2026 statutory map is newer than a 2025 drive; the 250 m inward
     # margin is what stands in for the boundary edits between the two dates.
     gaps = ((410.0, 427.0),)
-    assert BOUNDARY_PROOF_VERSION == "tiger2026-tailte2026-bounded-v2"
+    assert BOUNDARY_PROOF_VERSION == "tiger2026-tailte2026-bounded-v3"
     assert _validate_bounded_proof(
         _tailte_proof(), region="County Cork", recording_date=IE_DATE, gaps=gaps
     )
@@ -782,3 +782,49 @@ def test_a_cited_road_backs_its_name():
     uncited = _record(text=text, ids=("p-1", "p-2"))
     review = review_final_text(uncited, _decision(), evidence)
     assert "name_unbacked:ost:mill" in review.reasons
+
+
+NEIGHBOUR_BASIS = "pinned_tailte_other_counties_bounded_speed_error_and_margin"
+
+
+def test_tailte_other_counties_proof_is_accepted_off_the_border():
+    # Galley Head: a coastal County Cork drive whose reach touches only the sea.
+    assert _validate_bounded_proof(
+        _tailte_proof(basis=NEIGHBOUR_BASIS),
+        region="County Cork",
+        recording_date=IE_DATE,
+        gaps=((410.0, 427.0),),
+    )
+
+
+@pytest.mark.parametrize(
+    "region",
+    ["County Donegal", "County Leitrim", "Cavan", "county monaghan", "County Louth"],
+)
+def test_tailte_other_counties_proof_is_refused_on_the_northern_ireland_border(region):
+    # The map has no Northern Ireland polygon: past these counties' edge may be
+    # another country, not the sea.
+    kw = {"region": region, "recording_date": IE_DATE, "gaps": ((410.0, 427.0),)}
+    assert not _validate_bounded_proof(
+        _tailte_proof(basis=NEIGHBOUR_BASIS, region=region), **kw
+    )
+    assert _validate_bounded_proof(_tailte_proof(region=region), **kw)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"margin_m": 249.0},
+        {"country": "GB"},
+        {"recording_date": "2027-01-04"},
+        {"max_gap_s": 16.0},
+    ],
+)
+def test_weakened_tailte_other_counties_proof_is_refused(change):
+    proof = _tailte_proof(basis=NEIGHBOUR_BASIS, **change)
+    assert not _validate_bounded_proof(
+        proof,
+        region="County Cork",
+        recording_date=proof["recording_date"],
+        gaps=((410.0, 427.0),),
+    )

@@ -6,7 +6,7 @@ may replace required place names only when the region claim contains all of
 them. The usual rule still requires full sampled GPS coverage, no gaps and no
 observed samples outside the region.
 
-`BOUNDARY_PROOF_VERSION = "tiger2026-tailte2026-bounded-v2"` adds a narrow alternative for
+`BOUNDARY_PROOF_VERSION = "tiger2026-tailte2026-bounded-v3"` adds a narrow alternative for
 gaps or lower sampled coverage. The producer must check every retained segment
 against the **pinned 2026 Census TIGER/Line county or state polygon** before
 rendering. Its `boundary_proof` must retain `verified`, the source archive and
@@ -28,6 +28,17 @@ producer added to every boundary distance so a boundary edit between the drive
 and the map's date cannot move the route outside. The basis is
 `pinned_tailte_polygon_bounded_speed_error_and_margin`. A TIGER proof still
 needs a 2026 recording.
+
+A county polygon on that map ends at the shoreline, so measuring the reach to
+the county's own edge counts the sea as a possible crossing and refuses every
+coastal drive. Since `-v3` the producer may instead measure the reach to the
+union of every **other** county on the map, with basis
+`pinned_tailte_other_counties_bounded_speed_error_and_margin` and the same
+envelope otherwise. A fix outside the claimed county still refuses. The map has
+no Northern Ireland polygon, so past Cavan, Donegal, Leitrim, Louth or Monaghan
+may be another country, not the sea: Waypost refuses the other-counties basis
+when the region names any of those five counties, and those claims keep the
+full-boundary basis.
 
 Waypost does **not** recompute the geometry from GPX. GMS owns that calculation
 and checks the official ZIP hash; Waypost binds the producer's result to the
