@@ -174,3 +174,38 @@ def test_cli_without_credentials_exits_2(tmp_path, capsys):
         ]
     )
     assert rc == 2 and "credentials" in capsys.readouterr().err
+
+
+class LaggingYouTube(FakeYouTube):
+    """YouTube serves the old snippet for a read or two after the write lands
+    (e2-y6djJzZU, 2026-11-27: the update took, the next read still had the old text)."""
+
+    def __init__(self, stale_reads, **kw):
+        super().__init__(**kw)
+        self.stale_reads = stale_reads
+        self.old = None
+
+    def update(self, *, part, body):
+        self.old = copy.deepcopy(self.store[body["id"]])
+        return super().update(part=part, body=body)
+
+    def list(self, *, part, id):
+        if self.old is not None and self.stale_reads > 0:
+            self.stale_reads -= 1
+            old = copy.deepcopy(self.old)
+            return _Req(lambda: {"items": [{"id": id, "snippet": old}]})
+        return super().list(part=part, id=id)
+
+
+def test_a_read_back_that_lags_the_write_is_retried_until_it_lands():
+    yt, slept = LaggingYouTube(stale_reads=2), []
+    out = du.update_description(yt, VID, NEW, sleep=slept.append)
+    assert out["after"] == NEW and len(yt.updates) == 1
+    assert len(slept) == 2
+
+
+def test_a_description_that_never_lands_is_still_an_error_after_the_retries():
+    yt, slept = LaggingYouTube(stale_reads=99), []
+    with pytest.raises(du.DescriptionUpdateError, match="did not land"):
+        du.update_description(yt, VID, NEW, sleep=slept.append)
+    assert len(slept) == du.READ_BACK_TRIES - 1

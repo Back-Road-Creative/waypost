@@ -228,8 +228,9 @@ tags. `seo-manager youtube update-description VIDEO_ID --description-file new.tx
 [--expect-current-file current.txt] [--dry-run] [--json]` replaces only the
 description. YouTube's snippet update replaces the whole snippet, so the command
 sends back every writable field it read (title, tags, category, languages) and
-reads the video again. If any of them moved, or the new text did not land, it
-exits 2. `--expect-current-file` refuses the write when the live description no
+reads the video again, retrying for up to about 25 seconds because YouTube can
+serve the old text just after a write. If any of them moved, or the new text
+never lands, it exits 2. `--expect-current-file` refuses the write when the live description no
 longer matches what you read. Text with `<` or `>`, empty text, or over 5,000
 bytes is refused before any call. Credentials: `--youtube-credentials` (token
 file) or `--youtube-credentials-sops`; the token needs the `youtube.force-ssl`

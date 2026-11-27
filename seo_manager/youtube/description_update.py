@@ -7,6 +7,9 @@ field unchanged with the new description, then reads the video again. If any fie
 other than the description moved, or the description did not land, it raises
 :class:`DescriptionUpdateError`; it never reports a partial edit as done.
 
+The read-back is retried a few times, because YouTube can serve the old snippet for a
+few seconds after the write lands.
+
 ``expect_current`` binds the edit to the description the caller read: if the live
 text changed since, nothing is written.
 """
@@ -14,6 +17,8 @@ text changed since, nothing is written.
 from __future__ import annotations
 
 import json
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +33,10 @@ READ_ONLY = (
 )
 #: Writable snippet fields the edit carries over and checks on read-back.
 KEPT = ("title", "tags", "categoryId", "defaultLanguage", "defaultAudioLanguage")
+#: YouTube can serve the old snippet for a few seconds after a write lands, so the
+#: read-back is tried this many times, ``READ_BACK_WAIT_S`` apart.
+READ_BACK_TRIES = 6
+READ_BACK_WAIT_S = 5.0
 #: YouTube's description limit, in bytes.
 MAX_DESCRIPTION_BYTES = 5000
 
@@ -66,6 +75,7 @@ def update_description(
     *,
     expect_current: str | None = None,
     dry_run: bool = False,
+    sleep: Callable[[float], Any] = time.sleep,
 ) -> dict:
     """Set ``video_id``'s description and return ``{video_id, before, after, title, tags,
     categoryId, dry_run}``, ``after`` as YouTube returns it on read-back."""
@@ -92,7 +102,11 @@ def update_description(
     youtube.videos().update(
         part="snippet", body={"id": video_id, "snippet": snippet}
     ).execute()
-    after = read_snippet(youtube, video_id)
+    for attempt in range(READ_BACK_TRIES):
+        after = read_snippet(youtube, video_id)
+        if after.get("description") == description or attempt == READ_BACK_TRIES - 1:
+            break
+        sleep(READ_BACK_WAIT_S)
     moved = [k for k in KEPT if after.get(k) != before.get(k)]
     if moved:
         raise DescriptionUpdateError(
