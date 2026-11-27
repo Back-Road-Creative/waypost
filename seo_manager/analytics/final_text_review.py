@@ -90,7 +90,7 @@ from .final_text_surfaces import (
 
 REVIEW_VERSION = "final-text-review-6"
 RECORD_VERSION = "final-text-record-2"
-BOUNDARY_PROOF_VERSION = "tiger2026-tailte2026-bounded-v2"
+BOUNDARY_PROOF_VERSION = "tiger2026-tailte2026-bounded-v3"
 _BOUNDARY_SOURCES = {
     "county": (
         "TIGER2026/COUNTY/tl_2026_us_county.zip",
@@ -109,6 +109,15 @@ _TAILTE_COUNTIES = (
     "8b422a75fcac8e21f1eef2fe2480b925e7bed06e9aeed3e5daa73cfec45df881",  # pragma: allowlist secret
 )
 _TAILTE_MIN_MARGIN_M = 250.0
+# A county's own polygon ends at the shore, so the full-boundary basis counts
+# the sea as a crossing. The other-counties basis tests the reach against every
+# other county instead. The map has no Northern Ireland polygon, so a claim
+# naming a county on that border must keep the full-boundary basis.
+_TAILTE_FULL_BASIS = "pinned_tailte_polygon_bounded_speed_error_and_margin"
+_TAILTE_NEIGHBOUR_BASIS = "pinned_tailte_other_counties_bounded_speed_error_and_margin"
+_TAILTE_BORDER = re.compile(
+    r"\b(?:cavan|donegal|leitrim|louth|monaghan)\b", re.IGNORECASE
+)
 # Canonical TIGER state name -> (postal abbreviation, STATEFP). The state
 # source's full name may appear as its postal abbreviation in GMS titles.
 _US_STATES = {
@@ -533,10 +542,11 @@ def _bounded_proof(
             margin = float(raw.get("margin_m"))
         except (OverflowError, TypeError, ValueError):
             return False
+        basis = raw.get("basis")
         if (
             recorded_on.year > 2026
-            or raw.get("basis")
-            != "pinned_tailte_polygon_bounded_speed_error_and_margin"
+            or basis not in (_TAILTE_FULL_BASIS, _TAILTE_NEIGHBOUR_BASIS)
+            or (basis == _TAILTE_NEIGHBOUR_BASIS and _TAILTE_BORDER.search(region))
             or raw.get("country") != "IE"
             or not math.isfinite(margin)
             or margin < _TAILTE_MIN_MARGIN_M
