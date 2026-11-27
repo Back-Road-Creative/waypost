@@ -18,6 +18,11 @@ tagged is listed under Unreleased.
 
 ### Added
 
+- `seo-manager youtube update-description` replaces only a live video's description:
+  it sends back the title, tags, category and languages it read, reads the video again,
+  and exits 2 if any of them moved. `--expect-current-file` refuses a stale edit and
+  `--dry-run` writes nothing. `seo-manager youtube show` prints the live text. See
+  [the README](README.md#editing-a-live-videos-description).
 - `ScheduleStore.reopen_for_replace` reopens a `complete` drive (to `auditing`) so LFs that
   are booked but not yet public can be re-rendered into their own slots. It refuses unless
   the booked video ids match `expected` and each replaced slot is beyond a margin, never

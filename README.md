@@ -221,6 +221,20 @@ explicit flags override environment defaults. A claim with no work keeps
 | `SEO_SCHEDULE_DB` | `--db` | the tenant's `schedule.sqlite3`; required, never defaulted |
 | `SEO_DECISIONS_DB` | `--decisions-db` | the tenant's `cadence_decisions.sqlite3`; when set, its decided LF weekdays replace the yaml `dow` (the seed) |
 
+### Editing a live video's description
+
+`seo-manager youtube show VIDEO_ID [--json]` prints the live title, description and
+tags. `seo-manager youtube update-description VIDEO_ID --description-file new.txt
+[--expect-current-file current.txt] [--dry-run] [--json]` replaces only the
+description. YouTube's snippet update replaces the whole snippet, so the command
+sends back every writable field it read (title, tags, category, languages) and
+reads the video again. If any of them moved, or the new text did not land, it
+exits 2. `--expect-current-file` refuses the write when the live description no
+longer matches what you read. Text with `<` or `>`, empty text, or over 5,000
+bytes is refused before any call. Credentials: `--youtube-credentials` (token
+file) or `--youtube-credentials-sops`; the token needs the `youtube.force-ssl`
+scope.
+
 ### Volume and cadence decisions
 
 `python -m seo_manager.analytics.volume_decide --evidence evidence.json`

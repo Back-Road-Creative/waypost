@@ -441,7 +441,7 @@ def _cmd_collect_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _with_credentials(name: str, body):
+def _with_credentials(name: str, body, group: str = "collect"):
     """Run ``body(args, creds)`` with the plain or SOPS token resolved."""
     from seo_manager.collection.credentials import CredentialsError, youtube_credentials
 
@@ -452,7 +452,7 @@ def _with_credentials(name: str, body):
             ) as creds:
                 return body(args, creds)
         except CredentialsError as exc:
-            print(f"seo-manager collect {name}: {exc}", file=sys.stderr)
+            print(f"seo-manager {group} {name}: {exc}", file=sys.stderr)
             return 2
 
     return handler
@@ -651,6 +651,118 @@ def _add_collect_parser(sub) -> None:
     rep.set_defaults(func=_with_credentials("report", _cmd_collect_report))
 
 
+def _youtube_write_client(credentials: Path):
+    """The YouTube Data v3 client that edits a video (tests replace this)."""
+    from seo_manager.youtube.description_update import build_client
+
+    return build_client(credentials)
+
+
+def _youtube_client_or_exit(name: str, creds: Path | None):
+    if creds is None:
+        print(
+            f"seo-manager youtube {name}: no credentials; pass --youtube-credentials "
+            "or --youtube-credentials-sops",
+            file=sys.stderr,
+        )
+        return None
+    return _youtube_write_client(creds)
+
+
+def _cmd_youtube_show(args: argparse.Namespace, creds: Path | None) -> int:
+    from seo_manager.youtube.description_update import (
+        DescriptionUpdateError,
+        read_snippet,
+    )
+
+    client = _youtube_client_or_exit("show", creds)
+    if client is None:
+        return 2
+    try:
+        snippet = read_snippet(client, args.video_id)
+    except DescriptionUpdateError as exc:
+        print(f"seo-manager youtube show: {exc}", file=sys.stderr)
+        return 2
+    keep = ("title", "description", "tags", "categoryId", "defaultLanguage")
+    shown = {k: snippet.get(k) for k in keep}
+    print(json.dumps(shown, ensure_ascii=False) if args.json else shown["description"])
+    return 0
+
+
+def _cmd_youtube_update_description(
+    args: argparse.Namespace, creds: Path | None
+) -> int:
+    from seo_manager.youtube.description_update import (
+        DescriptionUpdateError,
+        update_description,
+    )
+
+    try:
+        new = Path(args.description_file).read_text(encoding="utf-8")
+        expect = (
+            Path(args.expect_current_file).read_text(encoding="utf-8")
+            if args.expect_current_file
+            else None
+        )
+    except OSError as exc:
+        print(f"seo-manager youtube update-description: {exc}", file=sys.stderr)
+        return 2
+    client = _youtube_client_or_exit("update-description", creds)
+    if client is None:
+        return 2
+    try:
+        out = update_description(
+            client, args.video_id, new, expect_current=expect, dry_run=args.dry_run
+        )
+    except DescriptionUpdateError as exc:
+        print(f"seo-manager youtube update-description: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        print(
+            ("would set" if args.dry_run else "set") + f" {args.video_id} description:"
+        )
+        print(out["after"])
+    return 0
+
+
+def _add_youtube_parser(sub) -> None:
+    sp = sub.add_parser("youtube", help="live video edits: show | update-description")
+    act = sp.add_subparsers(dest="youtube_command", required=True)
+    show = act.add_parser(
+        "show", help="print a video's live title, description and tags"
+    )
+    show.add_argument("video_id")
+    show.add_argument("--json", action="store_true")
+    _add_credentials(show, "authorized-user token JSON file")
+    show.set_defaults(
+        func=_with_credentials("show", _cmd_youtube_show, group="youtube")
+    )
+    up = act.add_parser(
+        "update-description",
+        help="replace only the description; title, tags and category are kept and checked",
+    )
+    up.add_argument("video_id")
+    up.add_argument(
+        "--description-file", required=True, help="the new description (UTF-8)"
+    )
+    up.add_argument(
+        "--expect-current-file",
+        help="the description read before; refuse if the live one differs",
+    )
+    up.add_argument(
+        "--dry-run", action="store_true", help="read and check, write nothing"
+    )
+    up.add_argument("--json", action="store_true")
+    _add_credentials(up, "authorized-user token JSON file with youtube.force-ssl scope")
+    up.set_defaults(
+        func=_with_credentials(
+            "update-description", _cmd_youtube_update_description, group="youtube"
+        )
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="seo-manager")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -669,6 +781,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.set_defaults(func=_cmd_report)
     _add_schedule_parser(sub)
     _add_collect_parser(sub)
+    _add_youtube_parser(sub)
     return p
 
 
